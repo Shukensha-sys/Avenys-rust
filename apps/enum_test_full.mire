@@ -1,0 +1,50 @@
+import std
+
+enum Result {
+    Ok(value :i64)
+    Err(msg :str)
+}
+
+enum Option {
+    Some(value :i64)
+    None
+}
+
+pub fn main: () {
+    use dasu(=== Enum Tests ===)
+    
+    set r1 = Result.Ok(42)
+    set r2 = Result.Err("error message")
+    set o1 = Option.Some(100)
+    set o2 = Option.None
+    
+    set v1 = match r1 {
+        Result.Ok(val) { val }
+        Result.Err(e) { 0 }
+    } :i64
+    
+    set v2 = match r2 {
+        Result.Ok(val) { val }
+        Result.Err(e) { 999 }
+    } :i64
+    
+    set v3 = match o1 {
+        Option.Some(val) { val }
+        Option.None { -1 }
+    } :i64
+    
+    set v4 = match o2 {
+        Option.Some(val) { val }
+        Option.None { -1 }
+    } :i64
+    
+    use dasu(v1)
+    use dasu(v2)
+    use dasu(v3)
+    use dasu(v4)
+    
+    set sum = v1 + v2 + v3 + v4
+    use dasu(sum)
+    
+    use dasu(=== All Enum Tests Passed ===)
+}

@@ -1,0 +1,25 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set data = [] :map[str i64] mut
+
+set data = dicts.set(data "a" 1) mut
+set data = dicts.set(data "b" 2) mut
+set data = dicts.set(data "c" 3) mut
+set data = dicts.set(data "d" 4) mut
+set data = dicts.set(data "e" 5) mut
+
+set val_a = dicts.get(data "a" 0)
+set val_z = dicts.get(data "z" 99)
+set keys = dicts.keys(data)
+set vals = dicts.values(data)
+
+use dasu(val_a {val_a})
+use dasu(val_z {val_z})
+use dasu(num_keys {len(keys)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})

@@ -1,0 +1,12 @@
+struct Point {
+    x :i64
+    y :i64
+}
+fn create_point: () :i64 {
+set p = (Point x:10 y:20)
+return 42
+}
+pub fn main: () {
+set result = create_point()
+use dasu(Result {result})
+}

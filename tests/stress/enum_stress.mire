@@ -1,0 +1,8 @@
+enum Status {
+    Ok
+    Err
+}
+
+pub fn main: () {
+    use dasu(test)
+}

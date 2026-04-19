@@ -1,0 +1,27 @@
+import time as time
+import mem as mem
+import cpu as cpu
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set xs = [3 5 8 13 21 34 55 89] :arr[i64 8] mut
+
+set i = 0 :i64 mut
+set total = 0 :i64 mut
+
+while i < 30000 {
+    set total += xs at 0
+    set total += xs at 1
+    set total += xs at 2
+    set total += xs at 3
+    set total += xs at 4
+    set total += xs at 5
+    set total += xs at 6
+    set total += xs at 7
+    set i += 1
+}
+use dasu(total {total})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

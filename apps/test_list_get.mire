@@ -1,0 +1,16 @@
+import lists as lists
+
+pub fn main: () {
+set xs = [] :vec![i64] mut
+set xs = lists.push(xs 10)
+set xs = lists.push(xs 20)
+set xs = lists.push(xs 30)
+
+set v0 = lists.get(xs 0)
+set v1 = lists.get(xs 1)
+set v2 = lists.get(xs 2)
+
+use dasu(v0 {v0})
+use dasu(v1 {v1})
+use dasu(v2 {v2})
+}

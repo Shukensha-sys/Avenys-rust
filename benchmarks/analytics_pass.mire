@@ -1,0 +1,43 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import gpu as gpu
+import dicts as dicts
+import strings as strings
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set counts = [] :map[str i64] mut
+set sums = [] :map[str i64] mut
+set report = "" :str mut
+set i = 0 :i64 mut
+
+while i < 20000 {
+    set bucket = "gamma" :str mut
+    if i % 7 == 0 {
+        set bucket = "alpha"
+    }
+    if bucket == "gamma" and i % 5 == 0 {
+        set bucket = "beta"
+    }
+    set current_count = dicts.get(counts bucket 0)
+    set next_count = current_count + 1 :i64 mut
+    set counts = dicts.set(counts bucket next_count)
+
+    set current_sum = dicts.get(sums bucket 0)
+    set next_sum = current_sum + i :i64 mut
+    set sums = dicts.set(sums bucket next_sum)
+
+    if i % 1000 == 0 {
+        set report = report + strings.replace(bucket "a" "A")
+    }
+    set i += 1
+}
+use dasu(counts {counts})
+use dasu(sums {sums})
+use dasu(report_len {len(report)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})
+use dasu(gpu {gpu.snapshot()})

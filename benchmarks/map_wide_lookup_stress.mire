@@ -1,0 +1,52 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set stats = [] :map[str i64] mut
+set stats = dicts.set(stats "k00" 1) mut
+set stats = dicts.set(stats "k01" 2) mut
+set stats = dicts.set(stats "k02" 3) mut
+set stats = dicts.set(stats "k03" 4) mut
+set stats = dicts.set(stats "k04" 5) mut
+set stats = dicts.set(stats "k05" 6) mut
+set stats = dicts.set(stats "k06" 7) mut
+set stats = dicts.set(stats "k07" 8) mut
+set stats = dicts.set(stats "k08" 9) mut
+set stats = dicts.set(stats "k09" 10) mut
+set stats = dicts.set(stats "k10" 11) mut
+set stats = dicts.set(stats "k11" 12) mut
+set stats = dicts.set(stats "k12" 13) mut
+set stats = dicts.set(stats "k13" 14) mut
+set stats = dicts.set(stats "k14" 15) mut
+set stats = dicts.set(stats "k15" 16) mut
+
+set i = 0 :i64 mut
+set total = 0 :i64 mut
+
+while i < 20000 {
+    set total += dicts.get(stats "k00" 0)
+    set total += dicts.get(stats "k01" 0)
+    set total += dicts.get(stats "k02" 0)
+    set total += dicts.get(stats "k03" 0)
+    set total += dicts.get(stats "k04" 0)
+    set total += dicts.get(stats "k05" 0)
+    set total += dicts.get(stats "k06" 0)
+    set total += dicts.get(stats "k07" 0)
+    set total += dicts.get(stats "k08" 0)
+    set total += dicts.get(stats "k09" 0)
+    set total += dicts.get(stats "k10" 0)
+    set total += dicts.get(stats "k11" 0)
+    set total += dicts.get(stats "k12" 0)
+    set total += dicts.get(stats "k13" 0)
+    set total += dicts.get(stats "k14" 0)
+    set total += dicts.get(stats "k15" 0)
+    set i += 1
+}
+use dasu(total {total})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

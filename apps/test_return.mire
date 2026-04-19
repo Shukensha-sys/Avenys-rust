@@ -1,0 +1,27 @@
+import lists as lists
+import math as math
+
+fn find_max: (xs:vec![i64]) :i64 {
+set max_val = lists.get(xs 0)
+set i = 1 :i64 mut
+while i < len(xs) {
+set v = lists.get(xs i)
+set is_greater = v > max_val
+use is_greater then
+set max_val = v
+}
+set i = i + 1
+}
+return max_val
+}
+pub fn main: () {
+set xs = [] :vec![i64] mut
+set xs = lists.push(xs 5)
+set xs = lists.push(xs 12)
+set xs = lists.push(xs 3)
+set xs = lists.push(xs 99)
+set xs = lists.push(xs 7)
+
+set max_val = find_max(xs)
+use dasu(Max {max_val})
+}

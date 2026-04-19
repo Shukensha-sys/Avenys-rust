@@ -1,0 +1,20 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+pub fn main: () {
+    set wall = time.mark() :i64 mut
+    set proc = cpu.mark() :i64 mut
+
+    set data = [] :map[str i64] mut
+    set data = dicts.set(data "alpha" 10)
+    set data = dicts.set(data "beta" 20)
+    set data = dicts.set(data "gamma" 30)
+
+    set val = dicts.get(data "alpha" 0)
+    use dasu(alpha {val})
+
+    use dasu(wall_ms {time.elapsed_ms(wall)})
+    use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+}

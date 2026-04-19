@@ -1,0 +1,35 @@
+import std
+
+enum Color {
+    Red
+    Green
+    Blue
+    Custom(value :i64)
+}
+
+pub fn main: () {
+    use dasu(=== Test: Enums with multiple variants ===)
+    
+    set c1 = Color.Red
+    set c4 = Color.Custom(42)
+    
+    set color_val = match c1 {
+        Color.Red { 1 }
+        Color.Green { 2 }
+        Color.Blue { 3 }
+        Color.Custom(value) { value }
+    } :i64
+    
+    use dasu(c1 -> {color_val})
+    
+    set color_val2 = match c4 {
+        Color.Red { 1 }
+        Color.Green { 2 }
+        Color.Blue { 3 }
+        Color.Custom(value) { value }
+    } :i64
+    
+    use dasu(c4 -> {color_val2})
+    
+    use dasu(=== All Tests Passed ===)
+}

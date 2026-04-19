@@ -1,0 +1,14 @@
+import time as time
+import cpu as cpu
+import strings as strings
+
+set wall = time.mark()
+
+set result = strings.to_upper("hello")
+set result2 = strings.to_lower("WORLD")
+set trimmed = strings.trim("  hello  ")
+
+use dasu(upper {result})
+use dasu(lower {result2})
+use dasu(trimmed {trimmed})
+use dasu(wall_ms {time.elapsed_ms(wall)})

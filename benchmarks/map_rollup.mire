@@ -1,0 +1,24 @@
+import dicts as dicts
+import strings as strings
+
+set counts = [] :map[str i64] mut
+set sums = [] :map[str i64] mut
+set i = 0 :i64 mut
+
+while i < 10000 {
+    set bucket = "cold" :str mut
+    if i % 4 == 0 {
+        set bucket = "warm"
+    }
+    if i % 9 == 0 {
+        set bucket = "hot"
+    }
+    set current_count = dicts.get(counts bucket 0)
+    set counts = dicts.set(counts bucket current_count + 1)
+
+    set current_sum = dicts.get(sums bucket 0)
+    set sums = dicts.set(sums bucket current_sum + i)
+    set i += 1
+}
+use dasu(counts {counts})
+use dasu(sums {sums})

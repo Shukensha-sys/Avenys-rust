@@ -1,0 +1,7 @@
+import strings as strings
+
+set s = "hello world test"
+set parts = strings.split(s " ")
+
+use dasu(parts {parts})
+use dasu(original {s})

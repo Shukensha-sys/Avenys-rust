@@ -1,0 +1,24 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+
+set data = []  :vec![i64] mut
+set i = 0 :i64 mut
+while i < 10000 {
+    set data = lists.push(data i)
+    set i += 1
+}
+set val = lists.get(data 5000) :i64 mut
+set last = lists.get(data 9999) :i64 mut
+set first = lists.get(data 0) :i64 mut
+
+use dasu(val {val})
+use dasu(last {last})
+use dasu(first {first})
+use dasu(len {len(data)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})

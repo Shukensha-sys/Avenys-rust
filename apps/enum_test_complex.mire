@@ -1,0 +1,41 @@
+import std
+
+enum Status {
+    Ok
+    Pending
+    Error(value :i64)
+}
+
+pub fn main: () {
+    use dasu(=== Test 1: Simple enum creation ===)
+    
+    set s1 = Status.Ok
+    set s2 = Status.Pending
+    set s3 = Status.Error(500)
+    
+    use dasu(=== Test 2: Match expressions ===)
+    
+    set result1 = match s1 {
+        Status.Ok { 1 }
+        Status.Pending { 2 }
+        Status.Error(value) { value }
+    } :i64
+    
+    set result2 = match s2 {
+        Status.Ok { 1 }
+        Status.Pending { 2 }
+        Status.Error(value) { value }
+    } :i64
+    
+    set result3 = match s3 {
+        Status.Ok { 1 }
+        Status.Pending { 2 }
+        Status.Error(value) { value }
+    } :i64
+    
+    use dasu(result1)
+    use dasu(result2)
+    use dasu(result3)
+    
+    use dasu(=== All Tests Passed ===)
+}

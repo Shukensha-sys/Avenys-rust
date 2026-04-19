@@ -1,0 +1,23 @@
+import time as time
+import mem as mem
+import cpu as cpu
+
+fn map_fn: (x:i64) :i64 {
+    return x * 2
+}
+fn filter_fn: (x:i64) :bool {
+    return x % 2 == 0
+}
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set numbers = []  :vec![i64] mut
+
+set i = 0 :i64 mut
+while i < 5000 {
+    set numbers = numbers + [i]
+    set i += 1
+}
+use dasu(len {len(numbers)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(process_ram {mem.format(mem.process())})

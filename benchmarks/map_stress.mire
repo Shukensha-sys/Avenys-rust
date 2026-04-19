@@ -1,0 +1,44 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set stats = [] :map[str i64] mut
+set i = 0 :i64 mut
+
+while i < 12000 {
+    if i % 4 == 0 {
+        set key = "alpha" :str mut
+        set current = dicts.get(stats key 0)
+        set stats = dicts.set(stats key current + i)
+    }
+    if i % 4 == 1 {
+        set key = "beta" :str mut
+        set current = dicts.get(stats key 0)
+        set stats = dicts.set(stats key current + i)
+    }
+    if i % 4 == 2 {
+        set key = "gamma" :str mut
+        set current = dicts.get(stats key 0)
+        set stats = dicts.set(stats key current + i)
+    }
+    if i % 4 == 3 {
+        set key = "delta" :str mut
+        set current = dicts.get(stats key 0)
+        set stats = dicts.set(stats key current + i)
+    }
+    set i += 1
+}
+set total = dicts.get(stats "alpha" 0) + dicts.get(stats "beta" 0) + dicts.get(stats "gamma" 0) + dicts.get(stats "delta" 0)
+
+use dasu(alpha {dicts.get(stats "alpha" 0)})
+use dasu(beta {dicts.get(stats "beta" 0)})
+use dasu(gamma {dicts.get(stats "gamma" 0)})
+use dasu(delta {dicts.get(stats "delta" 0)})
+use dasu(total {total})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

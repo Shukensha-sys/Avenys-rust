@@ -1,0 +1,21 @@
+import time as time
+import cpu as cpu
+import lists as lists
+
+set wall = time.mark()
+
+set xs = []  :vec![i64] mut
+set i = 0 :i64 mut
+while i < 10000 {
+    set xs = lists.push(xs i)
+    set i += 1
+}
+set first = lists.get(xs 0)
+set last = lists.get(xs 9999)
+
+set sliced = lists.slice(xs 100 200)
+
+use dasu(first {first})
+use dasu(last {last})
+use dasu(sliced_len {len(sliced)})
+use dasu(wall_ms {time.elapsed_ms(wall)})

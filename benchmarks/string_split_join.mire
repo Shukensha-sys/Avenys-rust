@@ -1,0 +1,18 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+import strings as strings
+import lists as lists
+
+set wall = time.mark()
+set proc = cpu.mark()
+
+set s = "hello world world" mut
+set s = strings.replace(s "world" "mire") mut
+
+set parts = strings.split(s " ")
+
+use dasu(original {s})
+use dasu(parts {parts})
+use dasu(wall_ms {time.elapsed_ms(wall)})

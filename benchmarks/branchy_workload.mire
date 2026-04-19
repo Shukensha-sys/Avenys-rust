@@ -1,0 +1,52 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import gpu as gpu
+import lists as lists
+import math as math
+import strings as strings
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set samples = []  :vec![i64] mut
+set trace = "" :str mut
+set i = 0 :i64 mut
+set total = 0 :i64 mut
+
+while i < 3000 {
+    set j = 0 :i64 mut
+    set local = 0 :i64 mut
+
+    while j < 32 {
+        set mix = (i * 3 + j * 7) % 11 :i64 mut
+        if mix % 2 == 0 {
+            set local += mix + i
+        }
+        if mix % 3 == 0 {
+            set local += j
+        }
+        if mix % 5 == 0 {
+            set local -= 1
+        }
+        set j += 1
+    }
+    set samples = lists.push(samples local)
+    set total += local
+
+    if i % 250 == 0 {
+        set chunk = strings.replace("node" "o" "0") :str mut
+        set trace = trace + chunk
+    }
+    set i += 1
+}
+set summed = math.sum(samples)
+
+use dasu(total {total})
+use dasu(sum_check {summed})
+use dasu(items {len(samples)})
+use dasu(trace_len {len(trace)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})
+use dasu(gpu {gpu.snapshot()})

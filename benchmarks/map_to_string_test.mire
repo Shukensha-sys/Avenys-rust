@@ -1,0 +1,10 @@
+import dicts as dicts
+import strings as strings
+
+set data = [] :map[str i64] mut
+set data = dicts.set(data "alpha" 100) mut
+set data = dicts.set(data "beta" 200) mut
+
+set s = strings.to_string(data)
+
+use dasu(map {s})

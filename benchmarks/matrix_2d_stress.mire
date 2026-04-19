@@ -1,0 +1,31 @@
+import time as time
+import mem as mem
+
+set wall = time.mark() :i64 mut
+
+set matrix = []  :vec![vec![i64]] mut
+set i = 0 :i64 mut
+while i < 100 {
+    set row = []  :vec![i64] mut
+    set j = 0 :i64 mut
+    while j < 100 {
+        set val = i * 100 + j
+        set row = row + [val]
+        set j += 1
+    }
+    set matrix = matrix + [row]
+    set i += 1
+}
+set total = 0 :i64 mut
+set i = 0 :i64 mut
+while i < 100 {
+    set j = 0 :i64 mut
+    while j < 100 {
+        set total += matrix at i at j
+        set j += 1
+    }
+    set i += 1
+}
+use dasu(total {total})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(process_ram {mem.format(mem.process())})

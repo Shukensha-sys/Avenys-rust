@@ -1,0 +1,37 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+
+set alpha = [] :map[str i64] mut
+set alpha = dicts.set(alpha "x" 11) mut
+set alpha = dicts.set(alpha "y" 22) mut
+
+set beta = [] :map[str i64] mut
+set beta = dicts.set(beta "x" 33) mut
+set beta = dicts.set(beta "y" 44) mut
+
+set gamma = [] :map[str i64] mut
+set gamma = dicts.set(gamma "x" 55) mut
+set gamma = dicts.set(gamma "y" 66) mut
+set empty_inner = [] :map[str i64]
+
+set outer = [] :map[str map[str i64]] mut
+set outer = dicts.set(outer "alpha" alpha) mut
+set outer = dicts.set(outer "beta" beta) mut
+set outer = dicts.set(outer "gamma" gamma) mut
+
+set picked = dicts.get(outer "beta" empty_inner) :map[str i64]
+set total = dicts.get(dicts.get(outer "alpha" empty_inner) "x" 0) + dicts.get(dicts.get(outer "alpha" empty_inner) "y" 0) + dicts.get(dicts.get(outer "beta" empty_inner) "x" 0) + dicts.get(dicts.get(outer "beta" empty_inner) "y" 0) + dicts.get(dicts.get(outer "gamma" empty_inner) "x" 0) + dicts.get(dicts.get(outer "gamma" empty_inner) "y" 0)
+set edge = dicts.get(picked "y" 0)
+
+use dasu(groups {str(outer)})
+use dasu(total {total})
+use dasu(edge {edge})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

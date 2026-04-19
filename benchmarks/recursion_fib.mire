@@ -1,0 +1,18 @@
+import time as time
+import mem as mem
+import cpu as cpu
+
+fn fib: (n:i64) :i64 {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set result = fib(20) :i64 mut
+
+use dasu(result {result})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(process_ram {mem.format(mem.process())})

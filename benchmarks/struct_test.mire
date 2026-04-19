@@ -1,0 +1,7 @@
+struct Point {
+    x :i64
+    y :i64
+}
+pub fn main: () {
+    use dasu(Hello from struct)
+}

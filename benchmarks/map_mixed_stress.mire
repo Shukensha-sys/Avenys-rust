@@ -1,0 +1,25 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set stats = [] :map[str i64] mut
+
+set i = 0 :i64 mut
+while i < 30000 {
+    set key1 = "item" + str(i % 1000)
+    set key2 = "cat" + str(i % 100)
+    
+    set v1 = dicts.get(stats key1 0)
+    set stats = dicts.set(stats key1 v1 + 1)
+    
+    set v2 = dicts.get(stats key2 0)
+    set stats = dicts.set(stats key2 v2 + 1)
+    
+    set i += 1
+}
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(process_ram {mem.format(mem.process())})

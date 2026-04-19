@@ -1,0 +1,9 @@
+[project]
+name = "matrix_2d_stress"
+version = "0.1.0"
+entry = "benchmarks/matrix_2d_stress.mire"
+
+[cache]
+max_units = 256
+analysis_cache = true
+compression = false

@@ -1,0 +1,36 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+
+set matrix = [[1 2 3 4] [5 6 7 8] [9 10 11 12]]  :vec[vec[i64]] mut
+
+set rows = len(matrix)
+set picked = matrix at 1  :vec[i64] mut
+set cols = len(picked)
+set total = 0 :i64 mut
+set total += (matrix at 0) at 0
+set total += (matrix at 0) at 1
+set total += (matrix at 0) at 2
+set total += (matrix at 0) at 3
+set total += (matrix at 1) at 0
+set total += (matrix at 1) at 1
+set total += (matrix at 1) at 2
+set total += (matrix at 1) at 3
+set total += (matrix at 2) at 0
+set total += (matrix at 2) at 1
+set total += (matrix at 2) at 2
+set total += (matrix at 2) at 3
+set edge = (matrix at 2) at 3
+
+use dasu(rows {rows})
+use dasu(cols {cols})
+use dasu(total {total})
+use dasu(edge {edge})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

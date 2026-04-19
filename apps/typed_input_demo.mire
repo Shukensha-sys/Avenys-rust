@@ -1,0 +1,6 @@
+import std: (input output)
+
+pub fn main: () {
+set age = std.input(Edad: ) :i64
+use std.output(Edad registrada {age})
+}

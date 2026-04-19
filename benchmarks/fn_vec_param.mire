@@ -1,0 +1,25 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+import math as math
+
+fn sum_vec: (xs:vec![i64]) :i64 {
+    return math.sum(xs)
+}
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set data = []  :vec![i64] mut
+
+set i = 0 :i64 mut
+while i < 1000 {
+    set data = lists.push(data i)
+    set i += 1
+}
+set result = sum_vec(data) :i64 mut
+
+use dasu(result {result})
+use dasu(len {len(data)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(process_ram {mem.format(mem.process())})

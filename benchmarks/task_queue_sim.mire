@@ -1,0 +1,22 @@
+import lists as lists
+import math as math
+import strings as strings
+
+set queue = [] :vec![i64] mut
+set total = 0 :i64 mut
+set digest = "" :str mut
+set i = 0 :i64 mut
+
+while i < 12000 {
+    set priority = (i * 7 + 3) % 11 :i64 mut
+    set queue = lists.push(queue priority)
+    set total += priority
+
+    if priority % 3 == 0 {
+        set digest = digest + strings.replace("task" "a" "A")
+    }
+    set i += 1
+}
+use dasu(total {total})
+use dasu(items {len(queue)})
+use dasu(digest_len {len(digest)})

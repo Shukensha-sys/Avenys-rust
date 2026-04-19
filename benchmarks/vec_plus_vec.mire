@@ -1,0 +1,14 @@
+import time as time
+import mem as mem
+
+pub fn main: () {
+    set xs = []  :vec![i64] mut
+    set i = 0 :i64 mut
+    
+    while i < 100 {
+        set xs = xs + [i]
+        set i += 1
+    }
+    use dasu(len {len(xs)})
+    use dasu(process_ram {mem.format(mem.process())})
+}

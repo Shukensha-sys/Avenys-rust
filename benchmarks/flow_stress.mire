@@ -1,0 +1,37 @@
+fn weight: (x:i64 y:i64) :i64 {
+    set base = x * 17 + y * 23 :i64 mut
+    set delta = if base % 2 == 0 { base / 2 } else { base * 3 - 1 } :i64 mut
+    return delta % 997
+}
+pub fn main: () {
+    set outer = 0 :i64 mut
+    set total = 0 :i64 mut
+    set checksum = 0 :i64 mut
+
+    while outer < 18000 {
+        for inner in range(64) {
+            if inner == 7 {
+                continue
+            }
+            set piece = weight(outer inner) :i64 mut
+            set total += piece
+
+            if piece % 11 == 0 {
+                set checksum += piece / 11
+            }
+            if inner == 61 and outer % 97 == 0 {
+                break
+            }
+        }
+        set outer += 1
+    }
+    set tail = 0 :i64 mut
+    do {
+        set tail += 1
+        set checksum += tail
+    } while tail != 128
+
+    use dasu(total {total})
+    use dasu(checksum {checksum})
+    use dasu(tag_len {len("avenys-flow-stress")})
+}

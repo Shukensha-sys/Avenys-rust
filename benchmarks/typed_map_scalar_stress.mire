@@ -1,0 +1,36 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import dicts as dicts
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set flags = [] :map[i32 bool] mut
+set i = 0 :i64 mut
+
+while i < 20000 {
+    set flags = dicts.set(flags 1 i % 2 == 0)
+    set flags = dicts.set(flags 2 i % 3 == 0)
+    set flags = dicts.set(flags 3 i % 5 == 0)
+    set flags = dicts.set(flags 4 i % 7 == 0)
+    set i += 1
+}
+set score = 0 :i64 mut
+if dicts.get(flags 1 false) {
+    set score += 1
+}
+if dicts.get(flags 2 false) {
+    set score += 10
+}
+if dicts.get(flags 3 false) {
+    set score += 100
+}
+if dicts.get(flags 4 false) {
+    set score += 1000
+}
+use dasu(score {score})
+use dasu(flags {str(flags)})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
+use dasu(process_ram {mem.format(mem.process())})

@@ -1,0 +1,6 @@
+import strings as strings
+
+set words = "hello world test"
+set joined = strings.join(words "-")
+
+use dasu(joined {joined})

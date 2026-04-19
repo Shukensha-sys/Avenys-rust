@@ -1,0 +1,7 @@
+Avenys v2.0.0
+
+Instance methods now require explicit self
+New syntax for associated/static methods using Type::method(...)
+Clear disambiguation: enums use ., static methods use ::
+Removed legacy add module syntax (use import)
+Stricter dispatch rules (no implicit self, requires explicit declaration)

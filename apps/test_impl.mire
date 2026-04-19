@@ -1,0 +1,86 @@
+import std
+
+struct Point {
+    x :i64
+    y :i64
+}
+
+impl Point {
+    fn new: (x: i64, y: i64) :Point {
+        return (Point x: x, y: y)
+    }
+    
+    fn get_x: (self) :i64 {
+        return self.x
+    }
+    
+    fn get_y: (self) :i64 {
+        return self.y
+    }
+    
+    fn sum: (self) :i64 {
+        return self.x + self.y
+    }
+}
+
+struct Person {
+    name :str
+    age :i64
+}
+
+impl Person {
+    fn new: (name: str, age: i64) :Person {
+        return (Person name: name, age: age)
+    }
+    
+    fn get_name: (self) :str {
+        return self.name
+    }
+    
+    fn get_age: (self) :i64 {
+        return self.age
+    }
+    
+    fn next_year: (self) :i64 {
+        return self.age + 1
+    }
+    
+    fn is_adult: (self) :bool {
+        return self.age >= 18
+    }
+}
+
+pub fn main: () {
+    set p1 = (Point x: 10, y: 20)
+    set x1 = p1.get_x()
+    set y1 = p1.get_y()
+    set sum1 = p1.sum()
+    
+    set p2 = Point::new(5, 15)
+    set x2 = p2.get_x()
+    set y2 = p2.get_y()
+    set sum2 = p2.sum()
+    
+    use dasu(x1)
+    use dasu(y1)
+    use dasu(sum1)
+    use dasu(x2)
+    use dasu(y2)
+    use dasu(sum2)
+    
+    set person = (Person name: "Alice", age: 25)
+    set name = person.get_name()
+    set age = person.get_age()
+    set next = person.next_year()
+    set adult = person.is_adult()
+    
+    use dasu(name: {name})
+    use dasu(age: {age})
+    use dasu(next: {next})
+    use dasu(adult: {adult})
+    
+    set adult_check = person.age >= 18
+    set doubled_age = person.age * 2
+    use dasu(adult_check)
+    use dasu(doubled_age)
+}

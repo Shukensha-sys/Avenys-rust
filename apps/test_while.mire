@@ -1,0 +1,20 @@
+import lists as lists
+import math as math
+
+pub fn main: () {
+set xs = [] :vec![i64] mut
+set xs = lists.push(xs 1)
+set xs = lists.push(xs 2)
+set xs = lists.push(xs 3)
+
+set l = len(xs)
+use dasu(Len {l})
+
+set i = 0 :i64 mut
+while i < l {
+set x = lists.get(xs i)
+use dasu(Item {x})
+set i = i + 1
+}
+use dasu(Done)
+}

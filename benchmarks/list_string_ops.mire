@@ -1,0 +1,24 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+import math as math
+
+set wall = time.mark()
+set proc = cpu.mark()
+
+set xs = [] :vec![str] mut
+set xs = lists.push(xs "hello") mut
+set xs = lists.push(xs "world") mut
+set xs = lists.push(xs "test") mut
+
+set first = lists.get(xs 0)
+set second = lists.get(xs 1)
+set last = lists.get(xs 2)
+set l = len(xs)
+
+use dasu(first {first})
+use dasu(second {second})
+use dasu(last {last})
+use dasu(len {l})
+use dasu(wall_ms {time.elapsed_ms(wall)})

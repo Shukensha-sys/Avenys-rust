@@ -1,0 +1,22 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set data = []  :vec![i64] mut
+
+set i = 0 :i64 mut
+while i < 10000 {
+    set data = lists.push(data i)
+    set i += 1
+}
+set data2 = data
+set val1 = lists.get(data 0) :i64 mut
+set val2 = lists.get(data2 0) :i64 mut
+
+use dasu(val1 {val1})
+use dasu(val2 {val2})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(process_ram {mem.format(mem.process())})

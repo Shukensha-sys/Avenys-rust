@@ -1,0 +1,16 @@
+import std: (output)
+import lists as lists
+import time as time
+
+pub fn main: () {
+set started = time.mark() :i64 mut
+
+set queue = [] :vec![i64] mut
+set queue = lists.push(queue 10)
+set queue = lists.push(queue 12)
+set queue = lists.push(queue 3)
+
+use std.output(queue size {len(queue)})
+use std.output(first ticket {lists.get(queue 0)})
+use std.output(elapsed {time.elapsed_ms(started)})
+}

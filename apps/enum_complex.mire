@@ -1,0 +1,26 @@
+import std
+
+enum Status {
+    Ok(value :i64)
+    Err(msg :str)
+    Pending
+}
+
+pub fn main: () {
+    set r1 = Status.Ok(42)
+    set r2 = Status.Err("error")
+    
+    set msg1 = match r1 {
+        Status.Ok(v) { 42 }
+        _ { 0 }
+    } :i64
+    
+    set msg2 = match r2 {
+        Status.Err(e) { 1 }
+        _ { 0 }
+    } :i64
+    
+    use dasu(msg1)
+    use dasu(msg2)
+    use dasu(All tests passed!)
+}

@@ -1,0 +1,13 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+
+fn pair: (x:i64 y:i64) :i64 {
+    return x + y
+}
+pub fn main: () {
+    set p = pair(3 4)
+    
+    use dasu(p {p})
+}

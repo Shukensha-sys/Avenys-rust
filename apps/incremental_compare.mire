@@ -1,0 +1,29 @@
+import time as time
+import mem as mem
+
+fn workload: (limit :i64) :i64 {
+    set i = 0 :i64 mut
+    set acc = 0 :i64 mut
+    set split = limit / 2 :i64
+
+    while i < limit {
+        if i < split {
+            set acc += i * 3
+        } else {
+            set acc += i / 3
+        }
+        set i += 1
+    }
+
+    return acc
+}
+
+pub fn main: () {
+    set mark = time.mark() :i64
+    set limit = 5000000 :i64
+    set result = workload(limit) :i64
+
+    use dasu(result {result})
+    use dasu(elapsed_ms {time.elapsed_ms(mark)})
+    use dasu(process_ram {mem.format(mem.process())})
+}

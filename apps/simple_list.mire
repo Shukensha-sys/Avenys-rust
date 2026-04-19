@@ -1,0 +1,13 @@
+import lists as lists
+
+pub fn main: () {
+    set items = [] :vec![i64] mut
+    set items = lists.push(items 42)
+    set items = lists.push(items 99)
+
+    set first = lists.get(items 0)
+    use dasu(First {first})
+
+    set count = len(items)
+    use dasu(Count {count})
+}

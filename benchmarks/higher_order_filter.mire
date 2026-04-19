@@ -1,0 +1,33 @@
+import time as time
+import mem as mem
+import cpu as cpu
+import lists as lists
+import dicts as dicts
+
+fn filter_even: (xs:vec![i64]) :vec![i64] {
+    set result = []  :vec![i64] mut
+    set i = 0 :i64 mut
+    while i < len(xs) {
+        set val = xs at i
+        if val % 2 == 0 {
+            set result = lists.push(result val)
+        }
+        set i += 1
+    }
+    return result
+}
+set wall = time.mark() :i64 mut
+set proc = cpu.mark() :i64 mut
+set data = []  :vec![i64] mut
+
+set i = 0 :i64 mut
+while i < 10000 {
+    set data = lists.push(data i)
+    set i += 1
+}
+set filtered = filter_even(data)
+set total = len(filtered)
+
+use dasu(total {total})
+use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu(cpu_ms {cpu.elapsed_ms(proc)})

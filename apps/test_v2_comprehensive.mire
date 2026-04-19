@@ -1,0 +1,111 @@
+import std
+
+struct Point {
+    x :i64
+    y :i64
+}
+
+impl Point {
+    fn new: (x :i64 y :i64) :Point {
+        return (Point x: x, y: y)
+    }
+    
+    fn get_x: (self) :i64 {
+        return self.x
+    }
+    
+    fn get_y: (self) :i64 {
+        return self.y
+    }
+    
+    fn sum: (self) :i64 {
+        return self.x + self.y
+    }
+    
+    fn scale: (self factor :i64) :i64 {
+        return self.x * factor + self.y * factor
+    }
+}
+
+struct Person {
+    name :str
+    age :i64
+}
+
+impl Person {
+    fn new: (name :str age :i64) :Person {
+        return (Person name: name, age: age)
+    }
+    
+    fn get_name: (self) :str {
+        return self.name
+    }
+    
+    fn get_age: (self) :i64 {
+        return self.age
+    }
+    
+    fn next_year: (self) :i64 {
+        return self.age + 1
+    }
+    
+    fn is_adult: (self) :bool {
+        return self.age >= 18
+    }
+}
+
+struct Rectangle {
+    width :i64
+    height :i64
+}
+
+impl Rectangle {
+    fn new: (w :i64 h :i64) :Rectangle {
+        return (Rectangle width: w, height: h)
+    }
+    
+    fn area: (self) :i64 {
+        return self.width * self.height
+    }
+    
+    fn perimeter: (self) :i64 {
+        return 2 * (self.width + self.height)
+    }
+}
+
+pub fn main: () {
+    set p1 = (Point x: 10, y: 20)
+    use dasu(p1.get_x())
+    use dasu(p1.get_y())
+    use dasu(p1.sum())
+    
+    set p2 = Point::new(5, 15)
+    use dasu(p2.get_x())
+    use dasu(p2.get_y())
+    use dasu(p2.sum())
+    
+    set scaled = p1.scale(2)
+    use dasu(scaled)
+    
+    set person = (Person name: "Alice", age: 25)
+    use dasu({person.get_name()})
+    use dasu(person.get_age())
+    use dasu(person.next_year())
+    use dasu(person.is_adult())
+    
+    set rect1 = (Rectangle width: 5, height: 3)
+    set rect2 = Rectangle::new(10, 8)
+    use dasu(rect1.area())
+    use dasu(rect1.perimeter())
+    use dasu(rect2.area())
+    use dasu(rect2.perimeter())
+    
+    set doubled_age = person.age * 2
+    set age_plus_10 = person.age + 10
+    use dasu(doubled_age)
+    use dasu(age_plus_10)
+    
+    set x = p1.get_x()
+    set y = p1.get_y()
+    use dasu(x + y)
+}
