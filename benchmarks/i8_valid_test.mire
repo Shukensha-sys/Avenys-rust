@@ -1,4 +1,4 @@
 pub fn main: () {
     set x = 127 :i8 mut
-    use dasu(x {x})
+    use dasu("x {x}")
 }

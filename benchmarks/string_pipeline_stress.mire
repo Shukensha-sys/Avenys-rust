@@ -10,4 +10,4 @@ while i < 8000 {
     set out = out + line
     set i += 1
 }
-use dasu(out_len {len(out)})
+use dasu("out_len {len(out")})

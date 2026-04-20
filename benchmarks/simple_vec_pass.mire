@@ -3,7 +3,7 @@ pub fn main: () {
     set data = data + [1]
     set data = data + [2]
     set len = len(data)
-    use dasu(len {len})
-    use dasu(first {data at 0})
-    use dasu(second {data at 1})
+    use dasu("len {len}")
+    use dasu("first {data at 0}")
+    use dasu("second {data at 1}")
 }

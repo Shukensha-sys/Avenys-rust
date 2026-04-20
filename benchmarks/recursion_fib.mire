@@ -12,7 +12,7 @@ set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
 set result = fib(20) :i64 mut
 
-use dasu(result {result})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("result {result}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

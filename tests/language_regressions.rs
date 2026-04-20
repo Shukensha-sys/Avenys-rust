@@ -1,4 +1,4 @@
-use mire::parser::ast::{DataType, Expression, Literal, Statement};
+use mire::parser::ast::{DataType, Expression, Statement};
 use mire::{
     BuildMode, BuildOptions, ErrorKind, MireError, analyze_program, cache_file_path,
     check_program_types, compile_file_with_avenys, load_program_from_file,
@@ -58,7 +58,7 @@ fn legacy_add_reports_deprecated_syntax_with_filename() {
     let source_path = root.join("legacy_add.mire");
     fs::write(
         &source_path,
-        "add std\n\npub fn main: () {\n    use dasu(ok)\n}\n",
+        "add std\n\npub fn main: () {\n    use dasu(\"ok\")\n}\n",
     )
     .expect("write source");
 
@@ -117,7 +117,7 @@ fn compile_reports_parser_error_kind_and_filename() {
     let err = expect_compile_error_from_source(
         "mire_diag_parser_kind_filename",
         "parser_error.mire",
-        "pub fn main: () {\n    set x = 10\n    if x > 5\n        use dasu(hola)\n}\n",
+        "pub fn main: () {\n    set x = 10\n    if x > 5\n        use dasu(\"hola\")\n}\n",
     );
 
     assert!(matches!(err.kind, ErrorKind::Parser { .. }));
@@ -217,12 +217,12 @@ fn compile_attributes_imported_type_error_to_imported_file() {
 }
 
 #[test]
-fn typed_std_input_annotation_propagates_to_let_binding() {
-    let source = "import std: (input output)\npub fn main: () {\nset x = std.input(: ) :i64\n}\n";
+fn typed_ireru_annotation_propagates_to_let_binding() {
+    let source = "pub fn main: () {\nset x = ireru(\": \") :i64\n}\n";
     let mut program = parse(source).expect("source should parse");
     check_program_types(&mut program, source).expect("type check should pass");
 
-    let Statement::Function { body, .. } = &program.statements[1] else {
+    let Statement::Function { body, .. } = &program.statements[0] else {
         panic!("expected function statement");
     };
     let Statement::Let {
@@ -242,31 +242,20 @@ fn typed_std_input_annotation_propagates_to_let_binding() {
 }
 
 #[test]
-fn template_output_keeps_unquoted_text_and_interpolation() {
-    let source = "pub fn main: () {\nset user = \"mire\"\nuse dasu(hola {user})\n}\n";
+fn template_output_requires_quoted_strings_for_literal_text() {
+    let source = "pub fn main: () {\nset user = \"mire\"\nuse dasu(\"hola {user}\")\n}\n";
     let mut program = parse(source).expect("source should parse");
     analyze_program(&mut program, source).expect("program should analyze");
 }
 
 #[test]
-fn template_output_preserves_symbols_without_quotes() {
-    let program =
-        parse("pub fn main: () {\nuse dasu(a > b == c != d <= e >= f & ! @ done => next)\n}\n")
-            .expect("source should parse");
-
-    let Statement::Function { body, .. } = &program.statements[0] else {
-        panic!("expected function statement");
-    };
-    let Statement::Expression(Expression::Call { name, args, .. }) = &body[0] else {
-        panic!("expected dasu call");
-    };
-
-    assert_eq!(name, "dasu");
-    let Expression::Literal(Literal::Str(text)) = &args[0] else {
-        panic!("expected single string literal template");
-    };
-
-    assert_eq!(text, "a > b == c != d <= e >= f & ! @ done => next");
+fn template_output_treats_unquoted_text_as_regular_expressions() {
+    let source = "pub fn main: () {\nuse dasu(hola mundo)\n}\n";
+    let mut program = parse(source).expect("regular expressions should still parse");
+    let err = analyze_program(&mut program, source)
+        .expect_err("unquoted text should now fail as unresolved identifiers")
+        .to_string();
+    assert!(err.contains("Unknown identifier 'hola'"), "{err}");
 }
 
 #[test]
@@ -306,11 +295,7 @@ fn match_pattern_binding_is_available_to_template_output() {
         panic!("expected dasu call");
     };
 
-    assert!(
-        contains_call_named(&args[0], "str"),
-        "expected dasu(v) to use the pattern binding, got {:?}",
-        args[0]
-    );
+    assert!(matches!(args.first(), Some(Expression::Identifier(_))), "{args:?}");
 }
 
 #[test]
@@ -333,7 +318,7 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
     .expect("write project");
     fs::write(
         &source_path,
-        "enum Status {\n    Loading(progress :i64 total :i64)\n}\n\npub fn main: () {\n    set loading = Status.Loading(total: 100, progress: 75)\n    match loading {\n        Status.Loading(progress total) {\n            use dasu({progress} {total})\n        }\n    }\n}\n",
+        "enum Status {\n    Loading(progress :i64 total :i64)\n}\n\npub fn main: () {\n    set loading = Status.Loading(total: 100, progress: 75)\n    match loading {\n        Status.Loading(progress total) {\n            use dasu(\"{progress} {total}\")\n        }\n    }\n}\n",
     )
     .expect("write source");
 
@@ -894,13 +879,13 @@ fn method_using_self_without_explicit_self_is_rejected() {
 
 #[test]
 fn distinct_struct_types_do_not_unify_by_shape() {
-    let source = "struct Point {\n    x :i64\n}\n\nstruct Size {\n    x :i64\n}\n\npub fn main: () {\n    set point = (Point x: 1)\n    set size = (Size x: 1)\n    set other = point :Size\n    use dasu(size.x)\n    use dasu(other.x)\n}\n";
+    let source = "struct Point {\n    x :i64\n}\n\nstruct Size {\n    x :i64\n}\n\nfn needs_size: (value :Size) :i64 {\n    return value.x\n}\n\npub fn main: () {\n    set point = (Point x: 1)\n    use dasu(needs_size(point))\n}\n";
     let mut program = parse(source).expect("source should parse");
     let err = check_program_types(&mut program, source)
         .expect_err("distinct nominal struct types must not unify")
         .to_string();
 
-    assert!(err.contains("expected StructNamed(\"Size\")"), "{err}");
+    assert!(err.contains("expects StructNamed(\"Size\")"), "{err}");
     assert!(err.contains("got StructNamed(\"Point\")"), "{err}");
 }
 
@@ -952,7 +937,7 @@ fn impl_self_parameter_must_be_first() {
 #[test]
 fn empty_skill_is_rejected() {
     let err = expect_analysis_error(
-        "import std\n\npub skill Printable {\n}\n\npub fn main: () {\n    use dasu(test)\n}\n",
+        "import std\n\npub skill Printable {\n}\n\npub fn main: () {\n    use dasu(\"test\")\n}\n",
     );
 
     assert!(
@@ -1067,7 +1052,7 @@ fn local_import_loads_selected_symbols_from_project_root() {
     fs::create_dir_all(root.join("code")).expect("mkdir code");
     fs::write(
         root.join("code").join("helpers.mire"),
-        "pub fn helper: () {\n    use dasu(ok)\n}\n\npub fn ignored: () {\n    use dasu(no)\n}\n",
+        "pub fn helper: () {\n    use dasu(\"ok\")\n}\n\npub fn ignored: () {\n    use dasu(\"no\")\n}\n",
     )
     .expect("write helpers");
     let main_path = root.join("code").join("main.mire");
@@ -1107,7 +1092,7 @@ fn local_import_requires_project_root() {
     .expect("write main");
     fs::write(
         root.join("helpers.mire"),
-        "pub fn helper: () {\n    use dasu(ok)\n}\n",
+        "pub fn helper: () {\n    use dasu(\"ok\")\n}\n",
     )
     .expect("write helper");
 
@@ -1120,7 +1105,7 @@ fn local_import_requires_project_root() {
 
 #[test]
 fn pipeline_self_placeholder_analyzes_after_desugaring() {
-    let source = "import std\npub fn main: () {\nuse range(5) => dasu({self})\n}\n";
+    let source = "import std\npub fn main: () {\nuse range(5) => dasu(self)\n}\n";
     let mut program = parse(source).expect("source should parse");
 
     analyze_program(&mut program, source).expect("pipeline self placeholder should analyze");
@@ -1166,7 +1151,7 @@ fn enum_match_multiple_payloads_compile() {
     .expect("write project");
     fs::write(
         &source_path,
-        "enum Pair {\n    Pair(left :i64 right :i64)\n    Empty\n}\n\npub fn main: () {\n    set pair = Pair.Pair(10 20)\n    match pair {\n        Pair.Pair(a b) {\n            use dasu(a {b})\n            set total = a + b :i64\n            use dasu(total)\n        }\n        Pair.Empty {\n            use dasu(empty)\n        }\n    }\n}\n",
+        "enum Pair {\n    Pair(left :i64 right :i64)\n    Empty\n}\n\npub fn main: () {\n    set pair = Pair.Pair(10 20)\n    match pair {\n        Pair.Pair(a b) {\n            use dasu(\"{a} {b}\")\n            set total = a + b :i64\n            use dasu(total)\n        }\n        Pair.Empty {\n            use dasu(\"empty\")\n        }\n    }\n}\n",
     )
     .expect("write source");
 
@@ -1195,7 +1180,7 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
     .expect("write project");
     fs::write(
         &source_path,
-        "enum Color {\n    Custom(r :i64, g :i64, b :i64)\n}\n\npub fn main: () {\n    set color = Color.Custom(10 20 30)\n    match color {\n        Color.Custom(r g b) {\n            use dasu({r} {g} {b})\n        }\n    }\n}\n",
+        "enum Color {\n    Custom(r :i64, g :i64, b :i64)\n}\n\npub fn main: () {\n    set color = Color.Custom(10 20 30)\n    match color {\n        Color.Custom(r g b) {\n            use dasu(\"{r} {g} {b}\")\n        }\n    }\n}\n",
     )
     .expect("write source");
 
@@ -1224,7 +1209,7 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
     .expect("write project");
     fs::write(
         &source_path,
-        "enum Response {\n    Ok(message :str retry :bool)\n    Empty\n}\n\npub fn main: () {\n    set response = Response.Ok(\"ready\" true)\n    match response {\n        Response.Ok(message retry) {\n            use dasu({message})\n            if retry {\n                use dasu(retrying)\n            }\n            set copy = message :str\n            use dasu(copy)\n        }\n        Response.Empty {\n            use dasu(empty)\n        }\n    }\n}\n",
+        "enum Response {\n    Ok(message :str retry :bool)\n    Empty\n}\n\npub fn main: () {\n    set response = Response.Ok(\"ready\" true)\n    match response {\n        Response.Ok(message retry) {\n            use dasu(message)\n            if retry {\n                use dasu(\"retrying\")\n            }\n            set copy = message :str\n            use dasu(copy)\n        }\n        Response.Empty {\n            use dasu(\"empty\")\n        }\n    }\n}\n",
     )
     .expect("write source");
 
@@ -1248,7 +1233,7 @@ fn pipeline_len_builtin_compiles() {
     let source_path = root.join("pipeline_len.mire");
     fs::write(
         &source_path,
-        "import std\npub fn main: () {\nset x = [1 2 3] :arr[i64 3]\nset y = x => len()\nuse dasu(y: {y})\n}\n",
+        "import std\npub fn main: () {\nset x = [1 2 3] :arr[i64 3]\nset y = x => len()\nuse dasu(\"y: {y}\")\n}\n",
     )
     .expect("write source");
 
@@ -1272,7 +1257,7 @@ fn nested_output_pipeline_compiles() {
     let source_path = root.join("nested_output.mire");
     fs::write(
         &source_path,
-        "import std\npub fn main: () {\nuse dasu(Hello) => use dasu({self})\n}\n",
+        "import std\npub fn main: () {\nuse dasu(\"Hello\") => use dasu(self)\n}\n",
     )
     .expect("write source");
 
@@ -1301,7 +1286,7 @@ fn debug_build_persists_ir_on_disk() {
     .expect("write project");
     fs::write(
         &source_path,
-        "import std\npub fn main: () {\n    use dasu(debug)\n}\n",
+        "import std\npub fn main: () {\n    use dasu(\"debug\")\n}\n",
     )
     .expect("write source");
 
@@ -1338,7 +1323,7 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
     fs::create_dir_all(root.join("code")).expect("mkdir code");
 
     let helper_path = root.join("code").join("helper.mire");
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(one)\n}\n").expect("write helper");
+    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"one\")\n}\n").expect("write helper");
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
@@ -1358,7 +1343,7 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
         .expect("helper metadata")
         .hash;
 
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(two)\n}\n").expect("rewrite helper");
+    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"two\")\n}\n").expect("rewrite helper");
 
     let second = load_program_with_metadata(&main_path).expect("load second");
     let second_main_hash = second
@@ -1388,7 +1373,7 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
     .expect("write project");
     fs::write(
         &source_path,
-        "import std\npub fn main: () {\n    use dasu(cache)\n}\n",
+        "import std\npub fn main: () {\n    use dasu(\"cache\")\n}\n",
     )
     .expect("write source");
 
@@ -1444,7 +1429,7 @@ fn incremental_build_invalidates_on_local_import_change() {
     fs::create_dir_all(root.join("code")).expect("mkdir code");
 
     let helper_path = root.join("code").join("helper.mire");
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(one)\n}\n").expect("write helper");
+    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"one\")\n}\n").expect("write helper");
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
@@ -1470,7 +1455,7 @@ fn incremental_build_invalidates_on_local_import_change() {
         .expect("bin modified");
 
     thread::sleep(Duration::from_millis(50));
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(two)\n}\n").expect("rewrite helper");
+    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"two\")\n}\n").expect("rewrite helper");
 
     let second = compile_file_with_avenys(
         &main_path,

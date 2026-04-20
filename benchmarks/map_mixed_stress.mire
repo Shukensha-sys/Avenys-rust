@@ -20,6 +20,6 @@ while i < 30000 {
     
     set i += 1
 }
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

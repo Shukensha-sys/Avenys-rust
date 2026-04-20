@@ -13,6 +13,6 @@ set s = strings.replace(s "world" "mire") mut
 
 set parts = strings.split(s " ")
 
-use dasu(original {s})
-use dasu(parts {parts})
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("original {s}")
+use dasu("parts {parts}")
+use dasu("wall_ms {time.elapsed_ms(wall")})

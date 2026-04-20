@@ -28,8 +28,8 @@ while i < 100 {
     }
     set i += 1
 }
-use dasu(total {total})
-use dasu(rows {len(matrix)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("total {total}")
+use dasu("rows {len(matrix")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

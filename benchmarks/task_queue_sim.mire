@@ -17,6 +17,6 @@ while i < 12000 {
     }
     set i += 1
 }
-use dasu(total {total})
-use dasu(items {len(queue)})
-use dasu(digest_len {len(digest)})
+use dasu("total {total}")
+use dasu("items {len(queue")})
+use dasu("digest_len {len(digest")})

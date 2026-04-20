@@ -10,6 +10,6 @@ while i < limit {
     set acc += i
     set i += 1
 }
-use dasu(result {acc})
-use dasu(elapsed_ms {time.elapsed_ms(mark)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("result {acc}")
+use dasu("elapsed_ms {time.elapsed_ms(mark")})
+use dasu("process_ram {mem.format(mem.process("))})

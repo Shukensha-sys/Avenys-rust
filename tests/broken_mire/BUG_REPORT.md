@@ -28,7 +28,7 @@ fn import: (a:i64 b:i64) :i64 >
 
 pub fn main: () >
     set result = import(5 3)
-    use dasu(result: {result})
+    use dasu("result: {result}")
 <
 ```
 
@@ -60,7 +60,7 @@ import std
 pub fn main: () >
     set x = 3.14 :f64
     set s = str(x)
-    use dasu(s: {s})
+    use dasu("s: {s}")
 <
 ```
 
@@ -85,7 +85,7 @@ import std
 
 pub fn main: () >
     set x = 3.14 :f64
-    use dasu(x: {x})
+    use dasu("x: {x}")
 <
 ```
 
@@ -117,8 +117,8 @@ pub fn main: () >
     set p = (Point x:10 y:20)
     set x = p.x
     set y = p.y
-    use dasu(x: {x})
-    use dasu(y: {y})
+    use dasu("x: {x}")
+    use dasu("y: {y}")
 <
 ```
 
@@ -145,10 +145,10 @@ pub fn main: () >
     set val1 = arr at 1
     set val2 = arr at 2
     set val3 = arr at 3
-    use dasu(val0: {val0})
-    use dasu(val1: {val1})
-    use dasu(val2: {val2})
-    use dasu(val3: {val3})
+    use dasu("val0: {val0}")
+    use dasu("val1: {val1}")
+    use dasu("val2: {val2}")
+    use dasu("val3: {val3}")
 <
 ```
 
@@ -175,7 +175,7 @@ pub fn main: () >
     < else >
         set y = 2
     <
-    use dasu(y: {y})
+    use dasu("y: {y}")
 <
 ```
 
@@ -249,7 +249,7 @@ opt: bin/release/test_struct.ll:64:37: error: invalid getelementptr indices
 import std
 
 pub fn main: () >
-    use dasu(Hello) => use dasu({self})
+    use dasu(Hello) => use dasu("{self}")
 <
 ```
 

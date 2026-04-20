@@ -14,6 +14,6 @@ set data = dicts.set(data "beta" 200) mut
 set keys = dicts.keys(data)
 set values = dicts.values(data)
 
-use dasu(keys {keys})
-use dasu(values {values})
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("keys {keys}")
+use dasu("values {values}")
+use dasu("wall_ms {time.elapsed_ms(wall")})

@@ -7,8 +7,8 @@ set proc = cpu.mark() :i64 mut
 set x = 10 :i64 mut
 set y = 20 :i64 mut
 
-use dasu(x {x})
-use dasu(y {y})
-use dasu(x_plus_y {x + y})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("x {x}")
+use dasu("y {y}")
+use dasu("x_plus_y {x + y}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("process_ram {mem.format(mem.process("))})

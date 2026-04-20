@@ -9,6 +9,6 @@ pub fn main: () {
         set xs = xs + [i]
         set i += 1
     }
-    use dasu(len {len(xs)})
-    use dasu(process_ram {mem.format(mem.process())})
+    use dasu("len {len(xs")})
+    use dasu("process_ram {mem.format(mem.process("))})
 }

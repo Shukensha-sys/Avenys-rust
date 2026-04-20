@@ -23,7 +23,7 @@ pub fn main: () {
     set limit = 5000000 :i64
     set result = workload(limit) :i64
 
-    use dasu(result {result})
-    use dasu(elapsed_ms {time.elapsed_ms(mark)})
-    use dasu(process_ram {mem.format(mem.process())})
+    use dasu("result {result}")
+    use dasu("elapsed_ms {time.elapsed_ms(mark")})
+    use dasu("process_ram {mem.format(mem.process("))})
 }

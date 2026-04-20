@@ -5,5 +5,5 @@ fn import: (a:i64 b:i64) :i64 {
 }
 pub fn main: () {
     set result = import(5 3)
-    use dasu(result: {result})
+    use dasu("result: {result}")
 }

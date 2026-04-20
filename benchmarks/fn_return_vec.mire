@@ -17,7 +17,7 @@ while i < 5000 {
     set numbers = numbers + [i]
     set i += 1
 }
-use dasu(len {len(numbers)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("len {len(numbers")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

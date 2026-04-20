@@ -14,7 +14,7 @@ set l1 = double_len(xs)
 set l2 = double_len(xs)
 set l3 = double_len(xs)
 
-use dasu(l1 {l1})
-use dasu(l2 {l2})
-use dasu(l3 {l3})
+use dasu("l1 {l1}")
+use dasu("l2 {l2}")
+use dasu("l3 {l3}")
 }

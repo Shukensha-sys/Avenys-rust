@@ -6,5 +6,5 @@ pub fn main: () {
     set m = dicts.set(m "b" 2)
     set m = dicts.set(m "c" 3)
     set val = dicts.get(m "a" 0)
-    use dasu(val: {val})
+    use dasu("val: {val}")
 }

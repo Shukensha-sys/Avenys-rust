@@ -18,8 +18,8 @@ while i < 5000 {
 set keys = dicts.keys(counts)
 set result = math.sum(dicts.values(counts))
 
-use dasu(total_keys {len(keys)})
-use dasu(total_values {result})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("total_keys {len(keys")})
+use dasu("total_values {result}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

@@ -17,7 +17,7 @@ Mire keeps its own type-annotation style. The language continues to prefer `name
 import std
 
 pub fn main: () {
-    use dasu(Hello Mire)
+    use dasu("Hello Mire")
 }
 ```
 
@@ -90,7 +90,7 @@ Instance methods must declare `self` explicitly as the first parameter:
 ```mire
 impl User {
     fn greet: (self) {
-        use dasu(Hello {self.name})
+        use dasu("Hello {self.name}")
     }
 
     fn is_adult: (self) :bool {
@@ -189,9 +189,9 @@ set dict  = {a: 1, b: 2} :map[str i64]
 
 ```mire
 if age >= 18 {
-    use dasu(adult)
+    use dasu("adult")
 } else {
-    use dasu(minor)
+    use dasu("minor")
 }
 
 while count < 10 {
@@ -199,7 +199,7 @@ while count < 10 {
 }
 
 for i in range(5) {
-    use dasu({i})
+    use dasu(i)
 }
 ```
 

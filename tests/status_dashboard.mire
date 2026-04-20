@@ -1,4 +1,3 @@
-import std: (output)
 import lists as lists
 import time as time
 
@@ -10,7 +9,7 @@ set queue = lists.push(queue 10)
 set queue = lists.push(queue 12)
 set queue = lists.push(queue 3)
 
-use std.output(queue size {len(queue)})
-use std.output(first ticket {lists.get(queue 0)})
-use std.output(elapsed {time.elapsed_ms(started)})
+use dasu("queue size {len(queue)}")
+use dasu("first ticket {lists.get(queue 0)}")
+use dasu("elapsed {time.elapsed_ms(started)}")
 }

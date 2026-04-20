@@ -64,9 +64,7 @@ Avenys is the active compiled backend for Mire. The current state is:
 - `if` and `while` conditions are checked to be bool-like; a condition of type `i64` is an error
 - Function call return type propagation: calling a known function resolves the call expression's type
 - All standard library modules (`math`, `strings`, `lists`, `dicts`, `time`, `term`, `mem`, `cpu`, `gpu`, `fs`, `env`, `proc`) are registered with known member return types
-- Builtin functions (`dasu`, `len`, `range`, `str`, `int`, `float`, `bool`, `input`, etc.) have registered return types and are accepted without errors
-- `std.<builtin>` calls such as `std.input` resolve to the same builtin surface when imported through `import std`
-- `std.output` is now fully supported in type checking (previously only worked in codegen)
+- Builtin functions (`dasu`, `ireru`, `len`, `range`, `str`, `int`, `float`, `bool`, etc.) have registered return types and are accepted without errors
 
 **Ownership and borrow checking** (`borrowck.rs` / MSS)
 
@@ -147,7 +145,7 @@ All blocks use `{}`. The `>` / `<` block syntax from Avenys is gone entirely.
 import std
 
 pub fn main: () {
-    use dasu(Hello Mire)
+    use dasu("Hello Mire")
 }
 ```
 
@@ -173,23 +171,23 @@ fn sum: (a:i64 b:i64) :i64 {
 
 pub fn main: () {
     set result = sum(5 3) :i64
-    use dasu(Result: {result})
+    use dasu("Result: {result}")
 }
 ```
 
 `use` evaluates an expression for its side effects. `pub` / `priv` control visibility.
 
-Inside `dasu(...)`, bare text stays literal, while an identifier that is already in scope is emitted as its value. Use `{expr}` for explicit interpolation.
+Inside `dasu(...)`, string literal text must be quoted. Unquoted arguments are regular expressions such as variables, field accesses, or function calls. Interpolation only happens inside quoted strings, for example `"hello {name}"`.
 
 ### Control flow
 
 ```mire
 if x > 10 {
-    use dasu(greater)
+    use dasu("greater")
 } elif x == 10 {
-    use dasu(equal)
+    use dasu("equal")
 } else {
-    use dasu(lower)
+    use dasu("lower")
 }
 
 while i < 5 {
@@ -197,7 +195,7 @@ while i < 5 {
 }
 
 for i in range(10) {
-    use dasu({i})
+    use dasu(i)
 }
 
 do {
@@ -210,10 +208,10 @@ do {
 ```mire
 match code {
     200 {
-        use dasu(ok)
+        use dasu("ok")
     }
     _ {
-        use dasu(error)
+        use dasu("error")
     }
 }
 ```
@@ -246,10 +244,10 @@ enum Pair {
 
 match Pair.Pair(10 20) {
     Pair.Pair(a b) {
-        use dasu(a {b})
+        use dasu("{a} {b}")
     }
     Pair.Empty {
-        use dasu(empty)
+        use dasu("empty")
     }
 }
 ```
@@ -267,10 +265,10 @@ set loading = Status.Loading(progress: 75, total: 100)
 
 match loading {
     Status.Loading(p t) {
-        use dasu({p} {t})
+        use dasu("{p} {t}")
     }
     _ {
-        use dasu(done)
+        use dasu("done")
     }
 }
 ```
@@ -301,7 +299,7 @@ impl User {
     }
 
     fn greet: (self) {
-        use dasu(Hello {self.name})
+        use dasu("Hello {self.name}")
     }
 }
 

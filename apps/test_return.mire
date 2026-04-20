@@ -23,5 +23,5 @@ set xs = lists.push(xs 99)
 set xs = lists.push(xs 7)
 
 set max_val = find_max(xs)
-use dasu(Max {max_val})
+use dasu("Max {max_val}")
 }

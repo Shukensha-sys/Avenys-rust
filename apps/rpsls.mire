@@ -1,0 +1,87 @@
+import std
+
+enum Move {
+    Rock
+    Paper
+    Scissors
+    Lizard
+    Spock
+}
+
+fn get_move_name: (m :Move) :str {
+    match m {
+        Move.Rock { "rock" }
+        Move.Paper { "paper" }
+        Move.Scissors { "scissors" }
+        Move.Lizard { "lizard" }
+        Move.Spock { "spock" }
+    }
+}
+
+fn beats_rock: (b :Move) :bool {
+    match b {
+        Move.Scissors { true }
+        Move.Lizard { true }
+        _ { false }
+    }
+}
+
+fn beats_paper: (b :Move) :bool {
+    match b {
+        Move.Rock { true }
+        Move.Spock { true }
+        _ { false }
+    }
+}
+
+fn beats_scissors: (b :Move) :bool {
+    match b {
+        Move.Paper { true }
+        Move.Lizard { true }
+        _ { false }
+    }
+}
+
+fn beats_lizard: (b :Move) :bool {
+    match b {
+        Move.Paper { true }
+        Move.Spock { true }
+        _ { false }
+    }
+}
+
+fn beats_spock: (b :Move) :bool {
+    match b {
+        Move.Scissors { true }
+        Move.Rock { true }
+        _ { false }
+    }
+}
+
+fn wins: (a :Move, b :Move) :bool {
+    match a {
+        Move.Rock { beats_rock(b) }
+        Move.Paper { beats_paper(b) }
+        Move.Scissors { beats_scissors(b) }
+        Move.Lizard { beats_lizard(b) }
+        Move.Spock { beats_spock(b) }
+    }
+}
+
+pub fn main: () {
+    set rock = Move.Rock
+    set paper = Move.Paper
+    set scissors = Move.Scissors
+
+    set r1 = wins(rock, scissors)
+    set r2 = wins(rock, paper)
+    set r3 = wins(paper, rock)
+    set r4 = wins(scissors, paper)
+
+    use dasu(r1)
+    use dasu(r2)
+    use dasu(r3)
+    use dasu(r4)
+
+    use dasu("RPSLS game logic works")
+}

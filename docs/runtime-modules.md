@@ -17,6 +17,8 @@ These stay in the language core:
 - `type value`
 - `range(...)`
 
+`dasu` and `ireru` are the standard Mire I/O surface. Literal text must be quoted, and `{...}` interpolation is only recognized inside quoted strings.
+
 `import std` imports the default standard surface. For explicit module-oriented code, prefer `import <module> as <alias>`.
 
 ## `time`
@@ -51,7 +53,7 @@ while n < 100000 {
     set n += 1
 }
 
-use dasu(loop took {time.elapsed_ms(mark)} ms)
+use dasu("loop took {time.elapsed_ms(mark)} ms")
 ```
 
 Notes:
@@ -83,9 +85,9 @@ Example:
 ```mire
 import mem as mem
 
-use dasu(total {mem.format(mem.total())})
-use dasu(used {mem.format(mem.used())})
-use dasu(process {mem.format(mem.process())})
+use dasu("total {mem.format(mem.total())}")
+use dasu("used {mem.format(mem.used())}")
+use dasu("process {mem.format(mem.process())}")
 ```
 
 Notes:

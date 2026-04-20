@@ -9,5 +9,5 @@ fn pair: (x:i64 y:i64) :i64 {
 pub fn main: () {
     set p = pair(3 4)
     
-    use dasu(p {p})
+    use dasu("p {p}")
 }

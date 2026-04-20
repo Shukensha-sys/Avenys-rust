@@ -15,5 +15,5 @@ while i < 100 {
     }
     set i += 1
 }
-use dasu(total {total})
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("total {total}")
+use dasu("wall_ms {time.elapsed_ms(wall")})

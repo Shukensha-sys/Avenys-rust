@@ -8,12 +8,12 @@ set xs = lists.push(xs 2)
 set xs = lists.push(xs 3)
 
 set l = len(xs)
-use dasu(Len {l})
+use dasu("Len {l}")
 
 set i = 0 :i64 mut
 while i < l {
 set x = lists.get(xs i)
-use dasu(Item {x})
+use dasu("Item {x}")
 set i = i + 1
 }
 use dasu(Done)

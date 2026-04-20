@@ -8,5 +8,5 @@ return 42
 }
 pub fn main: () {
 set result = create_point()
-use dasu(Result {result})
+use dasu("Result {result}")
 }

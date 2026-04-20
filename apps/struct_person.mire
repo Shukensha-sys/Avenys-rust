@@ -8,11 +8,11 @@ struct Person {
 
 pub fn main: () {
     set person = (Person name: "Alice", age: 30, active: true)
-    use dasu(name: {person.name})
-    use dasu(age: {person.age})
-    use dasu(active: {person.active})
+    use dasu("name: {person.name}")
+    use dasu("age: {person.age}")
+    use dasu("active: {person.active}")
     
     set age2 = person.age
     set new_age = age2 + 1
-    use dasu(next year: {new_age})
+    use dasu("next year: {new_age}")
 }

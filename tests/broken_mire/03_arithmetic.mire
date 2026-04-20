@@ -10,9 +10,9 @@ pub fn main: () {
     set div = a / b
     set mod = a % b
     
-    use dasu(sum: {sum})
-    use dasu(sub: {sub})
-    use dasu(mul: {mul})
-    use dasu(div: {div})
-    use dasu(mod: {mod})
+    use dasu("sum: {sum}")
+    use dasu("sub: {sub}")
+    use dasu("mul: {mul}")
+    use dasu("div: {div}")
+    use dasu("mod: {mod}")
 }

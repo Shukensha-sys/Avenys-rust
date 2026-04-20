@@ -5,5 +5,5 @@ pub fn main: () {
     while i < 3 {
         set i = i + 1
     }
-    use dasu(i: {i})
+    use dasu("i: {i}")
 }

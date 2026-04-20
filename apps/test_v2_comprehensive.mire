@@ -88,7 +88,7 @@ pub fn main: () {
     use dasu(scaled)
     
     set person = (Person name: "Alice", age: 25)
-    use dasu({person.get_name()})
+    use dasu("{person.get_name(")})
     use dasu(person.get_age())
     use dasu(person.next_year())
     use dasu(person.is_adult())

@@ -1,0 +1,40 @@
+import std
+
+enum Code {
+    Zero
+    One
+}
+
+fn get_code_name: (c :Code) :str {
+    match c {
+        Code.Zero { "0" }
+        Code.One { "1" }
+    }
+}
+
+fn get_code_value: (c :Code) :i64 {
+    match c {
+        Code.Zero { 0 }
+        Code.One { 1 }
+    }
+}
+
+pub fn main: () {
+    set a_count = 5 :i64
+    set b_count = 2 :i64
+    set c_count = 1 :i64
+
+    use dasu(a_count)
+    use dasu(b_count)
+    use dasu(c_count)
+
+    set sum = a_count + b_count
+    set total = sum + c_count
+    use dasu(total)
+
+    set bits = a_count * 2
+    set bit_string = bits + b_count
+    use dasu(bit_string)
+
+    use dasu("Huffman frequency exercise")
+}

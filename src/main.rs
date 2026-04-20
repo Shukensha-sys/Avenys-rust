@@ -619,14 +619,14 @@ fn create_project_in_dir(project_dir: &Path, manifest_dir: &Path) -> Result<i32,
     if !main_path.exists() {
         fs::write(
             &main_path,
-            "pub fn main: () {\n    use dasu(Hello from Mire)\n}\n",
+            "pub fn main: () {\n    use dasu(\"Hello from Mire\")\n}\n",
         )
         .map_err(runtime_err)?;
     }
 
     let smoke_test = manifest_dir.join("tests").join("smoke.mire");
     if !smoke_test.exists() {
-        fs::write(&smoke_test, "use dasu(smoke ok)\n").map_err(runtime_err)?;
+        fs::write(&smoke_test, "use dasu(\"smoke ok\")\n").map_err(runtime_err)?;
     }
 
     println!("{}", manifest_path.display());

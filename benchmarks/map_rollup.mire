@@ -20,5 +20,5 @@ while i < 10000 {
     set sums = dicts.set(sums bucket current_sum + i)
     set i += 1
 }
-use dasu(counts {counts})
-use dasu(sums {sums})
+use dasu("counts {counts}")
+use dasu("sums {sums}")

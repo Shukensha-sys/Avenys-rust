@@ -32,7 +32,7 @@ set sorted = quicksort(arr len(arr))
 set first = sorted at 0
 set last = sorted at len(sorted) - 1
 
-use dasu(first {first})
-use dasu(last {last})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("first {first}")
+use dasu("last {last}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("process_ram {mem.format(mem.process("))})

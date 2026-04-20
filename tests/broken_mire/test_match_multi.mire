@@ -7,5 +7,5 @@ pub fn main: () {
         5 { 20 }
         _ { 0 }
     } :i64
-    use dasu(result: {result})
+    use dasu("result: {result}")
 }

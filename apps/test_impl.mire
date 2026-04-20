@@ -74,10 +74,10 @@ pub fn main: () {
     set next = person.next_year()
     set adult = person.is_adult()
     
-    use dasu(name: {name})
-    use dasu(age: {age})
-    use dasu(next: {next})
-    use dasu(adult: {adult})
+    use dasu("name: {name}")
+    use dasu("age: {age}")
+    use dasu("next: {next}")
+    use dasu("adult: {adult}")
     
     set adult_check = person.age >= 18
     set doubled_age = person.age * 2

@@ -11,6 +11,6 @@ set counts = lists.push(counts 9)
 set total = math.sum(counts)
 set label = strings.to_upper("stock")
 
-use dasu({label} total {total})
-use dasu(Items {len(counts)})
+use dasu("{label} total {total}")
+use dasu("Items {len(counts")})
 }

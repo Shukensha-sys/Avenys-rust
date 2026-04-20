@@ -1251,8 +1251,8 @@ fn apply_type_ascription(
                     _ => None,
                 };
                 if let Some(name) = call_target {
-                    if matches!(name.as_str(), "dasu" | "ireru" | "std.output" | "std.input") {
-                        expr = self.parse_template_call(name)?;
+                    if matches!(name.as_str(), "dasu" | "ireru") {
+                        expr = self.parse_io_call(name)?;
                     } else {
                         let args = self.parse_call_arguments()?;
                         expr = Expression::Call {
@@ -1399,7 +1399,7 @@ fn apply_type_ascription(
 
                 // Check if this is a struct construction: (TypeName field:value ...)
                 // Pattern: (Ident Ident: value ...)
-                // But NOT if first token contains '.' (qualified path like std.input)
+                // But NOT if first token contains '.' (qualified path / member access)
                 if self.check(TokenType::Ident) {
                     let first_token = self.peek();
                     let type_name = first_token.value.clone().unwrap_or_default();
@@ -1873,10 +1873,14 @@ fn apply_type_ascription(
         Ok(args)
     }
 
-    fn parse_template_call(&mut self, name: String) -> Result<Expression> {
+    fn parse_io_call(&mut self, name: String) -> Result<Expression> {
         self.expect(TokenType::Lparen)?;
-        let template = self.parse_template_expression()?;
+        let mut args = self.parse_expression_list_until(TokenType::Rparen)?;
         self.expect(TokenType::Rparen)?;
+
+        for arg in &mut args {
+            self.normalize_io_argument(arg)?;
+        }
 
         // Parse optional type annotation: ireru(prompt) :i64
         let data_type = if self.check(TokenType::Colon) {
@@ -1888,153 +1892,19 @@ fn apply_type_ascription(
 
         Ok(Expression::Call {
             name,
-            args: vec![template],
+            args,
             data_type,
         })
     }
 
-    fn parse_template_expression(&mut self) -> Result<Expression> {
-        let mut current_text = String::new();
-        let mut parts: Vec<Expression> = Vec::new();
-        let mut last_part_was_expr = false;
-
-        while !self.check(TokenType::Rparen) && !self.is_at_end() {
-            if self.check(TokenType::Lbrace) {
-                self.advance();
-                if current_text
-                    .chars()
-                    .last()
-                    .is_some_and(|ch| ch.is_alphanumeric() || ch == '_' || ch == ')' || ch == ']')
-                {
-                    current_text.push(' ');
-                }
-                if !current_text.is_empty() {
-                    parts.push(string_expr(&current_text));
-                    current_text.clear();
-                }
-                let interpolation = self.parse_interpolation_expression()?;
-                parts.push(interpolation);
-                self.expect(TokenType::Rbrace)?;
-                last_part_was_expr = true;
-                continue;
+    fn normalize_io_argument(&self, expr: &mut Expression) -> Result<()> {
+        if let Expression::Literal(Literal::Str(value)) = expr {
+            if value.contains('{') {
+                *expr = concat_expressions(self.parse_string_template_parts(value)?);
             }
-
-            if self.check(TokenType::Ident) {
-                let token = self.peek();
-                let name = token.value.clone().unwrap_or_default();
-                if self.is_declared(&name) {
-                    if self.template_should_parse_declared_expression() {
-                        if !current_text.is_empty() {
-                            parts.push(string_expr(&current_text));
-                            current_text.clear();
-                        }
-                        let expr = self.parse_expression()?;
-                        parts.push(Expression::Call {
-                            name: "str".to_string(),
-                            args: vec![expr],
-                            data_type: DataType::Str,
-                        });
-                        last_part_was_expr = true;
-                        continue;
-                    }
-                    if current_text.is_empty() && last_part_was_expr {
-                        current_text.push(' ');
-                    } else if template_needs_space(&current_text, TokenType::Ident) {
-                        current_text.push(' ');
-                    }
-                    if !current_text.is_empty() {
-                        parts.push(string_expr(&current_text));
-                        current_text.clear();
-                    }
-                    let token = self.advance();
-                    parts.push(Expression::Call {
-                        name: "str".to_string(),
-                        args: vec![identifier_expr_with_pos(
-                            token.value.as_deref().unwrap_or_default(),
-                            token.line,
-                            token.column,
-                        )],
-                        data_type: DataType::Str,
-                    });
-                    last_part_was_expr = true;
-                    continue;
-                }
-            }
-
-            let token = self.advance();
-            if current_text.is_empty()
-                && last_part_was_expr
-                && template_needs_space_after_expr(token.ttype)
-            {
-                current_text.push(' ');
-            }
-            if token.ttype == TokenType::StrLit {
-                let value = token.value.clone().unwrap_or_default();
-                if value.contains('{') {
-                    if !current_text.is_empty() {
-                        parts.push(string_expr(&current_text));
-                        current_text.clear();
-                    }
-                    parts.extend(self.parse_string_template_parts(&value)?);
-                    last_part_was_expr = false;
-                    continue;
-                }
-            }
-
-            push_template_text(&mut current_text, &token);
-            last_part_was_expr = false;
         }
 
-        if !current_text.is_empty() {
-            parts.push(string_expr(&current_text));
-        }
-
-        Ok(concat_expressions(parts))
-    }
-
-    fn template_should_parse_declared_expression(&self) -> bool {
-        matches!(
-            self.peek_n(1).ttype,
-            TokenType::Dot
-                | TokenType::Lparen
-                | TokenType::At
-                | TokenType::Plus
-                | TokenType::Minus
-                | TokenType::Star
-                | TokenType::Slash
-                | TokenType::Percent
-                | TokenType::Eq
-                | TokenType::Neq
-                | TokenType::Lt
-                | TokenType::Lte
-                | TokenType::Gt
-                | TokenType::Gte
-                | TokenType::And
-                | TokenType::Or
-        )
-    }
-
-    fn parse_interpolation_expression(&mut self) -> Result<Expression> {
-        let expr = self.parse_expression()?;
-        if self.check(TokenType::Colon) {
-            self.advance();
-            let mut spec = String::new();
-            while !self.check(TokenType::Rbrace) && !self.is_at_end() {
-                let token = self.advance();
-                spec.push_str(&self.token_surface(token));
-            }
-            return Ok(Expression::Call {
-                name: "__mire_fmt".to_string(),
-                args: vec![expr, string_expr(&spec)],
-                data_type: DataType::Str,
-            });
-        }
-
-        Ok(Expression::Call {
-            name: "str".to_string(),
-            args: vec![expr],
-            data_type: DataType::Str,
-        })
+        Ok(())
     }
 
     fn parse_string_template_parts(&self, value: &str) -> Result<Vec<Expression>> {
@@ -2706,79 +2576,6 @@ fn concat_expressions(mut parts: Vec<Expression>) -> Expression {
     expr
 }
 
-fn push_template_text(buf: &mut String, token: &Token) {
-    let surface = match token.ttype {
-        TokenType::Ident | TokenType::IntLit | TokenType::FloatLit | TokenType::BoolLit => {
-            token.value.clone().unwrap_or_default()
-        }
-        TokenType::NoneLit => "none".to_string(),
-        TokenType::StrLit => token.value.clone().unwrap_or_default(),
-        TokenType::Comma => ",".to_string(),
-        TokenType::Colon => ":".to_string(),
-        TokenType::Dot => ".".to_string(),
-        TokenType::Eq => "==".to_string(),
-        TokenType::Assign => "=".to_string(),
-        TokenType::Neq => "!=".to_string(),
-        TokenType::Gt => ">".to_string(),
-        TokenType::Lt => "<".to_string(),
-        TokenType::Gte => ">=".to_string(),
-        TokenType::Lte => "<=".to_string(),
-        TokenType::Plus => "+".to_string(),
-        TokenType::Minus => "-".to_string(),
-        TokenType::Star => "*".to_string(),
-        TokenType::Slash => "/".to_string(),
-        TokenType::Percent => "%".to_string(),
-        TokenType::Amp => "&".to_string(),
-        TokenType::Bang => "!".to_string(),
-        TokenType::Lparen => "(".to_string(),
-        TokenType::Rparen => ")".to_string(),
-        TokenType::Lbracket => "[".to_string(),
-        TokenType::Rbracket => "]".to_string(),
-        TokenType::Lbrace => "{".to_string(),
-        TokenType::Rbrace => "}".to_string(),
-        TokenType::Pipeline => "=>".to_string(),
-        TokenType::PipelineSafe => "=>?".to_string(),
-        TokenType::At => token.value.clone().unwrap_or_else(|| "at".to_string()),
-        TokenType::Question => "?".to_string(),
-        TokenType::Newline => "\n".to_string(),
-        _ => token.value.clone().unwrap_or_default(),
-    };
-
-    if template_needs_space(buf, token.ttype) {
-        buf.push(' ');
-    }
-
-    buf.push_str(&surface);
-}
-
-fn template_needs_space(buf: &str, token_type: TokenType) -> bool {
-    let Some(prev) = buf.chars().last() else {
-        return false;
-    };
-
-    if matches!(prev, ' ' | '\n' | '(' | '[' | '{') {
-        return false;
-    }
-
-    match token_type {
-        TokenType::Comma
-        | TokenType::Dot
-        | TokenType::Colon
-        | TokenType::Rparen
-        | TokenType::Rbracket
-        | TokenType::Rbrace => false,
-        TokenType::Question | TokenType::Bang => {
-            !(prev.is_alphanumeric() || prev == '_' || matches!(prev, ')' | ']' | '}'))
-        }
-        TokenType::Newline => false,
-        _ => true,
-    }
-}
-
-fn template_needs_space_after_expr(token_type: TokenType) -> bool {
-    template_needs_space("x", token_type)
-}
-
 fn is_word_surface(surface: &str) -> bool {
     surface
         .chars()
@@ -3094,7 +2891,7 @@ mod tests {
 
     #[test]
     fn parses_import_and_brace_blocks() {
-        let source = "import std\npub fn main: () {\n    use dasu(ok)\n}\n";
+        let source = "import std\npub fn main: () {\n    use dasu(\"ok\")\n}\n";
         let program = parse(source);
         assert!(program.is_ok(), "{program:?}");
     }
@@ -3199,7 +2996,7 @@ mod tests {
     }
 
     #[test]
-    fn match_pattern_bindings_are_visible_inside_dasu_templates() {
+    fn match_pattern_bindings_are_visible_inside_dasu_calls() {
         let source = "enum Result {\n    Ok(value :i64)\n}\n\npub fn main: () {\n    set result = Result.Ok(42)\n    match result {\n        Result.Ok(v) {\n            use dasu(v)\n        }\n    }\n}\n";
         let program = parse(source).expect("parse should succeed");
 
@@ -3212,25 +3009,12 @@ mod tests {
         let Statement::Expression(Expression::Call { args, .. }) = &cases[0].1[0] else {
             panic!("expected dasu call");
         };
-        let Some(Expression::Call {
-            name,
-            args: inner_args,
-            ..
-        }) = args.first()
-        else {
-            panic!("expected template binding to become str(...)");
-        };
-
-        assert_eq!(name, "str");
-        assert!(matches!(
-            inner_args.first(),
-            Some(Expression::Identifier(_))
-        ));
+        assert!(matches!(args.first(), Some(Expression::Identifier(_))));
     }
 
     #[test]
     fn parses_enum_variants_with_multiple_payloads() {
-        let source = "enum Pair {\n    Pair(left :i64 right :i64)\n}\n\npub fn main: () {\n    set pair = Pair.Pair(10 20)\n    match pair {\n        Pair.Pair(a b) {\n            use dasu(a {b})\n        }\n    }\n}\n";
+        let source = "enum Pair {\n    Pair(left :i64 right :i64)\n}\n\npub fn main: () {\n    set pair = Pair.Pair(10 20)\n    match pair {\n        Pair.Pair(a b) {\n            use dasu(\"{a} {b}\")\n        }\n    }\n}\n";
         let program = parse(source).expect("parse should succeed");
 
         let Statement::Function { body, .. } = &program.statements[1] else {
@@ -3286,7 +3070,7 @@ mod tests {
 
     #[test]
     fn desugars_pipeline_self_placeholder_into_direct_stage_expression() {
-        let source = "pub fn main: () {\nuse range(5) => dasu({self})\n}\n";
+        let source = "pub fn main: () {\nuse range(5) => dasu(self)\n}\n";
         let program = parse(source).expect("parse should succeed");
 
         let Statement::Function { body, .. } = &program.statements[0] else {
@@ -3301,7 +3085,7 @@ mod tests {
 
     #[test]
     fn rejects_legacy_angle_block_syntax() {
-        let source = "pub fn main: () >\nuse dasu(no)\n<\n";
+        let source = "pub fn main: () >\nuse dasu(\"no\")\n<\n";
         let program = parse(source);
         assert!(program.is_err(), "legacy angle blocks should be rejected");
     }

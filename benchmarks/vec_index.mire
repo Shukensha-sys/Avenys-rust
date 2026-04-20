@@ -16,9 +16,9 @@ set val = lists.get(data 5000) :i64 mut
 set last = lists.get(data 9999) :i64 mut
 set first = lists.get(data 0) :i64 mut
 
-use dasu(val {val})
-use dasu(last {last})
-use dasu(first {first})
-use dasu(len {len(data)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu("val {val}")
+use dasu("last {last}")
+use dasu("first {first}")
+use dasu("len {len(data")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})

@@ -254,14 +254,7 @@ impl TypeChecker {
 
         // ── Builtins that return None (side-effect only) ──────────────────────
         for name in [
-            // Terminal / output
-            "print",
-            "println",
-            "print_fmt",
-            "output",
-            "hr",
-            "clear",
-            "style",
+            // Core terminal output
             "dasu",
             // Collections (mutate in-place semantics)
             "push",
@@ -367,7 +360,6 @@ impl TypeChecker {
         // ── Builtins that return str ──────────────────────────────────────────
         for name in [
             "ireru",
-            "input", // alias for ireru
             "__mire_fmt",
             "mem_format_bytes",
             // Fs content + path helpers
@@ -535,7 +527,7 @@ impl TypeChecker {
                 "sleep_ms",
                 "sleep_ns",
             ],
-            "term" => &["print", "println", "style", "hr", "clear", "ireru", "input"],
+            "term" => &["style", "hr", "clear"],
             "mem" => &[
                 "used",
                 "total",
@@ -1222,8 +1214,8 @@ impl TypeChecker {
                 args,
                 data_type,
             } => {
-                // Special handling for explicit typed input-style builtins.
-                if matches!(name.as_str(), "ireru" | "input" | "std.input")
+                // `ireru(...) :Type` propagates the explicit type annotation to the call node.
+                if name == "ireru"
                     && *data_type != DataType::Unknown
                 {
                     *data_type = data_type.clone();
@@ -3021,7 +3013,7 @@ mod tests {
         let mut program = Program {
             statements: vec![
                 Statement::Expression(Expression::Call {
-                    name: "print".to_string(),
+                    name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str("hello".to_string()))],
                     data_type: DataType::Unknown,
                 }),

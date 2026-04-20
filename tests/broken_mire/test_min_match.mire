@@ -3,5 +3,5 @@ import std
 pub fn main: () {
     set x = 1 :i64
     set result = match x { 1 { 10 } } :i64
-    use dasu(result: {result})
+    use dasu("result: {result}")
 }

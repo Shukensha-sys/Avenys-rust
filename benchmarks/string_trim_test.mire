@@ -3,4 +3,4 @@ import strings as strings
 set s = "  hello world  "
 set trimmed = strings.trim(s)
 
-use dasu(trimmed {trimmed})
+use dasu("trimmed {trimmed}")

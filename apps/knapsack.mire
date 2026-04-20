@@ -1,0 +1,48 @@
+import std
+
+enum ItemType {
+    Sword
+    Shield
+    Potion
+    Armor
+}
+
+fn get_item_value: (item :ItemType) :i64 {
+    match item {
+        ItemType.Sword { 10 }
+        ItemType.Shield { 5 }
+        ItemType.Potion { 3 }
+        ItemType.Armor { 8 }
+    }
+}
+
+fn get_item_weight: (item :ItemType) :i64 {
+    match item {
+        ItemType.Sword { 2 }
+        ItemType.Shield { 3 }
+        ItemType.Potion { 1 }
+        ItemType.Armor { 5 }
+    }
+}
+
+pub fn main: () {
+    set item1 = ItemType.Sword
+    set item2 = ItemType.Potion
+    set item3 = ItemType.Armor
+
+    set val1 = get_item_value(item1)
+    set val2 = get_item_value(item2)
+    set val3 = get_item_value(item3)
+    use dasu(val1)
+    use dasu(val2)
+    use dasu(val3)
+
+    set w1 = get_item_weight(item1)
+    set w2 = get_item_weight(item2)
+    set w3 = get_item_weight(item3)
+    use dasu(w1)
+    use dasu(w2)
+    use dasu(w3)
+
+    use dasu("Knapsack items defined")
+}

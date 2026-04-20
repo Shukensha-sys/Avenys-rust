@@ -16,7 +16,7 @@
 - Bucles: `while`, `for in range()`, `do...while`
 - Condicionales: `if...else`
 - Control: `break`, `continue`, `return`
-- Output: `use dasu(...)` (texto sin comillas)
+- Output: `use dasu("...")` para texto literal, o `use dasu(valor)` para expresiones
 - Imports: `import time as time`
 
 **Builtins implementados en LLVM:**

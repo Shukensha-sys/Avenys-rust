@@ -20,7 +20,7 @@ pub fn main: () {
         Color.Custom(value) { value }
     } :i64
     
-    use dasu(c1 -> {color_val})
+    use dasu("c1 -> {color_val}")
     
     set color_val2 = match c4 {
         Color.Red { 1 }
@@ -29,7 +29,7 @@ pub fn main: () {
         Color.Custom(value) { value }
     } :i64
     
-    use dasu(c4 -> {color_val2})
+    use dasu("c4 -> {color_val2}")
     
     use dasu(=== All Tests Passed ===)
 }

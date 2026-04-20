@@ -1,6 +1,6 @@
 pub fn main: () {
     set x = [1 2] :arr[i64 2]
     set y = [3 4] :arr[i64 2]
-    use dasu(x_at_0 {x at 0})
-    use dasu(y_at-0 {y at 0})
+    use dasu("x_at_0 {x at 0}")
+    use dasu("y_at-0 {y at 0}")
 }

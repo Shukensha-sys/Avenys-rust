@@ -12,13 +12,13 @@ set tasks = lists.push(tasks 1)
 set tasks = lists.push(tasks 5)
 
 set total = math.sum(tasks)
-use dasu(Total sum {total})
+use dasu("Total sum {total}")
 
 set count = len(tasks)
-use dasu(Count {count})
+use dasu("Count {count}")
 
 set first = lists.get(tasks 0)
-use dasu(First {first})
+use dasu("First {first}")
 
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("wall_ms {time.elapsed_ms(wall")})
 }

@@ -1,0 +1,26 @@
+import std
+
+enum LightColor {
+    Red
+    Yellow
+    Green
+}
+
+fn get_color_name: (c :LightColor) :str {
+    match c {
+        LightColor.Red { "red" }
+        LightColor.Yellow { "yellow" }
+        LightColor.Green { "green" }
+    }
+}
+
+pub fn main: () {
+    set color1 = LightColor.Green
+    set color2 = LightColor.Red
+    set name1 = get_color_name(color1)
+    set name2 = get_color_name(color2)
+    use dasu(name1)
+    use dasu(name2)
+
+    use dasu("Traffic simulation basic enum test works")
+}

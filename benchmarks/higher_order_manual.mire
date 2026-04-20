@@ -18,6 +18,6 @@ while i < len(nums) {
 }
 set total = math.sum(filtered)
 
-use dasu(total {total})
-use dasu(items {len(filtered)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("total {total}")
+use dasu("items {len(filtered")})
+use dasu("wall_ms {time.elapsed_ms(wall")})

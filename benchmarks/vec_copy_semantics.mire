@@ -16,7 +16,7 @@ set data2 = data
 set val1 = lists.get(data 0) :i64 mut
 set val2 = lists.get(data2 0) :i64 mut
 
-use dasu(val1 {val1})
-use dasu(val2 {val2})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("val1 {val1}")
+use dasu("val2 {val2}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("process_ram {mem.format(mem.process("))})

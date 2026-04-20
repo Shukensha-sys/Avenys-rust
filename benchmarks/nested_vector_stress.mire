@@ -26,11 +26,11 @@ set total += (matrix at 2) at 2
 set total += (matrix at 2) at 3
 set edge = (matrix at 2) at 3
 
-use dasu(rows {rows})
-use dasu(cols {cols})
-use dasu(total {total})
-use dasu(edge {edge})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("rows {rows}")
+use dasu("cols {cols}")
+use dasu("total {total}")
+use dasu("edge {edge}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("cpu_cycles_est {cpu.cycles_est(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

@@ -28,6 +28,6 @@ while i < 10000 {
 set filtered = filter_even(data)
 set total = len(filtered)
 
-use dasu(total {total})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+use dasu("total {total}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})

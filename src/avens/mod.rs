@@ -673,6 +673,7 @@ struct FnInfo {
     llvm_name: String,
     params: Vec<LlType>,
     ret: LlType,
+    returns_value: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -831,6 +832,7 @@ impl LlvmIrGen {
                         llvm_name,
                         params: param_types,
                         ret,
+                        returns_value: *return_type != DataType::None,
                     },
                 );
             }
@@ -862,6 +864,7 @@ impl LlvmIrGen {
                                     })
                                     .collect::<Result<Vec<_>>>()?,
                                 ret: self.map_type(return_type)?,
+                                returns_value: *return_type != DataType::None,
                             },
                         );
                     }
@@ -1127,8 +1130,7 @@ impl LlvmIrGen {
             Statement::Expression(Expression::Call { name, args, .. }) if name == "__do_while" => {
                 self.compile_do_while(args)
             }
-            Statement::Expression(Expression::Call { name, args, .. })
-                if name == "dasu" || name == "std.output" =>
+            Statement::Expression(Expression::Call { name, args, .. }) if name == "dasu" =>
             {
                 for arg in args {
                     self.emit_dasu_expr(arg)?;
@@ -1338,7 +1340,7 @@ impl LlvmIrGen {
                 }
             }
             Expression::Call { name, args, .. } if name == "len" => self.compile_len(args),
-            Expression::Call { name, args, .. } if name == "dasu" || name == "std.output" => {
+            Expression::Call { name, args, .. } if name == "dasu" => {
                 for arg in args {
                     self.emit_dasu_expr(arg)?;
                 }
@@ -1348,7 +1350,7 @@ impl LlvmIrGen {
                 name,
                 args,
                 data_type,
-            } if name == "ireru" || name == "std.input" => self.compile_input_expr(args, data_type),
+            } if name == "ireru" => self.compile_input_expr(args, data_type),
             Expression::Call {
                 name,
                 args,
@@ -4042,7 +4044,7 @@ impl LlvmIrGen {
     fn compile_input_expr(&mut self, args: &[Expression], data_type: &DataType) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
-                message: "Avenys input expects 1 argument".to_string(),
+                message: "Avenys ireru expects 1 argument".to_string(),
             }));
         }
 
@@ -4827,33 +4829,37 @@ impl LlvmIrGen {
         }
 
         let ret_clone = ret.clone();
-        if body
-            .iter()
-            .all(|stmt| !matches!(stmt, Statement::Return(_)))
-        {
-            if let Some(Statement::Expression(expr)) = body.last() {
-                let value = self.compile_expr(expr)?;
-                let ret = self.cast_to_type(value, ret_clone.clone())?;
-                let result_ptr = self.tmp();
-                self.body.push(format!(
-                    "  {result_ptr} = alloca {}",
-                    self.ty(ret_clone.clone())
-                ));
-                self.body.push(format!(
-                    "  store {} {}, ptr {}",
-                    self.ty(ret_clone.clone()),
-                    ret.repr,
-                    result_ptr
-                ));
-                self.body.push(format!(
-                    "  %ret_val = load {}, ptr {}",
-                    self.ty(ret_clone.clone()),
-                    result_ptr
-                ));
-                self.body.push(format!(
-                    "  ret {} %ret_val",
-                    self.ty(ret_clone.clone())
-                ));
+        if body.iter().all(|stmt| !matches!(stmt, Statement::Return(_))) {
+            if fn_info.returns_value {
+                if let Some(Statement::Expression(expr)) = body.last() {
+                    let value = self.compile_expr(expr)?;
+                    let ret = self.cast_to_type(value, ret_clone.clone())?;
+                    let result_ptr = self.tmp();
+                    self.body.push(format!(
+                        "  {result_ptr} = alloca {}",
+                        self.ty(ret_clone.clone())
+                    ));
+                    self.body.push(format!(
+                        "  store {} {}, ptr {}",
+                        self.ty(ret_clone.clone()),
+                        ret.repr,
+                        result_ptr
+                    ));
+                    self.body.push(format!(
+                        "  %ret_val = load {}, ptr {}",
+                        self.ty(ret_clone.clone()),
+                        result_ptr
+                    ));
+                    self.body
+                        .push(format!("  ret {} %ret_val", self.ty(ret_clone.clone())));
+                } else {
+                    let default = self.default_value(ret_clone.clone());
+                    self.body.push(format!(
+                        "  ret {} {}",
+                        self.ty(ret_clone.clone()),
+                        default.repr
+                    ));
+                }
             } else {
                 let default = self.default_value(ret_clone.clone());
                 self.body.push(format!(

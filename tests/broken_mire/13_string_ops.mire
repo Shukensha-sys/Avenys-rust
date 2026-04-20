@@ -3,5 +3,5 @@ import std
 pub fn main: () {
     set s = "hello"
     set upper = strings.upper(s)
-    use dasu(upper: {upper})
+    use dasu("upper: {upper}")
 }

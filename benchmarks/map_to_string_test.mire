@@ -7,4 +7,4 @@ set data = dicts.set(data "beta" 200) mut
 
 set s = strings.to_string(data)
 
-use dasu(map {s})
+use dasu("map {s}")

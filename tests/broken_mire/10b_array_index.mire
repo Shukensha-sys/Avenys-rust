@@ -6,8 +6,8 @@ pub fn main: () {
     set val1 = arr at 1
     set val2 = arr at 2
     set val3 = arr at 3
-    use dasu(val0: {val0})
-    use dasu(val1: {val1})
-    use dasu(val2: {val2})
-    use dasu(val3: {val3})
+    use dasu("val0: {val0}")
+    use dasu("val1: {val1}")
+    use dasu("val2: {val2}")
+    use dasu("val3: {val3}")
 }

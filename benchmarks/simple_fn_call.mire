@@ -3,5 +3,5 @@ pub fn main: () {
     set y = 20 :i64 mut
     set z = x + y :i64 mut
     
-    use dasu(result {z})
+    use dasu("result {z}")
 }

@@ -19,6 +19,6 @@ pub fn main: () {
         Result.Err(m) { "default" }
     } :str
     
-    use dasu({v1})
-    use dasu({v2})
+    use dasu("{v1}")
+    use dasu("{v2}")
 }

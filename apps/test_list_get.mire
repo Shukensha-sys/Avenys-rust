@@ -10,7 +10,7 @@ set v0 = lists.get(xs 0)
 set v1 = lists.get(xs 1)
 set v2 = lists.get(xs 2)
 
-use dasu(v0 {v0})
-use dasu(v1 {v1})
-use dasu(v2 {v2})
+use dasu("v0 {v0}")
+use dasu("v1 {v1}")
+use dasu("v2 {v2}")
 }

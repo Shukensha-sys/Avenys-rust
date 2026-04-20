@@ -18,5 +18,5 @@ set xs = lists.push(xs 20)
 set xs = lists.push(xs 30)
 
 set total = sum_list(xs)
-use dasu(Total {total})
+use dasu("Total {total}")
 }

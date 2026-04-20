@@ -1,1 +1,1 @@
-use dasu(smoke ok)
+use dasu("smoke ok")

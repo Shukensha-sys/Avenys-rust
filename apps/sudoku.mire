@@ -1,0 +1,51 @@
+import std
+
+enum CellValue {
+    One
+    Two
+    Three
+    Four
+    Five
+    Six
+    Seven
+    Eight
+    Nine
+}
+
+fn get_digit: (v :CellValue) :i64 {
+    match v {
+        CellValue.One { 1 }
+        CellValue.Two { 2 }
+        CellValue.Three { 3 }
+        CellValue.Four { 4 }
+        CellValue.Five { 5 }
+        CellValue.Six { 6 }
+        CellValue.Seven { 7 }
+        CellValue.Eight { 8 }
+        CellValue.Nine { 9 }
+    }
+}
+
+pub fn main: () {
+    set cell1 = CellValue.Five
+    set cell2 = CellValue.Three
+    set cell3 = CellValue.One
+    set cell4 = CellValue.Nine
+
+    set d1 = get_digit(cell1)
+    set d2 = get_digit(cell2)
+    set d3 = get_digit(cell3)
+    set d4 = get_digit(cell4)
+
+    use dasu(d1)
+    use dasu(d2)
+    use dasu(d3)
+    use dasu(d4)
+
+    set sum1 = d1 + d2
+    set sum2 = d3 + d4
+    set total = sum1 + sum2
+    use dasu(total)
+
+    use dasu("Sudoku cell values exercise")
+}

@@ -31,7 +31,7 @@ pub fn main: () {
         set checksum += tail
     } while tail != 128
 
-    use dasu(total {total})
-    use dasu(checksum {checksum})
-    use dasu(tag_len {len("avenys-flow-stress")})
+    use dasu("total {total}")
+    use dasu("checksum {checksum}")
+    use dasu("tag_len {len("avenys-flow-stress"")})
 }

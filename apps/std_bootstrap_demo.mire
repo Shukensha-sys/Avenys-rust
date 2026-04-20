@@ -1,7 +1,5 @@
-import std: (input output)
-
 pub fn main: () {
-use std.output(Bienvenido a Mire)
-set name = std.input(Nombre: )
-use std.output(Hola {name})
+use dasu("Bienvenido a Mire")
+set name = ireru("Nombre: ")
+use dasu("Hola {name}")
 }

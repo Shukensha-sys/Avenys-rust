@@ -6,8 +6,8 @@ pub fn main: () {
     set items = lists.push(items 99)
 
     set first = lists.get(items 0)
-    use dasu(First {first})
+    use dasu("First {first}")
 
     set count = len(items)
-    use dasu(Count {count})
+    use dasu("Count {count}")
 }

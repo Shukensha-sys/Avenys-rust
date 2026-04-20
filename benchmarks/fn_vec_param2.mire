@@ -24,7 +24,7 @@ while i < 5000 {
 set result = sum_all(data) :i64 mut
 set result2 = sum_all(data) :i64 mut
 
-use dasu(result {result})
-use dasu(result2 {result2})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("result {result}")
+use dasu("result2 {result2}")
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("process_ram {mem.format(mem.process("))})

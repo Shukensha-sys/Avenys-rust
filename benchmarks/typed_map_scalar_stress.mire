@@ -28,9 +28,9 @@ if dicts.get(flags 3 false) {
 if dicts.get(flags 4 false) {
     set score += 1000
 }
-use dasu(score {score})
-use dasu(flags {str(flags)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("score {score}")
+use dasu("flags {str(flags")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("cpu_cycles_est {cpu.cycles_est(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

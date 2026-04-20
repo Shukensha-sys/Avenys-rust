@@ -15,9 +15,9 @@ while i < 20000 {
 }
 set total = math.sum(xs)
 
-use dasu(total {total})
-use dasu(items {len(xs)})
-use dasu(wall_ms {time.elapsed_ms(wall)})
-use dasu(cpu_ms {cpu.elapsed_ms(proc)})
-use dasu(cpu_cycles_est {cpu.cycles_est(proc)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("total {total}")
+use dasu("items {len(xs")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("cpu_ms {cpu.elapsed_ms(proc")})
+use dasu("cpu_cycles_est {cpu.cycles_est(proc")})
+use dasu("process_ram {mem.format(mem.process("))})

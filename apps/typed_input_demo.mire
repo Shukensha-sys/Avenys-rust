@@ -1,6 +1,4 @@
-import std: (input output)
-
 pub fn main: () {
-set age = std.input(Edad: ) :i64
-use std.output(Edad registrada {age})
+set age = ireru("Edad: ") :i64
+use dasu("Edad registrada {age}")
 }

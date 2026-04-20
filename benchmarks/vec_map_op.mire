@@ -15,5 +15,5 @@ while i < len(nums) {
 }
 set total = math.sum(squared)
 
-use dasu(total {total})
-use dasu(wall_ms {time.elapsed_ms(wall)})
+use dasu("total {total}")
+use dasu("wall_ms {time.elapsed_ms(wall")})

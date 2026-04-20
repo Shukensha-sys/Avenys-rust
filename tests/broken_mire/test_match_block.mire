@@ -5,5 +5,5 @@ pub fn main: () {
     match x {
         1 { set y = 10 }
     }
-    use dasu(y: {y})
+    use dasu("y: {y}")
 }

@@ -8,7 +8,7 @@ pub fn main: () {
     set r = (Result Ok 42)
     match r {
         Ok(v) {
-            use dasu(v: {v})
+            use dasu("v: {v}")
         }
         Err(e) {
             use dasu(e)

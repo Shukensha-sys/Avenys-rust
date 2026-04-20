@@ -10,6 +10,6 @@ while i < limit {
     set out = out + "-x"
     set i += 1
 }
-use dasu(length {len(out)})
-use dasu(elapsed_ms {time.elapsed_ms(mark)})
-use dasu(process_ram {mem.format(mem.process())})
+use dasu("length {len(out")})
+use dasu("elapsed_ms {time.elapsed_ms(mark")})
+use dasu("process_ram {mem.format(mem.process("))})

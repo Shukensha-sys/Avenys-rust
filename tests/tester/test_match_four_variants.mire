@@ -33,7 +33,7 @@ pub fn main: () {
         Level.Error { "error" }
     } :str
     
-    use dasu({msg1})
-    use dasu({msg2})
-    use dasu({msg3})
+    use dasu("{msg1}")
+    use dasu("{msg2}")
+    use dasu("{msg3}")
 }

@@ -13,8 +13,8 @@ pub fn main: () {
     set data = dicts.set(data "gamma" 30)
 
     set val = dicts.get(data "alpha" 0)
-    use dasu(alpha {val})
+    use dasu("alpha {val}")
 
-    use dasu(wall_ms {time.elapsed_ms(wall)})
-    use dasu(cpu_ms {cpu.elapsed_ms(proc)})
+    use dasu("wall_ms {time.elapsed_ms(wall")})
+    use dasu("cpu_ms {cpu.elapsed_ms(proc")})
 }
