@@ -4,7 +4,7 @@ Próximos cambios y mejoras para Avenys. Ver `avenyslogs.md` para cambios ya com
 
 ---
 
-## 🚧 SYNTAX IMPROVEMENTS
+## 🚧 SYNTAX IMPROVEMENTS (Propuestas)
 
 ### Match Multilínea
 ```mire
@@ -20,73 +20,54 @@ match x {
     _ => { default }
 }
 ```
-- Usar `=>` para indicar caso
-- `{ }` para bloque multilínea
 
 ### Boolean Operators (@ prefix)
 ```mire
 @| a b   # OR: a o b
 @& a b   # AND: a y b
-@! a      # NOT: negación
+@! a     # NOT: negación
 @^ a b   # XOR: a xor b
 ```
-- `@` como prefix para operadores lógicos
-- Más claro para parsear
-
-### Comparadores en Match
-```mire
-# PROPUESTO (expresión fuera del match):
-set result = @| (x >= 5) (y < 10)
-```
 
 ---
 
-## 🚧 COMPLETADO
+## 🚧 PENDING (Próximas tareas)
 
-### L009 - Struct Field Access in Function Parameters
+### HIGH PRIORITY
+1. **Match Multilínea** - Parser debe soportar bloques multilínea con `=>`
+2. **Boolean Operators (@)** - Agregar operadores lógicos con @ prefix
 
-✅ RESOLVER - Ahora funciona correctamente el acceso a campos de struct en funciones
+### MEDIUM PRIORITY
+3. Deprecated syntax cleanup
+4. Block parsing unificado
+5. Parser warnings cleanup
+6. Struct field validation
 
----
-
-## 🚧 PENDING
-
-### Frontend & Parser
-1. Deprecated syntax cleanup - más-allá de legacy `add`
-2. Block parsing - unificar if/while/for/match
-3. Parser warnings cleanup
-
-### Type System
-4. Struct field validation
-5. impl methods - nominal owner types
-
-### Language Features
-6. Pipelines semantics
-7. Traits & Skills profundos
-8. extern lib/fn semantics
-9. unsafe/asm/module semantics
-
-### Backend
-10. Diagnostic regression tests expansion
+### LOW PRIORITY
+7. Pipelines semantics
+8. Traits & Skills profundos
+9. extern lib/fn semantics
+10. Diagnostic regression tests
 
 ---
 
-## 🔴 PRIORITY ORDER
+## 📝 Notas de Desarrollo
 
-### Fase 1: Match Multilínea
-优先最高 - cambiar sintaxis de match
+### Reglas de Implementación
+- **Antes de modificar src/**: crear backup con git commit
+- **Aplicar SOLID**: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion
+- **Sin warnings**: todo código debe compilar sin warnings de rustc
 
-### Fase 2: Boolean Operators (@)
-Priority media - agregar operadores
-
-### Fase 3: Fixes
-- Struct field access
-- Más diagnostics
+### Priority Order Actual
+1. Fase 1: Match Multilínea (syntax improvement)
+2. Fase 2: Boolean Operators (@ prefix)
+3. Fase 3: Fixes menores y diagnostics
 
 ---
 
 ## 📝 Referencias
 
 - Cambios completados: `avenyslogs.md`
+- Limitaciones conocidas: `docs/issues.md`
 - Síntaxis actual: `syntax-V2.0.0.md`
 - Roadmap: `docs/avenys-roadmap.md`
