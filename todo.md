@@ -34,11 +34,12 @@ match x {
 ## 🚧 PENDING (Próximas tareas)
 
 ### HIGH PRIORITY
-1. **Match Multilínea** - Parser debe soportar bloques multilínea con `=>`
+1. ~~Match Multiline Body~~ - ✅ RESOLVED
 2. **Boolean Operators (@)** - Agregar operadores lógicos con @ prefix
 
 ### MEDIUM PRIORITY
-3. Deprecated syntax cleanup
+3. Match with Comparison (sintaxis alternativa)
+4. Deprecated syntax cleanup
 4. Block parsing unificado
 5. Parser warnings cleanup
 6. Struct field validation

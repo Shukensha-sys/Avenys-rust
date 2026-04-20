@@ -11,10 +11,10 @@ Limitaciones actuales del compilador Avenys. Ver `avenyslogs.md` para lo ya resu
 **Description:**
 
 ```mire
-# ACTUAL - Works solo inline:
+# FUNCIONA:
 match x { Pattern { body } }
 
-# FALLA - Multiline:
+# FUNCIONA (multiline):
 match x {
     Pattern {
         multiline
@@ -22,7 +22,9 @@ match x {
 }
 ```
 
-**Status**: PENDING - requiere parser fix
+**Status**: ✅ RESOLVED (Abril 2026)
+- Parser ya soporta multilínea via parse_expression_until_block_close()
+- Requiere tipo explícito: `match x { ... } :i64`
 
 ---
 
