@@ -4784,7 +4784,7 @@ impl LlvmIrGen {
         })?;
         let method_owner = name.split_once('.').map(|(owner, _)| owner.to_string());
 
-        for ((param_name, _), param_ty) in params.iter().zip(fn_info.params.iter()) {
+        for ((param_name, param_data_type), param_ty) in params.iter().zip(fn_info.params.iter()) {
             let ptr = self.tmp();
             let arg_name = format!("%arg_{}", sanitize_symbol(param_name));
             let param_ty = param_ty.clone();
@@ -4796,30 +4796,35 @@ impl LlvmIrGen {
                 arg_name,
                 ptr
             ));
+
+            let param_struct_name = match param_data_type {
+                DataType::StructNamed(name) => Some(name.clone()),
+                _ => {
+                    let ty_str = format!("{}", self.ty(param_ty.clone()));
+                    self.user_structs
+                        .iter()
+                        .find(|(_, info)| format!("{}", self.render_struct_ty(&info.fields)) == ty_str)
+                        .map(|(name, _)| name.clone())
+                }
+            };
+
+            let final_data_type = if param_name == "self" {
+                method_owner
+                    .clone()
+                    .map(DataType::StructNamed)
+                    .unwrap_or(DataType::Struct)
+            } else {
+                param_data_type.clone()
+            };
+
             self.vars.insert(
                 param_name.clone(),
                 VarInfo {
                     ptr,
-                    ty: param_ty,
-                    data_type: params
-                        .iter()
-                        .find(|(name, _)| name == param_name)
-                        .map(|(_, ty)| ty.clone())
-                        .map(|ty| {
-                            if param_name == "self" {
-                                method_owner
-                                    .clone()
-                                    .map(DataType::StructNamed)
-                                    .unwrap_or(DataType::Struct)
-                            } else {
-                                ty
-                            }
-                        })
-                        .unwrap_or(DataType::Unknown),
+                    ty: param_ty.clone(),
+                    data_type: final_data_type,
                     owns_heap_string: false,
-                    struct_name: (param_name == "self")
-                        .then(|| method_owner.clone())
-                        .flatten(),
+                    struct_name: param_struct_name,
                 },
             );
         }

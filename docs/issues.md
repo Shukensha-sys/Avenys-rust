@@ -148,6 +148,24 @@ set doubled = nums => map(n => n * 2)
 
 ---
 
+## 🔴 COMPLETADO (Abril 2026)
+
+### L009 - Struct Field Access in Function Parameters
+
+**Status**: ✅ RESOLVED
+
+**Fix aplicado:**
+- El backend ahora propaga `struct_name` usando `params.iter()` (parámetros de la LLAMADA)
+- Anteriormente usaba `fn_info.params` que contenía tipos LLVM, no DataType
+- También guarda `data_type` correcto para el parámetro
+
+**Test case:**
+```mire
+fn get_x: (p :Point) :i64 { p.x }  # ✅ Ahora funciona
+```
+
+---
+
 ## 📝 Propuestas de Mejora
 
 Ver `todo.md` sección SYNTAX IMPROVEMENTS para语法mejoras propuestas:

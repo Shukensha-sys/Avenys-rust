@@ -70,6 +70,9 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 - Dict type ascription: parse_expression -> parse_pipeline_free_expression en literales
 - Esto permitió `{a: 1} :map[str i64]` funcione correctamente
 
+### Backend Fixes (Abril 2026)
+- **Struct field access in function parameters**: Fix en compile_fn_block para propagar struct_name usando los parámetros de la LLAMADA (params.iter()) en lugar de fn_info.params. El error era "Avenys cannot resolve struct member 'x' without concrete struct metadata"
+
 ---
 
 ## v1.0.x (Histórico)

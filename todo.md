@@ -41,6 +41,14 @@ set result = @| (x >= 5) (y < 10)
 
 ---
 
+## 🚧 COMPLETADO
+
+### L009 - Struct Field Access in Function Parameters
+
+✅ RESOLVER - Ahora funciona correctamente el acceso a campos de struct en funciones
+
+---
+
 ## 🚧 PENDING
 
 ### Frontend & Parser
