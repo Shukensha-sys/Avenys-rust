@@ -53,28 +53,10 @@ fn immutable_reassignment_still_errors() {
 }
 
 #[test]
-fn legacy_add_reports_deprecated_syntax_with_filename() {
-    let root = make_temp_project_root("mire_legacy_add_diagnostic");
-    let source_path = root.join("legacy_add.mire");
-    fs::write(
-        &source_path,
-        "add std\n\npub fn main: () {\n    use dasu(\"ok\")\n}\n",
-    )
-    .expect("write source");
-
-    let canonical = source_path.canonicalize().expect("canonical path");
-    let err =
-        load_program_from_file(&source_path).expect_err("legacy add should fail during parsing");
-
-    assert!(matches!(err.kind, ErrorKind::DeprecatedSyntax { .. }));
-    assert_eq!(
-        err.filename.as_deref(),
-        Some(canonical.to_string_lossy().as_ref())
-    );
-
-    let rendered = err.to_string();
-    assert!(rendered.contains("error[deprecated]"), "{rendered}");
-    assert!(rendered.contains("use `import ...` instead"), "{rendered}");
+fn unknown_identifier_error_for_removed_keyword_add() {
+    // "add" was removed - now treated as unknown identifier
+    let err = expect_analysis_error("add std\npub fn main: () {}\n");
+    assert!(err.contains("Unknown identifier 'add'"), "{err}");
 }
 
 #[test]

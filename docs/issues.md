@@ -87,11 +87,28 @@ struct Stack { items :arr[i64 10] }
 set doubled = nums => map(n => n * 2)
 ```
 
+**Status**: ❌ INVESTIGATED (Abril 2026) - REQUIRES REFACTOR
+- Parser: sintaxis ya soportada (`=>` syntax funciona para pipelines)
+- Typeck: no restringe la forma del stage
+- Backend: `src/avens/mod.rs:1586-1710` NO maneja `Expression::Closure` como pipeline stage
+- Error: "Pipeline stage must be a function call or identifier"
+- Requiere cambios significativos enbackend para compilar closures como funciones inline
+- Sugerencia: Postergar hasta nueva fase de optimización
+
 ---
 
 ## ✅ RESOLVED ( Abril 2026 )
 
+- L001: Match Multiline Body ✅
+- L002: Logical Operators C-style (!, &&, ||, ^) ✅
+- L003: Match with Comparison ✅
+- L004: Struct field reassignment ✅
+- L005: Arrays in Struct Fields ✅
 - L009: Struct field access in function parameters ✅
+
+## ❌ INVESTIGATED ( Abril 2026 )
+
+- L006: Closures in Pipelines - REQUIRES REFACTOR (postergar)
 
 ---
 

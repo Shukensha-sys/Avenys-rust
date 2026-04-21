@@ -21,12 +21,21 @@ match x {
 }
 ```
 
-### Boolean Operators (@ prefix)
-```mire
-@| a b   # OR: a o b
-@& a b   # AND: a y b
-@! a     # NOT: negación
-@^ a b   # XOR: a xor b
+### Logical Operators (C-style)
+```
+!a      # NOT: negación lógica
+a && b  # AND: a y b (short-circuit)
+a || b  # OR: a o b (short-circuit)
+a ^ b   # XOR: a xor b
+```
+
+#### Bitwise Operators (C-style)
+```
+a & b   # Bitwise AND
+a | b   # Bitwise OR
+a ^ b   # Bitwise XOR
+a << b  # Shift left
+a >> b  # Shift right
 ```
 
 ---
@@ -35,16 +44,27 @@ match x {
 
 ### HIGH PRIORITY
 1. ~~Match Multiline Body~~ - ✅ RESOLVED
-2. **Boolean Operators (@)** - Agregar operadores lógicos con @ prefix
+2. ~~Logical Operators (C-style)~~ - ✅ RESOLVED (!, &&, ||, ^)
+3. ~~Match with Comparison~~ - ✅ RESOLVED
+   - parse_match_value uses parse_or() for full expressions
+   - Soporta !, &&, ||, ^, comparaciones
 
 ### MEDIUM PRIORITY
 3. Match with Comparison (sintaxis alternativa)
-4. Deprecated syntax cleanup
-4. Block parsing unificado
-5. Parser warnings cleanup
-6. Struct field validation
+4. ~~Deprecated syntax cleanup~~ - ✅ ELIMINADO (`add`)
+5. ~~Block parsing unificado~~ - INVESTIGADO (Requiere refactor significativo)
+   - Sistema actual (AnalysisUnit + max_units=256) cumple para la mayoría
+   - Funciones >10k líneas deberían dividirse en archivos
+   - Postergar hasta nueva fase de optimización
+6. ~~Parser warnings cleanup~~ - PARCIAL (arreglado if_same_then_else, collapsible_if en parser/avens)
+   - остальные warnings de clippy (~300 result_large_err) postergados
+7. ~~Struct field validation~~ - ✅ RESOLVED
+   - Field reassignment: c.x = 1 ahora funciona
+   - Partial init: (Point x: 10) ahora funciona
 
 ### LOW PRIORITY
+6. ~~Closures in Pipelines~~ - ❌ INVESTIGATED (Requiere refactor significativo en backend)
+   - Parser/typeck soportan sintaxis, pero backend no compila closures como pipeline stages
 7. Pipelines semantics
 8. Traits & Skills profundos
 9. extern lib/fn semantics
@@ -58,11 +78,18 @@ match x {
 - **Antes de modificar src/**: crear backup con git commit
 - **Aplicar SOLID**: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion
 - **Sin warnings**: todo código debe compilar sin warnings de rustc
+- **Documentación**: Al implementar, actualizar o arreglar algo, documentar en:
+  - `avenyslogs.md` - cambios completados
+  - `docs/issues.md` - limitaciones resueltas
+  - `docs/avenys-roadmap.md` - estado actual
+  - NO modificar README.md ni syntax-*.md a menos que sea necesario y manteniendo su formato
 
 ### Priority Order Actual
-1. Fase 1: Match Multilínea (syntax improvement)
-2. Fase 2: Boolean Operators (@ prefix)
-3. Fase 3: Fixes menores y diagnostics
+1. Fase 1: Match Multilínea (syntax improvement) - ✅ DONE
+2. Fase 2: Logical Operators (C-style) - ✅ DONE
+3. Fase 3: Match with Comparison - ✅ DONE
+4. Fase 4: Fixes menores y diagnostics
+5. Fase 5: Block parsing - ❌ INVESTIGADO (postergar)
 
 ---
 
