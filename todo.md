@@ -24,13 +24,14 @@ match x {
 ### Logical Operators (C-style)
 ```
 !a      # NOT: negación lógica
-a && b  # AND: a y b (short-circuit)
-a || b  # OR: a o b (short-circuit)
+a && b  # AND: a y b (short-circuit evaluado)
+a || b  # OR: a o b (short-circuit evaluado)
 a ^ b   # XOR: a xor b
 ```
 
 **Status**: ✅ IMPLEMENTED (Mayo 2026)
 - `&&`, `||`, `^`, `!` operators now supported
+- Short-circuit evaluation para `&&` y `||`
 - Old keywords `and`/`or`/`not` REMOVED
 
 #### Bitwise Operators (C-style)
@@ -92,7 +93,7 @@ a >> b  # Shift right - PENDING
 1. Fase 1: Match Multilínea (syntax improvement) - ✅ DONE
 2. Fase 2: Logical Operators (C-style) - ✅ DONE (!, &&, ||, ^)
 3. Fase 3: Match with Comparison - ✅ DONE
-4. Fase 4: Short-circuit evaluation for && and || - ⏳ PENDING
+4. Fase 4: Short-circuit evaluation for && and || - ✅ DONE
 5. Fase 5: Bitwise operators - ⏳ PENDING
 
 ---

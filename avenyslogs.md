@@ -92,8 +92,10 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 - Parser: `parse_and()` → `&&`, `parse_or()` → `||`, `parse_not()` → `!`, `parse_xor()` → `^`
 - Typeck: Operadores actualizados para usar símbolos
 - Backend: Full LLVM IR generation para todos los operadores
+- **Short-circuit evaluation**: `&&` y `||` ahora evalúan solo lo necesario usando branching
 
-**Nota:** Short-circuit evaluation pendiente para `&&` y `||` (usa simple AND/OR por ahora)
+**Optimizaciones:**
+- Short-circuit evaluation reduce work en expresiones booleanas complejas
 
 ---
 

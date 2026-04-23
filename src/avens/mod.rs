@@ -1254,6 +1254,10 @@ impl LlvmIrGen {
                 data_type,
                 ..
             } => {
+                if operator == "&&" || operator == "||" {
+                    return self.compile_logical_short_circuit(operator, left, right, data_type);
+                }
+
                 let lhs = self.compile_expr(left)?;
                 let rhs = self.compile_expr(right)?;
 
@@ -4700,6 +4704,62 @@ impl LlvmIrGen {
                 message: format!("Unknown operator: {}", op),
             })),
         }
+    }
+
+    fn compile_logical_short_circuit(
+        &mut self,
+        op: &str,
+        left: &Expression,
+        right: &Expression,
+        _data_type: &DataType,
+    ) -> Result<LlValue> {
+        let end_label = self.label("logical_end");
+        let result_ptr = self.tmp();
+        self.entry_allocas.push(format!("  {result_ptr} = alloca i1"));
+
+        let left_val = self.compile_expr(left)?;
+        let left_cond = self.cast_to_i1(left_val)?;
+
+        if op == "&&" {
+            let skip_label = self.label("and_skip_rhs");
+            let rhs_label = self.label("and_rhs");
+            self.body.push(format!(
+                "  br i1 {}, label %{rhs_label}, label %{skip_label}",
+                left_cond.repr
+            ));
+            self.body.push(format!("{skip_label}:"));
+            self.body.push(format!("  store i1 0, ptr {result_ptr}"));
+            self.body.push(format!("  br label %{end_label}"));
+            self.body.push(format!("{rhs_label}:"));
+            let right_val = self.compile_expr(right)?;
+            let right_cond = self.cast_to_i1(right_val)?;
+            self.body.push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
+            self.body.push(format!("  br label %{end_label}"));
+        } else {
+            let skip_label = self.label("or_skip_rhs");
+            let rhs_label = self.label("or_rhs");
+            self.body.push(format!(
+                "  br i1 {}, label %{skip_label}, label %{rhs_label}",
+                left_cond.repr
+            ));
+            self.body.push(format!("{skip_label}:"));
+            self.body.push(format!("  store i1 1, ptr {result_ptr}"));
+            self.body.push(format!("  br label %{end_label}"));
+            self.body.push(format!("{rhs_label}:"));
+            let right_val = self.compile_expr(right)?;
+            let right_cond = self.cast_to_i1(right_val)?;
+            self.body.push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
+            self.body.push(format!("  br label %{end_label}"));
+        }
+
+        self.body.push(format!("{end_label}:"));
+        let loaded = self.tmp();
+        self.body.push(format!("  {loaded} = load i1, ptr {result_ptr}"));
+        Ok(LlValue {
+            ty: LlType::I1,
+            repr: loaded,
+            owned: false,
+        })
     }
 
     fn compile_unary(&mut self, op: &str, value: LlValue) -> Result<LlValue> {

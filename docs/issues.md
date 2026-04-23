@@ -39,11 +39,11 @@ if a ^ b { }
 ```
 
 **Status**: ✅ RESOLVED (Mayo 2026)
-- `&&` logical AND implemented
-- `||` logical OR implemented
+- `&&` logical AND implemented with short-circuit evaluation
+- `||` logical OR implemented with short-circuit evaluation
 - `!` unary NOT implemented
 - `^` logical XOR implemented
-- Old `and`/`or`/`not` keywords REMOVED
+- Old keywords `and`/`or`/`not` REMOVED
 
 ---
 
