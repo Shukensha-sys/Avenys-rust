@@ -75,6 +75,28 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.1.0 (Mayo 2026)
+
+### Logical Operators - C-Style Syntax
+
+**Cambio de sintaxis:**
+- `and`/`or`/`not` keywords REMOVIDOS
+- Nuevos operadores C-style implementados:
+  - `&&` - logical AND
+  - `||` - logical OR
+  - `!` - unary NOT
+  - `^` - logical XOR
+
+**Implementación:**
+- Lexer: Nuevos tokens `AmpAmp`, `PipePipe`, `Xor`
+- Parser: `parse_and()` → `&&`, `parse_or()` → `||`, `parse_not()` → `!`, `parse_xor()` → `^`
+- Typeck: Operadores actualizados para usar símbolos
+- Backend: Full LLVM IR generation para todos los operadores
+
+**Nota:** Short-circuit evaluation pendiente para `&&` y `||` (usa simple AND/OR por ahora)
+
+---
+
 ## v1.0.x (Histórico)
 
 ### Enum Implementation (v1.0.2)

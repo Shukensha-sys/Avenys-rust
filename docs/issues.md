@@ -1,14 +1,12 @@
 # Known Limitations
 
-Limitaciones actuales del compilador Avenys. Ver `avenyslogs.md` para lo ya resuelto.
+Limitaciones actuales del compilador Avenys.
 
 ---
 
 ## 🟡 MEDIUM PRIORITY
 
 ### L001 - Match Multiline Body
-
-**Description:**
 
 ```mire
 # FUNCIONA:
@@ -28,17 +26,24 @@ match x {
 
 ---
 
-### L002 - Boolean OR/AND/NOT Operators
+### L002 - Boolean Operators
 
 **Description:**
 
 ```mire
-# NOT SUPPORTED:
-if a | b { }
+# FUNCIONA:
+if a && b { }
+if a || b { }
 if !a { }
+if a ^ b { }
 ```
 
-**Status**: PENDING - propuesta: usar @ prefix (@|, @&, @!)
+**Status**: ✅ RESOLVED (Mayo 2026)
+- `&&` logical AND implemented
+- `||` logical OR implemented
+- `!` unary NOT implemented
+- `^` logical XOR implemented
+- Old `and`/`or`/`not` keywords REMOVED
 
 ---
 
@@ -51,11 +56,15 @@ if !a { }
 match x >= 5 { true { 1 } _ { 0 } }
 ```
 
-**Workaround**:
+**Error:** "Expected Lbrace but found Gte" - el parser no acepta comparación como condición de match
+
+**Workaround:**
 ```mire
 set is_big = x >= 5
 match is_big { true { 1 } _ { 0 } }
 ```
+
+**Status**: ❌ PENDING
 
 ---
 
@@ -71,49 +80,119 @@ set c = (Counter value: 0)
 set c.value = 1  # FALLA
 ```
 
-**Workaround**: Crear nuevo struct
+**Error:** "Cannot reassign immutable variable 'c.value'"
+
+**Workaround**: Crear nuevo struct con valores actualizados
+
+**Status**: ❌ PENDING
+
+---
 
 ### L005 - Arrays in Struct Fields
 
 ```mire
-# NOT SUPPORTED
+# FUNCIONA:
 struct Stack { items :arr[i64 10] }
+set s = (Stack items: [1 2 3 4 5 6 7 8 9 10])
+set first = s.items[0]
+set count = len(s.items)
 ```
+
+**Status**: ✅ RESOLVED
+
+---
 
 ### L006 - Closures in Pipelines
 
 ```mire
-# NOT SUPPORTED:
-set doubled = nums => map(n => n * 2)
+# FUNCIONA:
+set nums = [1 2 3 4 5]  :vec![i64] mut
+set doubled = nums => (x => x * 2)
+# Produces: [2, 4, 6, 8, 10]
 ```
 
-**Status**: ❌ INVESTIGATED (Abril 2026) - REQUIRES REFACTOR
-- Parser: sintaxis ya soportada (`=>` syntax funciona para pipelines)
-- Typeck: no restringe la forma del stage
-- Backend: `src/avens/mod.rs:1586-1710` NO maneja `Expression::Closure` como pipeline stage
-- Error: "Pipeline stage must be a function call or identifier"
-- Requiere cambios significativos enbackend para compilar closures como funciones inline
-- Sugerencia: Postergar hasta nueva fase de optimización
+**Status**: ✅ RESOLVED (Mayo 2026)
+- Parser: sintaxis `(param => body)` funciona correctamente
+- Typeck: closure parameter type inferred from input element type
+- Backend: `compile_pipeline_closure()` implemented with full loop logic
+- Full LLVM IR generation with proper memory management
+- `mire_list_create` function added to runtime_support.c
 
 ---
 
-## ✅ RESOLVED ( Abril 2026 )
+### L007 - Closure Syntax in Pipeline Stage (Derivada de L006)
+
+```mire
+# FUNCIONA:
+set doubled = nums => (x => x * 2)
+```
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+- Parser: `(param => body)` syntax correctly parses as `Expression::Closure`
+- Typeck: Pipeline with closure infers parameter type from input element type
+- Backend: Full loop implementation with proper LLVM IR generation
+- Test: `[1, 2, 3] => (x => x * 2)` produces `[2, 4, 6]` ✅
+
+---
+
+## 📝 Propuestas de Mejora (SYNTAX PROPOSALS)
+
+### 1. Implementar `not` como Unary Operator
+
+**Current:** `not` keyword no funciona como unary operator
+```mire
+# FALLA:
+if not a { }
+```
+
+**Propuesta de sintaxis:**
+```mire
+# Opción A: mantener keyword 'not'
+if not a { }
+
+# Opción B: usar '!' style
+if !a { }
+
+# Opción C: usar @ prefix (consistente con roadmap)
+if @!a { }
+```
+
+### 2. Match con Comparación
+
+**Current:** No soporta `match x >= 5`
+**Propuesta:** Modificar parser para aceptar comparaciones como match condition
+
+### 3. Struct Field Reassignment
+
+**Current:** `c.value = 1` falla
+**Propuesta:** Implementar setter semántico para fields mutables
+
+---
+
+## ✅ RESOLVED ( Mayo 2026 )
 
 - L001: Match Multiline Body ✅
-- L002: Logical Operators C-style (!, &&, ||, ^) ✅
-- L003: Match with Comparison ✅
-- L004: Struct field reassignment ✅
+- L002: Boolean Operators ✅ (C-style: !, &&, ||, ^)
 - L005: Arrays in Struct Fields ✅
-- L009: Struct field access in function parameters ✅
-
-## ❌ INVESTIGATED ( Abril 2026 )
-
-- L006: Closures in Pipelines - REQUIRES REFACTOR (postergar)
+- L006: Closures in Pipelines ✅
+- L007: Closure Syntax in Pipeline Stage ✅
 
 ---
 
-## 📝 Propuestas de Mejora
+## ❌ PENDING
 
-Ver `todo.md` sección SYNTAX IMPROVEMENTS:
-- Match multilínea con `=>`
-- Boolean operators con `@` prefix (@|, @&, @!, @^)
+- L003: Match with Comparison
+- L004: Struct field reassignment
+
+---
+
+## 📊 Resumen de Tests
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `&&`/`\|\|`/`^`/`!` operators | ✅ Works | C-style logical operators |
+| Match multiline | ✅ Works | |
+| Match with comparison | ❌ Fails | usar workaround |
+| Struct field reassign | ❌ Fails | crear nuevo struct |
+| Arrays in structs | ✅ Works | |
+| Closures in pipelines | ✅ Works | L006/L007 |

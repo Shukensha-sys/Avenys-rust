@@ -19,7 +19,7 @@ pub fn main: () {
             if piece % 11 == 0 {
                 set checksum += piece / 11
             }
-            if inner == 61 and outer % 97 == 0 {
+            if inner == 61 && outer % 97 == 0 {
                 break
             }
         }

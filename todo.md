@@ -29,13 +29,17 @@ a || b  # OR: a o b (short-circuit)
 a ^ b   # XOR: a xor b
 ```
 
+**Status**: ✅ IMPLEMENTED (Mayo 2026)
+- `&&`, `||`, `^`, `!` operators now supported
+- Old keywords `and`/`or`/`not` REMOVED
+
 #### Bitwise Operators (C-style)
 ```
-a & b   # Bitwise AND
-a | b   # Bitwise OR
-a ^ b   # Bitwise XOR
-a << b  # Shift left
-a >> b  # Shift right
+a & b   # Bitwise AND - PENDING
+a | b   # Bitwise OR - PENDING
+a ^ b   # Bitwise XOR - PENDING
+a << b  # Shift left - PENDING
+a >> b  # Shift right - PENDING
 ```
 
 ---
@@ -86,10 +90,10 @@ a >> b  # Shift right
 
 ### Priority Order Actual
 1. Fase 1: Match Multilínea (syntax improvement) - ✅ DONE
-2. Fase 2: Logical Operators (C-style) - ✅ DONE
+2. Fase 2: Logical Operators (C-style) - ✅ DONE (!, &&, ||, ^)
 3. Fase 3: Match with Comparison - ✅ DONE
-4. Fase 4: Fixes menores y diagnostics
-5. Fase 5: Block parsing - ❌ INVESTIGADO (postergar)
+4. Fase 4: Short-circuit evaluation for && and || - ⏳ PENDING
+5. Fase 5: Bitwise operators - ⏳ PENDING
 
 ---
 

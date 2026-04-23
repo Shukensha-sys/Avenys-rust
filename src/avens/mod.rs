@@ -964,7 +964,9 @@ impl LlvmIrGen {
         out.push("declare ptr @mire_strings_split(ptr, ptr)".to_string());
         out.push("declare ptr @mire_strings_join(ptr, i64, ptr)".to_string());
         out.push("declare ptr @mire_strings_trim(ptr)".to_string());
+        out.push("declare ptr @mire_list_create(i64, i64)".to_string());
         out.push("declare ptr @mire_list_push_i64(ptr, i64)".to_string());
+        out.push("declare ptr @mire_list_new()".to_string());
         out.push("declare ptr @mire_list_push_scalar(ptr, i64, i64)".to_string());
         out.push("declare ptr @mire_list_push_ptr(ptr, ptr)".to_string());
         out.push("declare ptr @mire_list_concat(ptr, ptr)".to_string());
@@ -1705,8 +1707,24 @@ impl LlvmIrGen {
                             owned: false,
                         })
                     }
+                    Expression::Closure {
+                        params,
+                        body,
+                        return_type,
+                        capture,
+                    } => {
+                        return self.compile_pipeline_closure(
+                            input,
+                            input_val,
+                            params,
+                            body,
+                            return_type,
+                            capture,
+                            *safe,
+                        );
+                    }
                     _ => Err(MireError::new(ErrorKind::Runtime {
-                        message: "Pipeline stage must be a function call or identifier".to_string(),
+                        message: "Pipeline stage must be a function call, identifier, or closure".to_string(),
                     })),
                 }
             }
@@ -1791,6 +1809,226 @@ impl LlvmIrGen {
                     owned: false,
                 }),
             },
+        }
+    }
+
+    fn compile_pipeline_closure(
+        &mut self,
+        _input: &Expression,
+        input_val: LlValue,
+        params: &[(String, DataType)],
+        body: &[Statement],
+        return_type: &DataType,
+        _capture: &[(String, crate::MireValue)],
+        _safe: bool,
+    ) -> Result<LlValue> {
+        if params.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Pipeline closure must have exactly 1 parameter".to_string(),
+            }));
+        }
+
+        let param_name = &params[0].0;
+        let param_type = params[0].1.clone();
+        let elem_size = self.element_size(&param_type);
+
+        let var_ptr = self.tmp();
+        self.entry_allocas.push(format!("  {var_ptr} = alloca i64"));
+
+        let list_result_ptr = self.tmp();
+        self.entry_allocas.push(format!("  {list_result_ptr} = alloca ptr"));
+
+        let index_ptr = self.tmp();
+        self.entry_allocas.push(format!("  {index_ptr} = alloca i64"));
+
+        let initial_list = self.tmp();
+        self.body.push(format!(
+            "  {initial_list} = call ptr @mire_list_create(i64 4, i64 {})",
+            elem_size
+        ));
+        self.body.push(format!(
+            "  store ptr {initial_list}, ptr {list_result_ptr}"
+        ));
+        self.body.push(format!("  store i64 0, ptr {index_ptr}"));
+
+        let is_null = self.tmp();
+        let loop_cond_label = self.label("pl_closure_cond");
+        let loop_body_label = self.label("pl_closure_body");
+        let end_label = self.label("pl_closure_end");
+        self.body
+            .push(format!("  {is_null} = icmp eq ptr {initial_list}, null"));
+        self.body.push(format!(
+            "  br i1 {is_null}, label %{end_label}, label %{loop_cond_label}"
+        ));
+
+        self.body.push(format!("{loop_cond_label}:"));
+        let input_len = self.tmp();
+        let index = self.tmp();
+        let has_more = self.tmp();
+        let current_list = self.tmp();
+
+        self.body.push(format!("  {current_list} = load ptr, ptr {list_result_ptr}"));
+        self.body.push(format!("  {input_len} = load i64, ptr {}", input_val.repr));
+        self.body
+            .push(format!("  {index} = load i64, ptr {index_ptr}"));
+        self.body
+            .push(format!("  {has_more} = icmp slt i64 {index}, {input_len}"));
+        self.body.push(format!(
+            "  br i1 {has_more}, label %{loop_body_label}, label %{end_label}"
+        ));
+
+        self.body.push(format!("{loop_body_label}:"));
+        let data_ptr = self.tmp();
+        let offset = self.tmp();
+        let elem_ptr = self.tmp();
+
+        self.body.push(format!(
+            "  {data_ptr} = getelementptr i8, ptr {}, i64 8",
+            input_val.repr
+        ));
+        self.body
+            .push(format!("  {offset} = mul i64 {index}, {}", elem_size));
+        self.body.push(format!(
+            "  {elem_ptr} = getelementptr i8, ptr {data_ptr}, i64 {offset}"
+        ));
+
+        let elem_val = self.tmp();
+        match param_type {
+            DataType::Bool => {
+                let raw = self.tmp();
+                self.body
+                    .push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+                self.body
+                    .push(format!("  {elem_val} = trunc i8 {raw} to i1"));
+            }
+            DataType::I8 | DataType::U8 => {
+                let raw = self.tmp();
+                self.body
+                    .push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+                self.body
+                    .push(format!("  {elem_val} = zext i8 {raw} to i64"));
+            }
+            DataType::I16 | DataType::U16 => {
+                let raw = self.tmp();
+                self.body
+                    .push(format!("  {raw} = load i16, ptr {elem_ptr}"));
+                self.body
+                    .push(format!("  {elem_val} = zext i16 {raw} to i64"));
+            }
+            DataType::I32 | DataType::U32 => {
+                let raw = self.tmp();
+                self.body
+                    .push(format!("  {raw} = load i32, ptr {elem_ptr}"));
+                self.body
+                    .push(format!("  {elem_val} = zext i32 {raw} to i64"));
+            }
+            _ => {
+                self.body
+                    .push(format!("  {elem_val} = load i64, ptr {elem_ptr}"));
+            }
+        }
+
+        let param_var_ptr = var_ptr.clone();
+        let old_vars = self.vars.clone();
+        self.vars.insert(
+            param_name.clone(),
+            VarInfo {
+                ptr: param_var_ptr.clone(),
+                ty: LlType::I64,
+                data_type: param_type.clone(),
+                owns_heap_string: false,
+                struct_name: None,
+            },
+        );
+
+        self.body.push(format!(
+            "  store i64 {}, ptr {}",
+            elem_val, param_var_ptr
+        ));
+
+        let result_val = self.compile_closure_body(body, return_type);
+        self.vars = old_vars;
+
+        let result_i64 = self.cast_to_i64(result_val)?;
+        let result_i64_repr = result_i64.repr.clone();
+
+        let result_list_new = self.tmp();
+        if elem_size == 8 {
+            self.body.push(format!(
+                "  {result_list_new} = call ptr @mire_list_push_i64(ptr {current_list}, i64 {result_i64_repr})"
+            ));
+        } else {
+            self.body.push(format!(
+                "  {result_list_new} = call ptr @mire_list_push_scalar(ptr {current_list}, i64 {result_i64_repr}, i64 {})",
+                elem_size
+            ));
+        }
+        self.body.push(format!(
+            "  store ptr {result_list_new}, ptr {list_result_ptr}"
+        ));
+
+        let next_index = self.tmp();
+        self.body
+            .push(format!("  {next_index} = add i64 {index}, 1"));
+        self.body
+            .push(format!("  store i64 {next_index}, ptr {index_ptr}"));
+        self.body.push(format!("  br label %{loop_cond_label}"));
+
+        self.body.push(format!("{end_label}:"));
+        let final_list = self.tmp();
+        self.body.push(format!("  {final_list} = load ptr, ptr {list_result_ptr}"));
+
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: final_list,
+            owned: true,
+        })
+    }
+
+    fn compile_closure_body(&mut self, body: &[Statement], _expected_type: &DataType) -> LlValue {
+        if body.is_empty() {
+            return LlValue {
+                ty: LlType::I64,
+                repr: "0".to_string(),
+                owned: false,
+            };
+        }
+
+        for stmt in body.iter().take(body.len() - 1) {
+            let _ = self.compile_statement(stmt);
+        }
+
+        if let Some(last) = body.last() {
+            match last {
+                Statement::Return(Some(expr)) => {
+                    self.compile_expr(expr).unwrap_or(LlValue {
+                        ty: LlType::I64,
+                        repr: "0".to_string(),
+                        owned: false,
+                    })
+                }
+                Statement::Expression(expr) => {
+                    self.compile_expr(expr).unwrap_or(LlValue {
+                        ty: LlType::I64,
+                        repr: "0".to_string(),
+                        owned: false,
+                    })
+                }
+                _ => {
+                    let _ = self.compile_statement(last);
+                    LlValue {
+                        ty: LlType::I64,
+                        repr: "0".to_string(),
+                        owned: false,
+                    }
+                }
+            }
+        } else {
+            LlValue {
+                ty: LlType::I64,
+                repr: "0".to_string(),
+                owned: false,
+            }
         }
     }
 
@@ -4431,7 +4669,7 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
-            "and" => {
+            "&&" => {
                 self.body
                     .push(format!("  {result} = and i1 {left_repr}, {right_repr}"));
                 Ok(LlValue {
@@ -4440,9 +4678,18 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
-            "or" => {
+            "||" => {
                 self.body
                     .push(format!("  {result} = or i1 {left_repr}, {right_repr}"));
+                Ok(LlValue {
+                    ty: LlType::I1,
+                    repr: result,
+                    owned: false,
+                })
+            }
+            "^" => {
+                self.body
+                    .push(format!("  {result} = xor i1 {left_repr}, {right_repr}"));
                 Ok(LlValue {
                     ty: LlType::I1,
                     repr: result,
@@ -4463,6 +4710,18 @@ impl LlvmIrGen {
                     .push(format!("  {result} = sub i64 0, {}", value.repr));
                 Ok(LlValue {
                     ty: LlType::I64,
+                    repr: result,
+                    owned: false,
+                })
+            }
+            "!" => {
+                let bool_val = self.cast_to_i1(value)?;
+                self.body.push(format!(
+                    "  {result} = xor i1 {}, 1",
+                    bool_val.repr
+                ));
+                Ok(LlValue {
+                    ty: LlType::I1,
                     repr: result,
                     owned: false,
                 })
@@ -4817,6 +5076,12 @@ impl LlvmIrGen {
                 param_data_type.clone()
             };
 
+            let final_struct_name = if param_name == "self" {
+                method_owner.clone()
+            } else {
+                param_struct_name
+            };
+
             self.vars.insert(
                 param_name.clone(),
                 VarInfo {
@@ -4824,7 +5089,7 @@ impl LlvmIrGen {
                     ty: param_ty.clone(),
                     data_type: final_data_type,
                     owns_heap_string: false,
-                    struct_name: param_struct_name,
+                    struct_name: final_struct_name,
                 },
             );
         }

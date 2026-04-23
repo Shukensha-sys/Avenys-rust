@@ -1,0 +1,14 @@
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/thiserror-595b0bebf32a4d59.d: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/thiserror-34d357fc66d2d31f/out/private.rs
+
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/libthiserror-595b0bebf32a4d59.rlib: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/thiserror-34d357fc66d2d31f/out/private.rs
+
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/libthiserror-595b0bebf32a4d59.rmeta: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/thiserror-34d357fc66d2d31f/out/private.rs
+
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/thiserror-34d357fc66d2d31f/out/private.rs:
+
+# env-dep:OUT_DIR=/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/thiserror-34d357fc66d2d31f/out

@@ -54,9 +54,10 @@ fn immutable_reassignment_still_errors() {
 
 #[test]
 fn unknown_identifier_error_for_removed_keyword_add() {
-    // "add" was removed - now treated as unknown identifier
-    let err = expect_analysis_error("add std\npub fn main: () {}\n");
-    assert!(err.contains("Unknown identifier 'add'"), "{err}");
+    let result: Result<_, MireError> = parse("add std\npub fn main: () {}\n");
+    let err = result.expect_err("source should fail to parse");
+    let err_str = err.to_string();
+    assert!(err_str.contains("Legacy `add` imports are no longer supported"), "{err_str}");
 }
 
 #[test]

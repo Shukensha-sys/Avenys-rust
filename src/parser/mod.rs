@@ -951,12 +951,27 @@ fn apply_type_ascription(
     }
 
     fn parse_or(&mut self) -> Result<Expression> {
+        let mut expr = self.parse_xor()?;
+        while self.check(TokenType::PipePipe) {
+            self.advance();
+            let right = self.parse_xor()?;
+            expr = Expression::BinaryOp {
+                operator: "||".to_string(),
+                left: Box::new(expr),
+                right: Box::new(right),
+                data_type: DataType::Bool,
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_xor(&mut self) -> Result<Expression> {
         let mut expr = self.parse_and()?;
-        while self.check(TokenType::Or) {
+        while self.check(TokenType::Xor) {
             self.advance();
             let right = self.parse_and()?;
             expr = Expression::BinaryOp {
-                operator: "or".to_string(),
+                operator: "^".to_string(),
                 left: Box::new(expr),
                 right: Box::new(right),
                 data_type: DataType::Bool,
@@ -967,11 +982,11 @@ fn apply_type_ascription(
 
     fn parse_and(&mut self) -> Result<Expression> {
         let mut expr = self.parse_equality()?;
-        while self.check(TokenType::And) {
+        while self.check(TokenType::AmpAmp) {
             self.advance();
             let right = self.parse_equality()?;
             expr = Expression::BinaryOp {
-                operator: "and".to_string(),
+                operator: "&&".to_string(),
                 left: Box::new(expr),
                 right: Box::new(right),
                 data_type: DataType::Bool,
@@ -1186,11 +1201,11 @@ fn apply_type_ascription(
             });
         }
 
-        if self.check(TokenType::Not) {
+        if self.check(TokenType::Bang) {
             self.advance();
             let operand = self.parse_unary()?;
             return Ok(Expression::UnaryOp {
-                operator: "not".to_string(),
+                operator: "!".to_string(),
                 operand: Box::new(operand),
                 data_type: DataType::Bool,
             });
@@ -1446,6 +1461,29 @@ fn apply_type_ascription(
                             });
                         }
                     }
+                }
+
+                // Check for closure syntax: (param => body) or (self => body)
+                // Look ahead: we need Ident or SelfToken followed by => (Pipeline token)
+                let is_closure = (self.check(TokenType::Ident) || self.check(TokenType::SelfToken))
+                    && self.peek_n(1).ttype == TokenType::Pipeline;
+
+                if is_closure {
+                    let param_name = if self.check(TokenType::SelfToken) {
+                        self.advance();
+                        "self".to_string()
+                    } else {
+                        self.expect_ident()?
+                    };
+                    self.advance(); // consume =>
+                    let body_expr = self.parse_or()?;
+                    self.expect(TokenType::Rparen)?;
+                    return Ok(Expression::Closure {
+                        params: vec![(param_name, DataType::Unknown)],
+                        body: vec![Statement::Return(Some(body_expr))],
+                        return_type: DataType::Unknown,
+                        capture: Vec::new(),
+                    });
                 }
 
                 // Regular parenthesized expression
@@ -2342,7 +2380,7 @@ fn parse_brace_literal(&mut self) -> Result<Expression> {
                 | TokenType::Lbracket
                 | TokenType::Lbrace
                 | TokenType::Minus
-                | TokenType::Not
+                | TokenType::Bang
                 | TokenType::Amp
                 | TokenType::Star
         )

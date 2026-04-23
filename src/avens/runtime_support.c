@@ -11,7 +11,7 @@
 // Format: [capacity, length, data...]
 // This avoids pointer arithmetic and extra allocations
 
-static inline void *mire_list_create(int64_t initial_cap, int64_t elem_size) {
+void *mire_list_create(int64_t initial_cap, int64_t elem_size) {
     if (initial_cap < 4) initial_cap = 4;
     int64_t *ptr = (int64_t *)malloc(16 + initial_cap * elem_size);
     if (!ptr) return NULL;

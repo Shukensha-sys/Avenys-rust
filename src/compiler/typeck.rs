@@ -1190,7 +1190,7 @@ impl TypeChecker {
                 let operand_type = self.check_expression(operand)?;
                 let resolved = match operator.as_str() {
                     "-" if Self::is_numeric(&operand_type) => operand_type,
-                    "not" | "!" if Self::is_bool_like(&operand_type) => DataType::Bool,
+                    "!" if Self::is_bool_like(&operand_type) => DataType::Bool,
                     "-" => {
                         return Err(type_error(format!(
                             "Unary '-' requires numeric operand, got {:?}",
@@ -1651,8 +1651,44 @@ impl TypeChecker {
                 safe,
                 data_type,
             } => {
-                let _ = self.check_expression(input)?;
-                let _ = self.check_expression(stage)?;
+                self.push_scope();
+                
+                let input_type = self.check_expression(input)?;
+                
+                if let Expression::Closure { params, body, return_type, .. } = stage.as_ref() {
+                    let elem_type = match input_type {
+                        DataType::Vector { ref element_type, .. } => {
+                            *element_type.clone()
+                        }
+                        DataType::Array { ref element_type, .. } => {
+                            *element_type.clone()
+                        }
+                        _ => DataType::I64,
+                    };
+                    
+                    let mut actual_params = params.clone();
+                    if let Some((_, ptype)) = actual_params.first_mut() {
+                        if *ptype == DataType::Unknown {
+                            *ptype = elem_type.clone();
+                        }
+                    }
+                    
+                    for (name, ptype) in actual_params.iter() {
+                        self.insert_var(name.clone(), ptype.clone(), true);
+                    }
+                    
+                    self.return_type_stack.push(return_type.clone());
+                    self.check_statements(&mut body.clone())?;
+                    let _inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
+                    
+                    if *data_type == DataType::Unknown {
+                        *data_type = DataType::List;
+                    }
+                } else {
+                    let _ = self.check_expression(stage)?;
+                }
+                
+                self.pop_scope();
                 let _ = safe;
                 Ok(data_type.clone())
             }
@@ -1753,7 +1789,7 @@ impl TypeChecker {
                 )))
             }
             "==" | "!=" | "<" | "<=" | ">" | ">=" => Ok(DataType::Bool),
-            "and" | "or" | "xor" | "&&" | "||" => {
+            "&&" | "||" | "^" => {
                 if left == &DataType::Unknown || right == &DataType::Unknown {
                     return Ok(DataType::Bool);
                 }
@@ -1801,7 +1837,7 @@ impl TypeChecker {
     }
 
     fn is_logical_operator(operator: &str) -> bool {
-        matches!(operator, "and" | "or" | "xor" | "&&" | "||")
+        matches!(operator, "&&" | "||" | "^")
     }
 
     fn is_match_identifier_pattern(expression: &Expression) -> bool {
@@ -3067,7 +3103,7 @@ mod tests {
                     visibility: Visibility::Public,
                 },
                 Statement::Expression(Expression::BinaryOp {
-                    operator: "and".to_string(),
+                    operator: "&&".to_string(),
                     left: Box::new(Expression::Identifier(Identifier {
                         name: "a".to_string(),
                         data_type: DataType::Unknown,

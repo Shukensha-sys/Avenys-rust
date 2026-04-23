@@ -41,9 +41,6 @@ pub enum TokenType {
     To,
     At,
     SelfToken,
-    And,
-    Or,
-    Not,
     Break,
     Continue,
     Eq,
@@ -59,8 +56,12 @@ pub enum TokenType {
     Slash,
     Percent,
     Amp,
+    AmpAmp,
+    Pipe,
+    PipePipe,
+    Xor,
     Pipeline,
-    PipelineSafe, // =>? - safe pipeline that returns Option
+    PipelineSafe,
     PlusAssign,
     MinusAssign,
     StarAssign,
@@ -344,9 +345,6 @@ impl Lexer {
                     "to" => Token::new(TokenType::To, self.line, self.column),
                     "at" => Token::new(TokenType::At, self.line, self.column),
                     "self" => Token::new(TokenType::SelfToken, start_line, start_col),
-                    "and" => Token::new(TokenType::And, start_line, start_col),
-                    "or" => Token::new(TokenType::Or, start_line, start_col),
-                    "not" => Token::new(TokenType::Not, start_line, start_col),
                     "break" => Token::new(TokenType::Break, start_line, start_col),
                     "continue" => Token::new(TokenType::Continue, start_line, start_col),
                     "true" | "false" => {
@@ -470,7 +468,25 @@ impl Lexer {
                 }
                 '&' => {
                     self.advance();
-                    Token::new(TokenType::Amp, self.line, self.column)
+                    if self.peek(0) == Some('&') {
+                        self.advance();
+                        Token::new(TokenType::AmpAmp, self.line, self.column)
+                    } else {
+                        Token::new(TokenType::Amp, self.line, self.column)
+                    }
+                }
+                '|' => {
+                    self.advance();
+                    if self.peek(0) == Some('|') {
+                        self.advance();
+                        Token::new(TokenType::PipePipe, self.line, self.column)
+                    } else {
+                        Token::new(TokenType::Pipe, self.line, self.column)
+                    }
+                }
+                '^' => {
+                    self.advance();
+                    Token::new(TokenType::Xor, self.line, self.column)
                 }
                 '(' => {
                     self.advance();
