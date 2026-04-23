@@ -137,35 +137,20 @@ set doubled = nums => (x => x * 2)
 
 ## 📝 Propuestas de Mejora (SYNTAX PROPOSALS)
 
-### 1. Implementar `not` como Unary Operator
-
-**Current:** `not` keyword no funciona como unary operator
-```mire
-# FALLA:
-if not a { }
-```
-
-**Propuesta de sintaxis:**
-```mire
-# Opción A: mantener keyword 'not'
-if not a { }
-
-# Opción B: usar '!' style
-if !a { }
-
-# Opción C: usar @ prefix (consistente con roadmap)
-if @!a { }
-```
-
-### 2. Match con Comparación
+### 1. Match con Comparación
 
 **Current:** No soporta `match x >= 5`
 **Propuesta:** Modificar parser para aceptar comparaciones como match condition
 
-### 3. Struct Field Reassignment
+### 2. Struct Field Reassignment
 
 **Current:** `c.value = 1` falla
 **Propuesta:** Implementar setter semántico para fields mutables
+
+### 3. Bitwise Operators
+
+**Current:** `&`, `|`, `<<`, `>>` no implementados
+**Propuesta:** Implementar operadores bitwise para consistencia con C-style
 
 ---
 
