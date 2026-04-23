@@ -36,11 +36,11 @@ a ^ b   # XOR: a xor b
 
 #### Bitwise Operators (C-style)
 ```
-a & b   # Bitwise AND - PENDING
-a | b   # Bitwise OR - PENDING
-a ^ b   # Bitwise XOR - PENDING
-a << b  # Shift left - PENDING
-a >> b  # Shift right - PENDING
+a & b   # Bitwise AND - ✅ IMPLEMENTED
+a | b   # Bitwise OR - ✅ IMPLEMENTED
+a ^ b   # Bitwise XOR - ✅ IMPLEMENTED
+a << b  # Shift left - ✅ IMPLEMENTED
+a >> b  # Shift right - ✅ IMPLEMENTED
 ```
 
 ---
@@ -94,7 +94,7 @@ a >> b  # Shift right - PENDING
 2. Fase 2: Logical Operators (C-style) - ✅ DONE (!, &&, ||, ^)
 3. Fase 3: Match with Comparison - ✅ DONE
 4. Fase 4: Short-circuit evaluation for && and || - ✅ DONE
-5. Fase 5: Bitwise operators - ⏳ PENDING
+5. Fase 5: Bitwise operators - ✅ DONE (&, |, <<, >>, ^)
 
 ---
 

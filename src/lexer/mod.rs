@@ -60,6 +60,8 @@ pub enum TokenType {
     Pipe,
     PipePipe,
     Xor,
+    LShift,
+    RShift,
     Pipeline,
     PipelineSafe,
     PlusAssign,
@@ -453,6 +455,9 @@ impl Lexer {
                     if self.peek(0) == Some('=') {
                         self.advance();
                         Token::new(TokenType::Gte, self.line, self.column)
+                    } else if self.peek(0) == Some('>') {
+                        self.advance();
+                        Token::new(TokenType::RShift, self.line, self.column)
                     } else {
                         Token::new(TokenType::Gt, self.line, self.column)
                     }
@@ -462,6 +467,9 @@ impl Lexer {
                     if self.peek(0) == Some('=') {
                         self.advance();
                         Token::new(TokenType::Lte, self.line, self.column)
+                    } else if self.peek(0) == Some('<') {
+                        self.advance();
+                        Token::new(TokenType::LShift, self.line, self.column)
                     } else {
                         Token::new(TokenType::Lt, self.line, self.column)
                     }

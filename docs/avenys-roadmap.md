@@ -62,7 +62,7 @@ if a || expensive_check() { }
 
 - Match con comparación directa: `match x >= 5` (usar variable intermedia)
 - Struct field reassignment: `c.value = 1` (crear nuevo struct)
-- Bitwise operators: `&`, `|`, `<<`, `>>` (pendientes)
+- Bitwise operators: `&`, `|`, `<<`, `>>` (implementados en v2.1.0)
 - `vec[vec[T]]` - no conserva tipo interno en todas las rutas
 - Member access avanzado
 - Semántica profunda de traits/skills más allá de conformance directa

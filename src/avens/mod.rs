@@ -4692,10 +4692,76 @@ impl LlvmIrGen {
                 })
             }
             "^" => {
-                self.body
-                    .push(format!("  {result} = xor i1 {left_repr}, {right_repr}"));
+                if lhs.ty == LlType::I1 && rhs.ty == LlType::I1 {
+                    self.body
+                        .push(format!("  {result} = xor i1 {left_repr}, {right_repr}"));
+                    Ok(LlValue {
+                        ty: LlType::I1,
+                        repr: result,
+                        owned: false,
+                    })
+                } else {
+                    let left_i64 = self.cast_to_i64(lhs)?;
+                    let right_i64 = self.cast_to_i64(rhs)?;
+                    self.body.push(format!(
+                        "  {result} = xor i64 {}, {}",
+                        left_i64.repr, right_i64.repr
+                    ));
+                    Ok(LlValue {
+                        ty: LlType::I64,
+                        repr: result,
+                        owned: false,
+                    })
+                }
+            }
+            "&" => {
+                let left_i64 = self.cast_to_i64(lhs)?;
+                let right_i64 = self.cast_to_i64(rhs)?;
+                self.body.push(format!(
+                    "  {result} = and i64 {}, {}",
+                    left_i64.repr, right_i64.repr
+                ));
                 Ok(LlValue {
-                    ty: LlType::I1,
+                    ty: LlType::I64,
+                    repr: result,
+                    owned: false,
+                })
+            }
+            "|" => {
+                let left_i64 = self.cast_to_i64(lhs)?;
+                let right_i64 = self.cast_to_i64(rhs)?;
+                self.body.push(format!(
+                    "  {result} = or i64 {}, {}",
+                    left_i64.repr, right_i64.repr
+                ));
+                Ok(LlValue {
+                    ty: LlType::I64,
+                    repr: result,
+                    owned: false,
+                })
+            }
+            "<<" => {
+                let left_i64 = self.cast_to_i64(lhs)?;
+                let right_i64 = self.cast_to_i64(rhs)?;
+                self.body.push(format!(
+                    "  {result} = shl i64 {}, {}",
+                    left_i64.repr, right_i64.repr
+                ));
+                Ok(LlValue {
+                    ty: LlType::I64,
+                    repr: result,
+                    owned: false,
+                })
+            }
+            ">>" => {
+                let left_i64 = self.cast_to_i64(lhs)?;
+                let right_i64 = self.cast_to_i64(rhs)?;
+                self.body.push(format!(
+                    "  {result} = lshr i64 {}, {}",
+                    left_i64.repr, right_i64.repr
+                ));
+                Ok(LlValue {
+                    ty: LlType::I64,
                     repr: result,
                     owned: false,
                 })

@@ -1789,7 +1789,7 @@ impl TypeChecker {
                 )))
             }
             "==" | "!=" | "<" | "<=" | ">" | ">=" => Ok(DataType::Bool),
-            "&&" | "||" | "^" => {
+            "&&" | "||" => {
                 if left == &DataType::Unknown || right == &DataType::Unknown {
                     return Ok(DataType::Bool);
                 }
@@ -1802,8 +1802,50 @@ impl TypeChecker {
                     )))
                 }
             }
+            "^" => {
+                if left == &DataType::Unknown || right == &DataType::Unknown {
+                    return Ok(DataType::Unknown);
+                }
+                if Self::is_bool_like(left) && Self::is_bool_like(right) {
+                    Ok(DataType::Bool)
+                } else if Self::is_integer_type(left) && Self::is_integer_type(right) {
+                    Ok(left.clone())
+                } else {
+                    Err(type_error(format!(
+                        "XOR operator '^' requires either bool or integer operands, got {:?} and {:?}",
+                        left, right
+                    )))
+                }
+            }
+            "&" | "|" | "<<" | ">>" => {
+                if left == &DataType::Unknown || right == &DataType::Unknown {
+                    return Ok(DataType::Unknown);
+                }
+                if Self::is_integer_type(left) && Self::is_integer_type(right) {
+                    Ok(left.clone())
+                } else {
+                    Err(type_error(format!(
+                        "Bitwise operator '{}' requires integer operands, got {:?} and {:?}",
+                        operator, left, right
+                    )))
+                }
+            }
             _ => Ok(DataType::Unknown),
         }
+    }
+
+    fn is_integer_type(ty: &DataType) -> bool {
+        matches!(
+            ty,
+            DataType::I64
+                | DataType::I32
+                | DataType::I16
+                | DataType::I8
+                | DataType::U64
+                | DataType::U32
+                | DataType::U16
+                | DataType::U8
+        )
     }
 
     fn check_expression_allow_unknown_identifier(
@@ -1837,7 +1879,7 @@ impl TypeChecker {
     }
 
     fn is_logical_operator(operator: &str) -> bool {
-        matches!(operator, "&&" | "||" | "^")
+        matches!(operator, "&&" | "||")
     }
 
     fn is_match_identifier_pattern(expression: &Expression) -> bool {

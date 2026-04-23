@@ -149,8 +149,12 @@ set doubled = nums => (x => x * 2)
 
 ### 3. Bitwise Operators
 
-**Current:** `&`, `|`, `<<`, `>>` no implementados
-**Propuesta:** Implementar operadores bitwise para consistencia con C-style
+**Status**: ✅ RESOLVED (Mayo 2026)
+- `&` - Bitwise AND
+- `|` - Bitwise OR
+- `<<` - Left shift
+- `>>` - Right shift
+- `^` - Bitwise XOR (int operands) / Logical XOR (bool operands)
 
 ---
 

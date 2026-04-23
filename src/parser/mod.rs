@@ -995,12 +995,12 @@ fn apply_type_ascription(
         Ok(expr)
     }
 
-    fn parse_equality(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_comparison()?;
+fn parse_equality(&mut self) -> Result<Expression> {
+        let mut expr = self.parse_bitwise_or()?;
         loop {
             if self.check(TokenType::Eq) {
                 self.advance();
-                let right = self.parse_comparison()?;
+                let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "==".to_string(),
                     left: Box::new(expr),
@@ -1009,7 +1009,7 @@ fn apply_type_ascription(
                 };
             } else if self.check(TokenType::Neq) {
                 self.advance();
-                let right = self.parse_comparison()?;
+                let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "!=".to_string(),
                     left: Box::new(expr),
@@ -1019,7 +1019,7 @@ fn apply_type_ascription(
             } else if self.check(TokenType::Is) {
                 self.advance();
                 self.expect(TokenType::Lparen)?;
-                let right = self.parse_expression()?;
+                let right = self.parse_bitwise_or()?;
                 self.expect(TokenType::Rparen)?;
                 expr = Expression::Call {
                     name: "__is".to_string(),
@@ -1029,6 +1029,36 @@ fn apply_type_ascription(
             } else {
                 break;
             }
+        }
+        Ok(expr)
+    }
+
+    fn parse_bitwise_or(&mut self) -> Result<Expression> {
+        let mut expr = self.parse_bitwise_and()?;
+        while self.check(TokenType::Pipe) {
+            self.advance();
+            let right = self.parse_bitwise_and()?;
+            expr = Expression::BinaryOp {
+                operator: "|".to_string(),
+                left: Box::new(expr),
+                right: Box::new(right),
+                data_type: DataType::Unknown,
+            };
+        }
+        Ok(expr)
+    }
+
+    fn parse_bitwise_and(&mut self) -> Result<Expression> {
+        let mut expr = self.parse_comparison()?;
+        while self.check(TokenType::Amp) {
+            self.advance();
+            let right = self.parse_comparison()?;
+            expr = Expression::BinaryOp {
+                operator: "&".to_string(),
+                left: Box::new(expr),
+                right: Box::new(right),
+                data_type: DataType::Unknown,
+            };
         }
         Ok(expr)
     }
@@ -1126,11 +1156,11 @@ fn apply_type_ascription(
     }
 
     fn parse_additive(&mut self) -> Result<Expression> {
-        let mut expr = self.parse_multiplicative()?;
+        let mut expr = self.parse_shift()?;
         loop {
             if self.check(TokenType::Plus) {
                 self.advance();
-                let right = self.parse_multiplicative()?;
+                let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "+".to_string(),
                     left: Box::new(expr),
@@ -1139,9 +1169,37 @@ fn apply_type_ascription(
                 };
             } else if self.check(TokenType::Minus) {
                 self.advance();
-                let right = self.parse_multiplicative()?;
+                let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "-".to_string(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                    data_type: DataType::Unknown,
+                };
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn parse_shift(&mut self) -> Result<Expression> {
+        let mut expr = self.parse_multiplicative()?;
+        loop {
+            if self.check(TokenType::LShift) {
+                self.advance();
+                let right = self.parse_multiplicative()?;
+                expr = Expression::BinaryOp {
+                    operator: "<<".to_string(),
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                    data_type: DataType::Unknown,
+                };
+            } else if self.check(TokenType::RShift) {
+                self.advance();
+                let right = self.parse_multiplicative()?;
+                expr = Expression::BinaryOp {
+                    operator: ">>".to_string(),
                     left: Box::new(expr),
                     right: Box::new(right),
                     data_type: DataType::Unknown,
