@@ -1607,9 +1607,15 @@ impl TypeChecker {
                         member
                     )));
                 }
-                if matches!(target_type, DataType::Anything | DataType::Unknown) {
-                    *data_type = target_type.clone();
-                    return Ok(target_type);
+                if matches!(target_type, DataType::Anything) {
+                    *data_type = DataType::Anything;
+                    return Ok(DataType::Anything);
+                }
+                if matches!(target_type, DataType::Unknown) {
+                    return Err(type_error(format!(
+                        "Cannot access member '{}' on unknown type - type not determined",
+                        member
+                    )));
                 }
                 Err(type_error(format!(
                     "Type {:?} has no member '{}'",
@@ -1744,13 +1750,20 @@ impl TypeChecker {
                     }
                     let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
                     if *return_type == DataType::Unknown {
+                        if inferred_return == DataType::Unknown {
+                            return Err(type_error(
+                                "Pipeline stage return type cannot be inferred - closure must return a value".to_string(),
+                            ));
+                        }
                         *return_type = inferred_return.clone();
                     }
                     self.pop_scope();
                     DataType::Vector {
                         element_type: Box::new(
                             if *return_type == DataType::Unknown {
-                                elem_type
+                                return Err(type_error(
+                                    "Cannot determine pipeline output element type - specify return type in closure".to_string(),
+                                ));
                             } else {
                                 return_type.clone()
                             },
@@ -1762,8 +1775,13 @@ impl TypeChecker {
                 {
                     stage_type
                 } else {
-                    self.check_expression(stage)?;
-                    DataType::Unknown
+                    let stage_check = self.check_expression(stage)?;
+                    if stage_check == DataType::Unknown {
+                        return Err(type_error(
+                            "Pipeline stage has unknown type - cannot infer output type".to_string(),
+                        ));
+                    }
+                    stage_check
                 };
                 let _ = safe;
                 if *data_type == DataType::Unknown {

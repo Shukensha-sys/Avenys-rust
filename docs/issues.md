@@ -214,11 +214,11 @@ El tipado de Pipeline usar defaults cuando no puede inferir.
 **Descripción:**
 Las referencias no almacenan tipo detallado en el AST.
 
-**Status:** ⚠️ INVESTIGATED (Abril 2026)
+**Status:** ✅ INVESTIGATED (Mayo 2026) - Enhancement Requerido
 - El AST solo distingue Ref/RefMut (ast.rs:207-211)
-- `referenced_type_for_expr()` intenta inferir del target
-- Mejora requeriría cambio en el AST para almacenar tipo en Reference
-- Considerar como mejora futura, no bug crítico
+- Requiere cambio en el AST para almacenar tipo en Reference
+- No es bug crítico, es mejora de diseño
+- Considerar para v2.1.0
 
 ---
 
@@ -262,7 +262,6 @@ Las referencias no almacenan tipo detallado en el AST.
 ### High Priority (Type Checking)
 - T1: Member access fallback too permissive
 - T2: Pipeline typing incomplete
-- T3: References without pointed type
 
 ---
 
@@ -304,6 +303,34 @@ set arr = lists.push(arr 1)  # Error: requires vec![T]
 - Parser properly handles `vec![T]` syntax since v2.0.0
 
 **Workaround**: Use `[1 2 3]` syntax instead of `[]` with push, OR use `lists.set(index, value)`
+
+---
+
+## ✅ RESOLVED (Mayo 2026)
+
+### T1: Member Access Fallback
+
+**Description:**
+Member access was too permissive - allowed any member access on Unknown types.
+
+**Fix:**
+- Now rejects member access on Unknown types with clear error message
+- Only allows on Anything type with warning
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
+### T2: Pipeline Typing
+
+**Description:**
+Pipeline used `element_type` as fallback when return_type was Unknown.
+
+**Fix:**
+- Now requires explicit return type or proper inference
+- Throws error if return type cannot be determined
+
+**Status**: ✅ RESOLVED (Mayo 2026)
 
 ---
 
