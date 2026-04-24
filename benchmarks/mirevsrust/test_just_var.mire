@@ -1,4 +1,0 @@
-pub fn main: () {
-    set x = "hello" :str
-    use dasu("{x}")
-}

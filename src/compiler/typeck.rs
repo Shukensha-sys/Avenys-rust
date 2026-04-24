@@ -1349,6 +1349,7 @@ impl TypeChecker {
                     let resolved = match arg_types.first().cloned().unwrap_or(DataType::Unknown) {
                         DataType::Vector { element_type, .. } => *element_type,
                         DataType::List => DataType::Anything,
+                        DataType::Unknown => DataType::Anything,
                         other => {
                             return Err(type_error(format!(
                                 "lists.get expects vec/vec! input, got {:?}",
@@ -1380,6 +1381,10 @@ impl TypeChecker {
                                     .to_string(),
                             ));
                         }
+                        DataType::List => DataType::Vector {
+                            element_type: Box::new(value_type),
+                            dynamic: true,
+                        },
                         DataType::Unknown => DataType::Vector {
                             element_type: Box::new(value_type),
                             dynamic: true,

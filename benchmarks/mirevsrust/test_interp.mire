@@ -1,6 +1,0 @@
-pub fn main: () {
-    set result = "test" :str
-    set length = len(result) :i64
-    use dasu("length {length}")
-    use dasu("result {result}")
-}

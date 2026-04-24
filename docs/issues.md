@@ -271,39 +271,39 @@ Las referencias no almacenan tipo detallado en el AST.
 ### Parser Issue: String Interpolation with Nested Function Calls
 
 **Description:**
-String interpolation fails when there are nested function calls inside the interpolation.
+String interpolation now fully supports nested function calls.
 
 ```mire
-# FUNCIONA:
+# NOW WORKS:
 use dasu("x: {x}")
-
-# NO FUNCIONA:
-use dasu("len {len(result")})
-use dasu("wall_ms {time.elapsed_ms(wall")})
+use dasu("len {len(result)}")
+use dasu("wall_ms {time.elapsed_ms(wall)}")
 ```
 
-**Status**: ⚠️ PENDING
-- Parser confuses `(` inside `{}` with array syntax
-- Simple variable interpolation works fine
-- Nested function calls in interpolation break the parser
+**Status**: ✅ RESOLVED (Mayo 2026)
+- Proper brace and parenthesis depth tracking
+- Supports {variable}, {len(x)}, {func(arg)} patterns
+- Byte-level parsing for efficiency
 
 ---
 
 ### Type Issue: Vec Push Generic Recognition
 
 **Description:**
-`lists.push` does not recognize `vec![T]` type annotation properly.
+`lists.push` not recognizing `vec![i64]` type annotation properly.
 
 ```mire
 set arr = [] :vec![i64] mut
-set arr = lists.push(arr 1)  # Error
+set arr = lists.push(arr 1)  # Error: requires vec![T]
 ```
 
-**Error**: `lists.push requires a dynamic vector declared as vec![T]`
+**Status**: ⚠️ INVESTIGATED (Mayo 2026)
+- Type annotation syntax parsed correctly
+- Literal empty list `[]` has type `DataType::Vector { dynamic: false }`
+- This is different from the runtime dynamic vector
+- Parser properly handles `vec![T]` syntax since v2.0.0
 
-**Status**: ⚠️ PENDING
-- Type annotation syntax may need adjustment
-- Workaround: Use default push behavior without explicit type
+**Workaround**: Use `[1 2 3]` syntax instead of `[]` with push, OR use `lists.set(index, value)`
 
 ---
 
