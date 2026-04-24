@@ -60,6 +60,7 @@ Avenys is the active compiled backend for Mire. The current state is:
 - `match` arm type consistency: all arm patterns must be compatible with the matched value's type
 - Identifier patterns in `match` are treated as comparison-side patterns and are not rejected as undefined bindings during type analysis
 - Enum payload bindings introduced by `match` patterns are scoped and available inside statement bodies and match expressions, including variants with multiple payload values
+- `match` accepts full comparison/logical expressions as the matched value, for example `match x < 5 :bool { ... }`
 - Loop variable type inference: `for i in range(10)` gives `i` type `i64`; iterating over a typed array or vector infers the element type
 - `if` and `while` conditions are checked to be bool-like; a condition of type `i64` is an error
 - Function call return type propagation: calling a known function resolves the call expression's type
@@ -217,6 +218,15 @@ match code {
 ```
 
 `_` is the wildcard arm. Literal patterns, enum-qualified patterns, and enum payload bindings are supported:
+
+```mire
+set x = 3 :i64
+
+set result = match x < 5 :bool {
+    true { 1 }
+    false { 2 }
+} :i64
+```
 
 ```mire
 enum Result {

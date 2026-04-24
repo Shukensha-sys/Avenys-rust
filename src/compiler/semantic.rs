@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::parser::ast::{DataType, Expression, Program, Statement};
+use crate::parser::ast::{DataType, Expression, MireValue, Program, QueryOp, Statement};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionInfo {
@@ -88,6 +88,7 @@ struct SemanticModelBuilder {
     scope_stack: Vec<usize>,
     unsafe_depth: usize,
     next_scope_id: usize,
+    impl_owner_stack: Vec<String>,
 }
 
 impl SemanticModelBuilder {
@@ -106,7 +107,74 @@ impl SemanticModelBuilder {
             scope_stack: vec![0],
             unsafe_depth: 0,
             next_scope_id: 1,
+            impl_owner_stack: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::analyze_program;
+    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Program, Statement, Visibility};
+
+    fn ident(name: &str) -> Expression {
+        Expression::Identifier(Identifier {
+            name: name.to_string(),
+            data_type: DataType::Unknown,
+            line: 0,
+            column: 0,
+        })
+    }
+
+    #[test]
+    fn registers_impl_methods_with_qualified_names() {
+        let program = Program {
+            statements: vec![Statement::Impl {
+                trait_name: None,
+                type_name: "Point".to_string(),
+                methods: vec![Statement::Function {
+                    name: "draw".to_string(),
+                    params: vec![("self".to_string(), DataType::StructNamed("Point".to_string()))],
+                    body: vec![],
+                    return_type: DataType::None,
+                    visibility: Visibility::Public,
+                    is_method: true,
+                }],
+            }],
+        };
+
+        let model = analyze_program(&program);
+        assert!(model.functions.contains_key("Point.draw"));
+    }
+
+    #[test]
+    fn tracks_unsafe_scope_and_drop_move_facts() {
+        let program = Program {
+            statements: vec![Statement::Unsafe {
+                body: vec![
+                    Statement::Let {
+                        name: "x".to_string(),
+                        data_type: DataType::I64,
+                        value: Some(Expression::Literal(Literal::Int(1))),
+                        is_constant: false,
+                        is_mutable: false,
+                        is_static: false,
+                        visibility: Visibility::Public,
+                    },
+                    Statement::Move {
+                        target: "y".to_string(),
+                        value: ident("x"),
+                    },
+                    Statement::Drop { value: ident("y") },
+                ],
+            }],
+        };
+
+        let model = analyze_program(&program);
+        assert_eq!(model.unsafe_blocks, 1);
+        assert_eq!(model.move_statements, 1);
+        assert_eq!(model.drop_statements, 1);
+        assert!(model.bindings.iter().any(|binding| binding.declared_in_unsafe));
     }
 }
 
@@ -158,8 +226,9 @@ impl SemanticModelBuilder {
                 is_method,
                 ..
             } => {
+                let function_name = self.current_function_name(name);
                 self.model.functions.insert(
-                    name.clone(),
+                    function_name,
                     FunctionInfo {
                         params: params.iter().map(|(_, ty)| ty.clone()).collect(),
                         return_type: return_type.clone(),
@@ -242,20 +311,82 @@ impl SemanticModelBuilder {
                 }
                 self.with_scope(|builder| builder.visit_statements(default));
             }
-            Statement::Class { .. }
-            | Statement::Impl { .. }
-            | Statement::Type { .. }
-            | Statement::Code { .. }
-            | Statement::Skill { .. }
-            | Statement::Unsafe { .. }
-            | Statement::Asm { .. }
-            | Statement::Module { .. }
-            | Statement::DmireTable { .. }
-            | Statement::DmireColumn { .. }
-            | Statement::DmireDlist { .. }
-            | Statement::Query { .. }
-            | Statement::Drop { .. }
-            | Statement::Move { .. } => {}
+            Statement::Class { methods, .. } | Statement::Code { methods, .. } => {
+                self.visit_statements(methods);
+            }
+            Statement::Impl {
+                type_name, methods, ..
+            } => {
+                self.impl_owner_stack.push(type_name.clone());
+                self.visit_statements(methods);
+                self.impl_owner_stack.pop();
+            }
+            Statement::Type { fields, .. } => {
+                self.visit_statements(fields);
+            }
+            Statement::Skill { .. } => {}
+            Statement::Unsafe { body } => {
+                self.model.unsafe_blocks += 1;
+                self.unsafe_depth += 1;
+                self.with_scope(|builder| builder.visit_statements(body));
+                self.unsafe_depth = self.unsafe_depth.saturating_sub(1);
+            }
+            Statement::Asm { instructions } => {
+                for (_, expr) in instructions {
+                    self.visit_expression(expr);
+                }
+            }
+            Statement::Module { body, .. }
+            | Statement::DmireTable { body, .. }
+            | Statement::DmireColumn { body, .. } => {
+                self.with_scope(|builder| builder.visit_statements(body));
+            }
+            Statement::DmireDlist { data, .. } => {
+                for expr in data {
+                    self.visit_expression(expr);
+                }
+            }
+            Statement::Query { bindings, ops, .. } => {
+                self.with_scope(|builder| {
+                    for binding in bindings {
+                        builder.register_binding(
+                            binding.target.clone(),
+                            DataType::Anything,
+                            BindingKind::QueryBinding,
+                            None,
+                            false,
+                            false,
+                        );
+                        builder.register_binding(
+                            binding.alias.clone(),
+                            DataType::Anything,
+                            BindingKind::QueryBinding,
+                            None,
+                            false,
+                            false,
+                        );
+                    }
+                    for op in ops {
+                        builder.visit_query_op(op);
+                    }
+                });
+            }
+            Statement::Drop { value } => {
+                self.visit_expression(value);
+                if let Some(name) = Self::identifier_name(value) {
+                    self.model.drop_facts.push((name, self.current_scope_id()));
+                    self.model.drop_statements += 1;
+                }
+            }
+            Statement::Move { target, value } => {
+                self.visit_expression(value);
+                self.model.move_facts.push(MoveFact {
+                    target: target.clone(),
+                    source: Self::identifier_name(value),
+                    scope_id: self.current_scope_id(),
+                });
+                self.model.move_statements += 1;
+            }
             Statement::Break
             | Statement::Continue
             | Statement::Trait { .. }
@@ -316,8 +447,35 @@ impl SemanticModelBuilder {
                 }
                 self.visit_expression(target);
             }
-            Expression::Closure { body, .. } => {
-                self.with_scope(|builder| builder.visit_statements(body));
+            Expression::Closure { .. } => {
+                if let Expression::Closure {
+                    params, capture, body, ..
+                } = expression
+                {
+                    self.with_scope(|builder| {
+                        for (name, value) in capture {
+                            builder.register_binding(
+                                name.clone(),
+                                Self::mire_value_type(value),
+                                BindingKind::Value,
+                                None,
+                                false,
+                                false,
+                            );
+                        }
+                        for (name, data_type) in params {
+                            builder.register_binding(
+                                name.clone(),
+                                data_type.clone(),
+                                Self::binding_kind(data_type, None, true),
+                                None,
+                                false,
+                                false,
+                            );
+                        }
+                        builder.visit_statements(body);
+                    });
+                }
             }
             Expression::Pipeline { input, stage, .. } => {
                 self.visit_expression(input);
@@ -418,6 +576,13 @@ impl SemanticModelBuilder {
         self.scope_stack.last().copied().unwrap_or(0)
     }
 
+    fn current_function_name(&self, name: &str) -> String {
+        self.impl_owner_stack
+            .last()
+            .map(|owner| format!("{owner}.{name}"))
+            .unwrap_or_else(|| name.to_string())
+    }
+
     fn binding_kind(
         data_type: &DataType,
         value: Option<&Expression>,
@@ -478,6 +643,90 @@ impl SemanticModelBuilder {
         match expression {
             Expression::Identifier(ident) => Some(ident.name.clone()),
             _ => None,
+        }
+    }
+
+    fn visit_query_op(&mut self, op: &QueryOp) {
+        match op {
+            QueryOp::Insert { assigns } => {
+                for (_, expr) in assigns {
+                    self.visit_expression(expr);
+                }
+            }
+            QueryOp::Update { condition, assigns } => {
+                self.visit_expression(condition);
+                for (_, expr) in assigns {
+                    self.visit_expression(expr);
+                }
+            }
+            QueryOp::Delete { condition } => self.visit_expression(condition),
+            QueryOp::Get(get) => {
+                self.visit_expression(&get.condition);
+                self.with_scope(|builder| {
+                    builder.register_binding(
+                        get.target.clone(),
+                        DataType::Anything,
+                        BindingKind::QueryBinding,
+                        None,
+                        false,
+                        false,
+                    );
+                    builder.visit_statements(&get.body);
+                });
+            }
+            QueryOp::Export { .. } | QueryOp::Import { .. } => {}
+        }
+    }
+
+    fn mire_value_type(value: &MireValue) -> DataType {
+        match value {
+            MireValue::I8(_) => DataType::I8,
+            MireValue::I16(_) => DataType::I16,
+            MireValue::I32(_) => DataType::I32,
+            MireValue::I64(_) => DataType::I64,
+            MireValue::U8(_) => DataType::U8,
+            MireValue::U16(_) => DataType::U16,
+            MireValue::U32(_) => DataType::U32,
+            MireValue::U64(_) => DataType::U64,
+            MireValue::Float(_) | MireValue::F64(_) => DataType::F64,
+            MireValue::F32(_) => DataType::F32,
+            MireValue::Str(_) => DataType::Str,
+            MireValue::Bool(_) => DataType::Bool,
+            MireValue::None => DataType::None,
+            MireValue::List(_) => DataType::List,
+            MireValue::Dict(_) => DataType::Dict,
+            MireValue::Tuple(_) => DataType::Tuple,
+            MireValue::Function(_) | MireValue::Builtinfn(_) => DataType::Function,
+            MireValue::Object { .. } | MireValue::Instance { .. } => DataType::Anything,
+            MireValue::Trait { name, .. } => DataType::DynTrait {
+                trait_name: name.clone(),
+            },
+            MireValue::Ref { is_mutable, .. } => {
+                if *is_mutable {
+                    DataType::RefMut
+                } else {
+                    DataType::Ref
+                }
+            }
+            MireValue::Box { .. } => DataType::Box,
+            MireValue::Array { elements, size } => DataType::Array {
+                element_type: Box::new(
+                    elements
+                        .first()
+                        .map(Self::mire_value_type)
+                        .unwrap_or(DataType::Anything),
+                ),
+                size: *size,
+            },
+            MireValue::Slice { elements } => DataType::Slice {
+                element_type: Box::new(
+                    elements
+                        .first()
+                        .map(Self::mire_value_type)
+                        .unwrap_or(DataType::Anything),
+                ),
+            },
+            MireValue::EnumVariant { enum_name, .. } => DataType::EnumNamed(enum_name.clone()),
         }
     }
 }

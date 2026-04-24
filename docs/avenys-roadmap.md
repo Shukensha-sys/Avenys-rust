@@ -60,13 +60,21 @@ if a || expensive_check() { }
 
 ### Lo que NO funciona o sigue incompleto:
 
-- Match con comparación directa: `match x >= 5` (usar variable intermedia)
 - Struct field reassignment: `c.value = 1` (crear nuevo struct)
 - Bitwise operators: `&`, `|`, `<<`, `>>` (implementados en v2.1.0)
 - `vec[vec[T]]` - no conserva tipo interno en todas las rutas
-- Member access avanzado
-- Semántica profunda de traits/skills más allá de conformance directa
-- Algunas rutas de builtins son stubs (`split`, `join`, `to_upper`, `to_lower`, `trim`)
+
+### Issues Críticos Pendientes:
+
+**Borrow Checker & Semantic Model:**
+- CR1: Scope lexical no filtrado en `borrowck.rs:784` - puede validar contra símbolo errado
+- CR2: Métodos en Impl/Class ignorados en `semantic.rs:245` - validaciones de ownership incompletas
+- CR3: `unsafe` no procesado en `semantic.rs:250` - `unsafe_depth` nunca se modifica
+
+**Type Checking:**
+- T1: Member access fallback troppo permisivo (`typeck.rs:1518`) - tapa errores
+- T2: Pipeline typing usa defaults incorrectos (`typeck.rs:1666`, `1685`)
+- T3: Referencias retornan `Anything` al desreferenciar (`typeck.rs:1628`)
 
 ### Lo que ya funciona en la práctica:
 
@@ -93,11 +101,9 @@ if a || expensive_check() { }
 
 ### Propuestas de sintaxis para implementar:
 
-1. **Match con comparación:** Modificar parser para aceptar expresiones en match condition
+1. **Struct field reassignment:** Implementar setter semántico para fields mutables
 
-2. **Struct field reassignment:** Implementar setter semántico para fields mutables
-
-3. **Bitwise operators:** `&`, `|`, `<<`, `>>` (pendientes de implementación)
+2. **Bitwise operators:** `&`, `|`, `<<`, `>>` (pendientes de implementación)
 
 ### Migración de v1.x a v2.x:
 

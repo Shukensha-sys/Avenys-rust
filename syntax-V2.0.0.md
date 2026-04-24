@@ -173,6 +173,21 @@ match result {
 }
 ```
 
+`match` also accepts a boolean/comparison expression as the matched value:
+
+```mire
+set x = 3 :i64
+
+match x < 5 :bool {
+    true {
+        use dasu("small")
+    }
+    false {
+        use dasu("large")
+    }
+}
+```
+
 ---
 
 ## Collections

@@ -94,11 +94,16 @@ impl ErrorKind {
 #[derive(Debug, Clone)]
 pub struct MireError {
     pub kind: ErrorKind,
-    pub source: Option<String>,
-    pub filename: Option<String>,
     pub line: usize,
     pub column: usize,
-    pub explanation: Option<String>,
+    context: Option<Box<MireErrorContext>>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MireErrorContext {
+    source: Option<String>,
+    filename: Option<String>,
+    explanation: Option<String>,
 }
 
 impl std::fmt::Display for MireError {
@@ -125,27 +130,65 @@ impl MireError {
 
         Self {
             kind,
-            source: None,
-            filename: None,
             line,
             column,
-            explanation,
+            context: Some(Box::new(MireErrorContext {
+                source: None,
+                filename: None,
+                explanation,
+            })),
         }
     }
 
     pub fn with_source(mut self, source: String) -> Self {
-        self.source = Some(source);
+        self.context_mut().source = Some(source);
         self
     }
 
     pub fn with_filename(mut self, filename: String) -> Self {
-        self.filename = Some(filename);
+        self.context_mut().filename = Some(filename);
         self
     }
 
     pub fn with_explanation(mut self, explanation: String) -> Self {
-        self.explanation = Some(explanation);
+        self.context_mut().explanation = Some(explanation);
         self
+    }
+
+    pub fn source(&self) -> Option<&String> {
+        self.context.as_ref().and_then(|ctx| ctx.source.as_ref())
+    }
+
+    pub fn filename(&self) -> Option<&String> {
+        self.context.as_ref().and_then(|ctx| ctx.filename.as_ref())
+    }
+
+    pub fn explanation(&self) -> Option<&String> {
+        self.context.as_ref().and_then(|ctx| ctx.explanation.as_ref())
+    }
+
+    pub fn set_source(&mut self, source: Option<String>) {
+        self.context_mut().source = source;
+    }
+
+    pub fn set_filename(&mut self, filename: Option<String>) {
+        self.context_mut().filename = filename;
+    }
+
+    pub fn set_explanation(&mut self, explanation: Option<String>) {
+        self.context_mut().explanation = explanation;
+    }
+
+    pub fn source_mut(&mut self) -> &mut Option<String> {
+        &mut self.context_mut().source
+    }
+
+    pub fn filename_mut(&mut self) -> &mut Option<String> {
+        &mut self.context_mut().filename
+    }
+
+    pub fn explanation_mut(&mut self) -> &mut Option<String> {
+        &mut self.context_mut().explanation
     }
 
     pub fn format(&self) -> String {
@@ -168,8 +211,8 @@ impl MireError {
         };
 
         let filename = self
-            .filename
-            .clone()
+            .filename()
+            .cloned()
             .unwrap_or_else(|| "main.mire".to_string());
 
         let error_type = self.kind.error_type_name();
@@ -216,7 +259,7 @@ impl MireError {
             output.push_str(&format!("\n╰─ {}\n", message));
         }
 
-        if let Some(explanation) = &self.explanation {
+        if let Some(explanation) = self.explanation() {
             if use_color {
                 output.push_str(&format!("   \x1b[90mexplanation:\x1b[0m {}\n", explanation));
             } else {
@@ -232,7 +275,7 @@ impl MireError {
     }
 
     fn format_code_context(&self, use_color: bool) -> String {
-        if let Some(source) = &self.source {
+        if let Some(source) = self.source() {
             let lines: Vec<&str> = source.lines().collect();
             if self.line == 0 || self.line > lines.len() {
                 return String::new();
@@ -307,6 +350,12 @@ impl MireError {
         } else {
             String::new()
         }
+    }
+
+    fn context_mut(&mut self) -> &mut MireErrorContext {
+        self.context
+            .get_or_insert_with(|| Box::new(MireErrorContext::default()))
+            .as_mut()
     }
 }
 
@@ -457,4 +506,29 @@ pub fn format_error_chain(errors: &[MireError], _use_color: bool) -> String {
     }
 
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ErrorKind, MireError};
+
+    #[test]
+    fn mire_error_stays_compact_enough_for_result_large_err() {
+        let size = std::mem::size_of::<MireError>();
+        assert!(
+            size <= 80,
+            "MireError regressed in size: expected <= 80 bytes, got {size}"
+        );
+
+        let err = MireError::new(ErrorKind::Runtime {
+            message: "boom".to_string(),
+        })
+        .with_filename("main.mire".to_string())
+        .with_source("use dasu(1)\n".to_string())
+        .with_explanation("runtime".to_string());
+
+        assert_eq!(err.filename().map(String::as_str), Some("main.mire"));
+        assert!(err.source().is_some());
+        assert!(err.explanation().is_some());
+    }
 }

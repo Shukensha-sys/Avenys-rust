@@ -23,6 +23,12 @@ pub struct Parser {
     method_context: usize,
 }
 
+#[derive(Clone, Copy)]
+enum BlockBoundary {
+    Open,
+    Close,
+}
+
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         let enum_names = Self::collect_top_level_nominal_names(&tokens, TokenType::Enum);
@@ -1752,6 +1758,10 @@ fn parse_equality(&mut self) -> Result<Expression> {
                 let val = self.advance().value.unwrap_or_default();
                 Ok(Expression::Literal(Literal::Str(val)))
             }
+            TokenType::BoolLit => {
+                let val = self.advance().value.unwrap_or_default();
+                Ok(Expression::Literal(Literal::Bool(val == "true")))
+            }
             _ => Err(self.error("Expected pattern in match case")),
         }
     }
@@ -1762,108 +1772,30 @@ fn parse_equality(&mut self) -> Result<Expression> {
             self.advance();
         }
 
-        let token = self.peek();
-
-        // Handle match expression syntax: value is just a simple identifier or literal
-        // (not advance until > like before)
-        match token.ttype {
-            TokenType::Ident => {
-                let name = self.advance().value.unwrap_or_default();
-                Ok(identifier_expr_with_pos(&name, token.line, token.column))
-            }
-            TokenType::IntLit => {
-                let val = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Int(val.parse().unwrap_or(0))))
-            }
-            TokenType::FloatLit => {
-                let val = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Float(
-                    val.parse().unwrap_or(0.0),
-                )))
-            }
-            TokenType::StrLit => {
-                let val = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Str(val)))
-            }
-            TokenType::Newline => {
-                // Skip newlines and try again
-                self.advance();
-                self.parse_match_value()
-            }
-            _ => Err(self.error("Expected value in match expression")),
-        }
+        // Parse full expression to support comparisons like x >= 5
+        self.parse_expression()
     }
 
     fn parse_expression_until_block_open(&mut self) -> Result<Expression> {
-        let start = self.pos;
-        let mut depth_paren = 0usize;
-        let mut depth_bracket = 0usize;
-
-        while !self.is_at_end() {
-            match self.peek().ttype {
-                TokenType::Lparen => depth_paren += 1,
-                TokenType::Rparen => depth_paren = depth_paren.saturating_sub(1),
-                TokenType::Lbracket => depth_bracket += 1,
-                TokenType::Rbracket => depth_bracket = depth_bracket.saturating_sub(1),
-                TokenType::Lbrace if depth_paren == 0 && depth_bracket == 0 => {
-                    break;
-                }
-                _ => {}
-            }
-            self.advance();
-        }
-
-        let end = self.pos;
-        let mut slice = self.tokens[start..end].to_vec();
-        slice.push(Token::new(
-            TokenType::Eof,
-            self.peek().line,
-            self.peek().column,
-        ));
-        let mut parser = Parser::new(slice);
-        parser.scopes = self.scopes.clone();
-        let expr = parser.parse_expression()?;
-        Ok(expr)
+        let slice = self.slice_until_block_boundary(BlockBoundary::Open);
+        let mut parser = self.subparser_from_slice(slice);
+        parser.parse_expression()
     }
 
     fn parse_expression_until_block_close(&mut self) -> Result<Expression> {
-        let start = self.pos;
-        let mut depth_paren = 0usize;
-        let mut depth_bracket = 0usize;
-        let mut depth_brace = 0usize;
-
-        while !self.is_at_end() {
-            match self.peek().ttype {
-                TokenType::Lparen => depth_paren += 1,
-                TokenType::Rparen => depth_paren = depth_paren.saturating_sub(1),
-                TokenType::Lbracket => depth_bracket += 1,
-                TokenType::Rbracket => depth_bracket = depth_bracket.saturating_sub(1),
-                TokenType::Lbrace if depth_paren == 0 && depth_bracket == 0 => depth_brace += 1,
-                TokenType::Rbrace if depth_paren == 0 && depth_bracket == 0 => {
-                    if depth_brace == 0 {
-                        break;
-                    }
-                    depth_brace = depth_brace.saturating_sub(1);
-                }
-                _ => {}
-            }
-            self.advance();
-        }
-
-        let end = self.pos;
-        let mut slice = self.tokens[start..end].to_vec();
-        slice.push(Token::new(
-            TokenType::Eof,
-            self.peek().line,
-            self.peek().column,
-        ));
-        let mut parser = Parser::new(slice);
-        parser.scopes = self.scopes.clone();
-        let expr = parser.parse_expression()?;
-        Ok(expr)
+        let slice = self.slice_until_block_boundary(BlockBoundary::Close);
+        let mut parser = self.subparser_from_slice(slice);
+        parser.parse_expression()
     }
 
     fn parse_statements_until_block_close(&mut self) -> Result<Vec<Statement>> {
+        let slice = self.slice_until_block_boundary(BlockBoundary::Close);
+        let mut parser = self.subparser_from_slice(slice);
+        parser.push_scope();
+        Ok(parser.parse()?.statements)
+    }
+
+    fn slice_until_block_boundary(&mut self, boundary: BlockBoundary) -> Vec<Token> {
         let start = self.pos;
         let mut depth_paren = 0usize;
         let mut depth_bracket = 0usize;
@@ -1875,9 +1807,12 @@ fn parse_equality(&mut self) -> Result<Expression> {
                 TokenType::Rparen => depth_paren = depth_paren.saturating_sub(1),
                 TokenType::Lbracket => depth_bracket += 1,
                 TokenType::Rbracket => depth_bracket = depth_bracket.saturating_sub(1),
-                TokenType::Lbrace if depth_paren == 0 && depth_bracket == 0 => depth_brace += 1,
+                TokenType::Lbrace if depth_paren == 0 && depth_bracket == 0 => match boundary {
+                    BlockBoundary::Open if depth_brace == 0 => break,
+                    BlockBoundary::Open | BlockBoundary::Close => depth_brace += 1,
+                },
                 TokenType::Rbrace if depth_paren == 0 && depth_bracket == 0 => {
-                    if depth_brace == 0 {
+                    if matches!(boundary, BlockBoundary::Close) && depth_brace == 0 {
                         break;
                     }
                     depth_brace = depth_brace.saturating_sub(1);
@@ -1894,11 +1829,13 @@ fn parse_equality(&mut self) -> Result<Expression> {
             self.peek().line,
             self.peek().column,
         ));
+        slice
+    }
 
+    fn subparser_from_slice(&self, slice: Vec<Token>) -> Parser {
         let mut parser = Parser::new(slice);
         parser.scopes = self.scopes.clone();
-        parser.push_scope();
-        Ok(parser.parse()?.statements)
+        parser
     }
 
     fn parse_call_arguments(&mut self) -> Result<Vec<Expression>> {
@@ -2005,55 +1942,68 @@ fn parse_equality(&mut self) -> Result<Expression> {
 
     fn parse_string_template_parts(&self, value: &str) -> Result<Vec<Expression>> {
         let mut parts = Vec::new();
-        let mut text = String::new();
-        let chars: Vec<char> = value.chars().collect();
-        let mut index = 0usize;
+        
+        if !value.contains('{') {
+            parts.push(string_expr(value));
+            return Ok(parts);
+        }
 
-        while index < chars.len() {
-            match chars[index] {
-                '{' if index + 1 < chars.len() && chars[index + 1] == '{' => {
-                    text.push('{');
-                    index += 2;
-                }
-                '}' if index + 1 < chars.len() && chars[index + 1] == '}' => {
-                    text.push('}');
-                    index += 2;
-                }
-                '{' => {
-                    if !text.is_empty() {
-                        parts.push(string_expr(&text));
-                        text.clear();
-                    }
+        let bytes = value.as_bytes();
+        let mut i = 0;
+        let mut current_text = String::new();
 
-                    let start = index + 1;
-                    let mut depth = 1usize;
-                    index += 1;
-                    while index < chars.len() && depth > 0 {
-                        match chars[index] {
-                            '{' => depth += 1,
-                            '}' => depth -= 1,
-                            _ => {}
+        while i < bytes.len() {
+            let b = bytes[i];
+            
+            if b == b'{' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+                current_text.push('{');
+                i += 2;
+            } else if b == b'}' && i + 1 < bytes.len() && bytes[i + 1] == b'}' {
+                current_text.push('}');
+                i += 2;
+            } else if b == b'{' {
+                if !current_text.is_empty() {
+                    parts.push(string_expr(&current_text));
+                    current_text.clear();
+                }
+                
+                let inner_start = i + 1;
+                let mut depth = 1;
+                let mut paren_depth = 0;
+                i += 1;
+                
+                while i < bytes.len() && depth > 0 {
+                    match bytes[i] {
+                        b'{' => depth += 1,
+                        b'}' if paren_depth == 0 => {
+                            depth -= 1;
                         }
-                        index += 1;
+                        b'(' => paren_depth += 1,
+                        b')' if paren_depth > 0 => paren_depth -= 1,
+                        _ => {}
                     }
-
-                    if depth != 0 {
-                        return Err(self.error("Unclosed interpolation in template string"));
-                    }
-
-                    let inner: String = chars[start..index - 1].iter().collect();
-                    let interpolation = self.parse_interpolation_source(&inner)?;
-                    parts.push(interpolation);
+                    i += 1;
                 }
-                ch => {
-                    text.push(ch);
-                    index += 1;
+                
+                if depth != 0 {
+                    return Err(self.error("Unclosed interpolation in template string"));
                 }
+                
+                let inner = &value[inner_start..i-1];
+                let interp = self.parse_interpolation_source(inner)?;
+                parts.push(interp);
+            } else {
+                current_text.push(b as char);
+                i += 1;
             }
         }
 
-        if !text.is_empty() {
-            parts.push(string_expr(&text));
+        if !current_text.is_empty() {
+            parts.push(string_expr(&current_text));
+        }
+
+        if parts.is_empty() {
+            parts.push(string_expr(value));
         }
 
         Ok(parts)

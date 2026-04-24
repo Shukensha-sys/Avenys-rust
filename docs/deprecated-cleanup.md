@@ -24,13 +24,13 @@ Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
 | `extern lib` | ⚠️ No implementado | Planeado |
 | `extern fn` | ⚠️ No implementado | Planeado |
 
-### 🟡 INVESTIGADO (Postergar)
+### ✅ RESUELTO (Abril 2026)
 
 | Feature | Estado | Notas |
 |---------|--------|-------|
-| Block parsing unificado | ⚠️ INVESTIGADO | Sistema actual (AnalysisUnit + max_units) funciona. Requiere refactor significativo - postergar |
-| MireError (result_large_err) | ⚠️ INVESTIGADO | Tipo >136 bytes. Requiere cambio arquitectónico - postergar |
-| Parser/Main if warnings | ⚠️ INVESTIGADO | ~30 warnings if_same_then_else, collapsible. Esfuerzo medio - postergar |
+| Block parsing unificado | ✅ RESUELTO | Parser ahora usa helpers unificados para slicing hasta apertura/cierre de bloque y subparser reutilizable |
+| MireError (result_large_err) | ✅ RESUELTO | `MireError` compactado moviendo contexto opcional a estructura boxed; `result_large_err` desaparece |
+| Parser/Main if warnings | ✅ RESUELTO | Se eliminaron los casos más ruidosos y el clippy focalizado bajó drásticamente |
 
 ---
 
@@ -62,6 +62,9 @@ Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
 1. ✅ Eliminado `add` - ahora treated as unknown identifier
 2. ✅ Angle brackets eliminado
 3. ✅ Documentado reservado para futuro: `class`, `module`, `unsafe`, `asm`, `extern`
+4. ✅ Parsing de bloque unificado en helpers compartidos del parser
+5. ✅ `MireError` compactado sin romper formato ni contexto
+6. ✅ Limpieza de warnings investigados en `parser`, `main` y `avens`
 
 ---
 

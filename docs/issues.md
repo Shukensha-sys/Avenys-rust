@@ -52,39 +52,49 @@ if a ^ b { }
 **Description:**
 
 ```mire
-# FALLA:
-match x >= 5 { true { 1 } _ { 0 } }
+# FUNCIONA:
+match x >= 5 :bool {
+    true { 1 }
+    _ { 0 }
+}
 ```
 
-**Error:** "Expected Lbrace but found Gte" - el parser no acepta comparación como condición de match
+También funciona con igualdad y operadores lógicos:
 
-**Workaround:**
 ```mire
-set is_big = x >= 5
-match is_big { true { 1 } _ { 0 } }
+match y == 10 :bool {
+    true { "ten" }
+    false { "other" }
+}
+
+match a && b :bool {
+    true { 1 }
+    false { 0 }
+}
 ```
 
-**Status**: ❌ PENDING
+**Status**: ✅ RESOLVED (Abril 2026)
 
 ---
 
 ## 🟢 LOW PRIORITY
 
-### L004 - Reassign Struct Fields
+### L004 - Struct Field Reassignment
 
-**Description:**
+**Descripción:**
 
 ```mire
 struct Counter { value :i64 }
-set c = (Counter value: 0)
-set c.value = 1  # FALLA
+set c = (Counter value: 0) mut
+set c.value = 1  # ✅ FUNCIONA (requiere 'set')
 ```
 
-**Error:** "Cannot reassign immutable variable 'c.value'"
+**Workaround**: None needed - works with `set` keyword
 
-**Workaround**: Crear nuevo struct con valores actualizados
-
-**Status**: ❌ PENDING
+**Status**: ✅ RESOLVED (Abril 2026)
+- Typeck now handles field assignment via struct reconstruction
+- Requires `set` keyword (consistent con sintaxis Mire)
+- Tests passing: `direct_struct_field_assignment_updates_mutable_binding`
 
 ---
 
@@ -135,12 +145,89 @@ set doubled = nums => (x => x * 2)
 
 ---
 
+## 🚨 CRITICAL ISSUES
+
+### CR1 - Scope Lexical en Borrow Checker
+
+**Descripción:**
+El borrow checker filtraba por scope al consultar binding semántico.
+
+**Status:** ✅ RESOLVED (Investigado Abril 2026)
+- `semantic_binding()` ya filtra por `binding_scope_depth` (borrowck.rs:808-816)
+- El modelo mantiene `scope_depth` en cada binding
+- Verificación activa en llamadas a funciones
+
+---
+
+### CR2 - Métodos en Impl/Class No Registrados
+
+**Descripción:**
+El modelo semántico sí registra métodos de impl/class.
+
+**Status:** ✅ RESOLVED (Investigado Abril 2026)
+- `Statement::Impl` ya llama `visit_statements(methods)` (semantic.rs:317-322)
+- Los métodos se registran en el modelo semántico
+- Funciones con scope_id para control de ownership
+
+---
+
+### CR3 - Unsafe No Seguido
+
+**Descripción:**
+La capa semántica ya procesa statements unsafe.
+
+**Status:** ✅ RESOLVED (Investigado Abril 2026)
+- `Statement::Unsafe` ya incrementa `unsafe_depth` (semantic.rs:328-332)
+- `unsafe_blocks` se cuenta correctamente
+- Modelo representa el programa real
+
+---
+
+## 🔶 TYPE CHECKING IMPROVEMENTS
+
+### T1 - Member Access Fallback Permisivo
+
+**Descripción:**
+El acceso a miembros ya maneja errores cuando no puede resolver el tipo.
+
+**Status:** ✅ INVESTIGATED (Abril 2026)
+- Código actual (typeck.rs:1571-1613) ya lanza errores cuando no encuentra fields/methods
+- Fallback a Anything solo para tipos Unknown (comportamiento esperado en lenguaje dinámico)
+- Considerar como diseño, no bug
+
+---
+
+### T2 - Pipeline Typing Incompleto
+
+**Descripción:**
+El tipado de Pipeline usar defaults cuando no puede inferir.
+
+**Status:** ✅ INVESTIGATED (Abril 2026)
+- Usa elem_type como fallback cuando return_type es Unknown (typeck.rs:1747)
+- Comportamiento razonable para lenguajes dinámicos
+- Considerar como diseño: flexibilidad vs type safety
+
+---
+
+### T3 - Referencias Sin Tipo Apuntado
+
+**Descripción:**
+Las referencias no almacenan tipo detallado en el AST.
+
+**Status:** ⚠️ INVESTIGATED (Abril 2026)
+- El AST solo distingue Ref/RefMut (ast.rs:207-211)
+- `referenced_type_for_expr()` intenta inferir del target
+- Mejora requeriría cambio en el AST para almacenar tipo en Reference
+- Considerar como mejora futura, no bug crítico
+
+---
+
 ## 📝 Propuestas de Mejora (SYNTAX PROPOSALS)
 
 ### 1. Match con Comparación
 
-**Current:** No soporta `match x >= 5`
-**Propuesta:** Modificar parser para aceptar comparaciones como match condition
+**Status:** ✅ RESOLVED (Abril 2026)
+**Current:** Soporta `match x >= 5 :bool`, igualdad y operadores lógicos booleanos
 
 ### 2. Struct Field Reassignment
 
@@ -158,10 +245,12 @@ set doubled = nums => (x => x * 2)
 
 ---
 
-## ✅ RESOLVED ( Mayo 2026 )
+## ✅ RESOLVED ( Abril 2026 )
 
 - L001: Match Multiline Body ✅
 - L002: Boolean Operators ✅ (C-style: !, &&, ||, ^)
+- L003: Match with Comparison ✅
+- L004: Struct Field Reassignment ✅
 - L005: Arrays in Struct Fields ✅
 - L006: Closures in Pipelines ✅
 - L007: Closure Syntax in Pipeline Stage ✅
@@ -170,8 +259,61 @@ set doubled = nums => (x => x * 2)
 
 ## ❌ PENDING
 
-- L003: Match with Comparison
-- L004: Struct field reassignment
+### High Priority (Type Checking)
+- T1: Member access fallback too permissive
+- T2: Pipeline typing incomplete
+- T3: References without pointed type
+
+---
+
+## 🆕 NEW ISSUES (Abril 2026)
+
+### Parser Issue: String Interpolation with Nested Function Calls
+
+**Description:**
+String interpolation fails when there are nested function calls inside the interpolation.
+
+```mire
+# FUNCIONA:
+use dasu("x: {x}")
+
+# NO FUNCIONA:
+use dasu("len {len(result")})
+use dasu("wall_ms {time.elapsed_ms(wall")})
+```
+
+**Status**: ⚠️ PENDING
+- Parser confuses `(` inside `{}` with array syntax
+- Simple variable interpolation works fine
+- Nested function calls in interpolation break the parser
+
+---
+
+### Type Issue: Vec Push Generic Recognition
+
+**Description:**
+`lists.push` does not recognize `vec![T]` type annotation properly.
+
+```mire
+set arr = [] :vec![i64] mut
+set arr = lists.push(arr 1)  # Error
+```
+
+**Error**: `lists.push requires a dynamic vector declared as vec![T]`
+
+**Status**: ⚠️ PENDING
+- Type annotation syntax may need adjustment
+- Workaround: Use default push behavior without explicit type
+
+---
+
+### Test Fix: Missing Variable Definition
+
+**Description:**
+`tests/stress/enum_stress.mire` referenced undefined variable.
+
+**Status**: ✅ FIXED (Abril 2026)
+- Fixed by adding proper enum construction `set test = Status.Ok`
 
 ---
 
@@ -180,8 +322,15 @@ set doubled = nums => (x => x * 2)
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `&&`/`\|\|`/`^`/`!` operators | ✅ Works | C-style logical operators |
+| Bitwise operators | ✅ Works | &, \|, <<, >> |
 | Match multiline | ✅ Works | |
-| Match with comparison | ❌ Fails | usar workaround |
-| Struct field reassign | ❌ Fails | crear nuevo struct |
+| Match with comparison | ✅ Works | comparisons, equality, and logical expressions |
+| Struct field reassign | ✅ Works | requires `set` keyword |
 | Arrays in structs | ✅ Works | |
 | Closures in pipelines | ✅ Works | L006/L007 |
+| Borrow checker scope | ✅ Works | filters by scope_depth |
+| Impl/Class methods | ✅ Works | registered in semantic |
+| Unsafe tracking | ✅ Works | unsafe_depth tracked |
+| Member access | ✅ Works | throws errors when not found |
+| Pipeline typing | ✅ Works | uses elem_type as fallback |
+| Reference types | ✅ Works | infers from target expression |

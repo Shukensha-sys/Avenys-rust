@@ -1348,11 +1348,11 @@ impl From<&MireError> for StoredMireError {
     fn from(value: &MireError) -> Self {
         Self {
             kind: (&value.kind).into(),
-            source: value.source.clone(),
-            filename: value.filename.clone(),
+            source: value.source().cloned(),
+            filename: value.filename().cloned(),
             line: value.line,
             column: value.column,
-            explanation: value.explanation.clone(),
+            explanation: value.explanation().cloned(),
         }
     }
 }
@@ -1360,11 +1360,11 @@ impl From<&MireError> for StoredMireError {
 impl From<StoredMireError> for MireError {
     fn from(value: StoredMireError) -> Self {
         let mut error = MireError::new(value.kind.into());
-        error.source = value.source;
-        error.filename = value.filename;
+        error.set_source(value.source);
+        error.set_filename(value.filename);
         error.line = value.line;
         error.column = value.column;
-        error.explanation = value.explanation;
+        error.set_explanation(value.explanation);
         error
     }
 }

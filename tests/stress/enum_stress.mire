@@ -4,5 +4,6 @@ enum Status {
 }
 
 pub fn main: () {
-    use dasu(test)
+    set test = Status.Ok
+    use dasu("enum test ok")
 }

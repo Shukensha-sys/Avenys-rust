@@ -542,12 +542,12 @@ fn info_command(cwd: &Path, _args: &[String]) -> Result<i32, MireError> {
         .unwrap_or_else(|_| "Not found".to_string());
     println!("Clang: {}", clang_version);
 
-    if let Ok(manifest) = load_project_manifest(cwd) {
-        if let Some(m) = manifest {
-            println!();
-            println!("Project: {} v{}", m.project.name, m.project.version);
-            println!("Entry: {}", m.project.entry);
-        }
+    if let Ok(manifest) = load_project_manifest(cwd)
+        && let Some(m) = manifest
+    {
+        println!();
+        println!("Project: {} v{}", m.project.name, m.project.version);
+        println!("Entry: {}", m.project.entry);
     }
 
     println!();
@@ -715,15 +715,11 @@ fn print_run_stats(options: &RunStatsOptions, stats: &ProcessStats) {
     if options.show_ms {
         println!("wall_ms {:.3}", stats.wall.as_secs_f64() * 1000.0);
     }
-    if options.show_cpu {
-        if let Some(cpu) = stats.cpu {
-            println!("cpu_ms {:.3}", cpu.as_secs_f64() * 1000.0);
-        }
+    if options.show_cpu && let Some(cpu) = stats.cpu {
+        println!("cpu_ms {:.3}", cpu.as_secs_f64() * 1000.0);
     }
-    if options.show_memory {
-        if let Some(bytes) = stats.max_rss_bytes {
-            println!("max_rss {}", format_bytes(bytes));
-        }
+    if options.show_memory && let Some(bytes) = stats.max_rss_bytes {
+        println!("max_rss {}", format_bytes(bytes));
     }
 }
 

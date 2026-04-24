@@ -1,0 +1,23 @@
+import time as time
+import cpu as cpu
+
+pub fn main: () {
+    set w = time.mark() :i64
+    set c = cpu.mark() :i64
+
+    set limit = 10000000 :i64 mut
+    set i = 0 :i64 mut
+    set acc = 0 :i64 mut
+
+    while i < limit {
+        set acc = acc + i
+        set i = i + 1
+    }
+
+    set wt = time.elapsed_ms(w) :i64
+    set ct = cpu.elapsed_ms(c) :i64
+
+    use dasu(acc)
+    use dasu(wt)
+    use dasu(ct)
+}

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::compiler::AnalysisSelection;
-use crate::compiler::semantic::{BindingInfo, BindingKind, SemanticModel};
+use crate::compiler::semantic::{BindingInfo, BindingKind, FunctionInfo, SemanticModel};
 use crate::error::mss::MssError;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::incremental::analysis_unit_key;
@@ -62,11 +62,12 @@ struct ReferenceBinding {
     is_mutable: bool,
 }
 
-struct BorrowChecker {
-    semantic_model: SemanticModel,
+struct BorrowChecker<'a> {
+    semantic_model: &'a SemanticModel,
     scopes: Vec<HashMap<String, BindingState>>,
     unsafe_depth: usize,
     function_stack: Vec<FunctionContext>,
+    impl_owner_stack: Vec<String>,
     statement_origins: Vec<String>,
     sources_by_filename: HashMap<String, String>,
     current_filename: Option<String>,
@@ -80,13 +81,14 @@ struct FunctionContext {
     scope_id: usize,
 }
 
-impl BorrowChecker {
-    fn new(semantic_model: &SemanticModel) -> Self {
+impl<'a> BorrowChecker<'a> {
+    fn new(semantic_model: &'a SemanticModel) -> Self {
         Self {
-            semantic_model: semantic_model.clone(),
+            semantic_model,
             scopes: vec![HashMap::new()],
             unsafe_depth: 0,
             function_stack: Vec::new(),
+            impl_owner_stack: Vec::new(),
             statement_origins: Vec::new(),
             sources_by_filename: HashMap::new(),
             current_filename: None,
@@ -144,14 +146,14 @@ impl BorrowChecker {
         Ok(())
     }
 
-    fn current_nested_statement_mask(&self) -> Option<Vec<bool>> {
+    fn current_nested_statement_mask(&self) -> Option<&[bool]> {
         self.current_top_level_key
             .as_ref()
-            .and_then(|key| self.nested_statement_masks.get(key).cloned())
+            .and_then(|key| self.nested_statement_masks.get(key).map(Vec::as_slice))
     }
 
     fn attach_current_context(&self, err: MireError) -> MireError {
-        let err = if err.filename.is_none() {
+        let err = if err.filename().is_none() {
             if let Some(filename) = &self.current_filename {
                 err.with_filename(filename.clone())
             } else {
@@ -161,8 +163,8 @@ impl BorrowChecker {
             err
         };
 
-        if err.source.is_none() {
-            if let Some(filename) = err.filename.as_ref() {
+        if err.source().is_none() {
+            if let Some(filename) = err.filename() {
                 if let Some(source) = self.sources_by_filename.get(filename) {
                     return err.with_source(source.clone());
                 }
@@ -204,9 +206,11 @@ impl BorrowChecker {
                     state.is_moved = false;
                 }
             }
-            Statement::Function { params, body, .. } => {
+            Statement::Function {
+                name, params, body, ..
+            } => {
                 let scope_id = self
-                    .current_function_scope_id(statement)
+                    .current_function_scope_id(name)
                     .unwrap_or_else(|| self.current_scope_depth() + 1);
                 self.push_scope();
                 self.function_stack.push(FunctionContext { scope_id });
@@ -286,8 +290,11 @@ impl BorrowChecker {
                 self.check_statements(default)?;
                 self.pop_scope();
             }
-            Statement::Impl { methods, .. } => {
-                let method_mask = self.current_nested_statement_mask();
+            Statement::Impl {
+                type_name, methods, ..
+            } => {
+                self.impl_owner_stack.push(type_name.clone());
+                let method_mask = self.current_nested_statement_mask().map(|mask| mask.to_vec());
                 for (method_index, method) in methods.iter().enumerate() {
                     if method_mask
                         .as_ref()
@@ -298,11 +305,15 @@ impl BorrowChecker {
                     }
                     self.check_statement(method)?;
                 }
+                self.impl_owner_stack.pop();
             }
-            Statement::Class { .. }
-            | Statement::Type { .. }
-            | Statement::Code { .. }
-            | Statement::Skill { .. } => {}
+            Statement::Class { methods, .. } | Statement::Code { methods, .. } => {
+                self.check_statements(methods)?;
+            }
+            Statement::Type { fields, .. } => {
+                self.check_statements(fields)?;
+            }
+            Statement::Skill { .. } => {}
             Statement::Unsafe { body } => {
                 self.unsafe_depth += 1;
                 self.push_scope();
@@ -441,6 +452,17 @@ impl BorrowChecker {
             }
             Expression::Closure { body, .. } => {
                 self.push_scope();
+                if let Expression::Closure {
+                    params, capture, ..
+                } = expression
+                {
+                    for (name, _) in capture {
+                        self.insert_binding(name.clone(), BindingState::default());
+                    }
+                    for (name, _) in params {
+                        self.insert_binding(name.clone(), BindingState::default());
+                    }
+                }
                 self.check_statements(body)?;
                 self.pop_scope();
             }
@@ -663,13 +685,15 @@ impl BorrowChecker {
         self.scopes.len().saturating_sub(1)
     }
 
-    fn current_function_scope_id(&self, statement: &Statement) -> Option<usize> {
-        let Statement::Function { name, .. } = statement else {
-            return None;
-        };
+    fn current_function_scope_id(&self, name: &str) -> Option<usize> {
         self.semantic_model
             .functions
             .get(name)
+            .or_else(|| {
+                self.impl_owner_stack
+                    .last()
+                    .and_then(|owner| self.semantic_model.functions.get(&format!("{owner}.{name}")))
+            })
             .map(|info| info.scope_id)
     }
 
@@ -702,7 +726,7 @@ impl BorrowChecker {
     }
 
     fn check_call_argument(&mut self, callee: &str, index: usize, arg: &Expression) -> Result<()> {
-        let Some(function) = self.semantic_model.functions.get(callee) else {
+        let Some(function) = self.resolve_semantic_function(callee) else {
             return Ok(());
         };
         let Some(expected) = function.params.get(index) else {
@@ -783,10 +807,12 @@ impl BorrowChecker {
 
     fn semantic_binding(&self, name: &str) -> Option<&BindingInfo> {
         let indexes = self.semantic_model.bindings_by_name.get(name)?;
+        let binding_depth = self.binding_scope_depth(name)?;
         indexes
             .iter()
             .rev()
-            .find_map(|index| self.semantic_model.bindings.get(*index))
+            .filter_map(|index| self.semantic_model.bindings.get(*index))
+            .find(|binding| binding.scope_depth == binding_depth)
     }
 
     fn is_move_type(data_type: &DataType) -> bool {
@@ -815,6 +841,28 @@ impl BorrowChecker {
             Expression::Identifier(ident) => Some(ident.name.clone()),
             _ => None,
         }
+    }
+
+    fn resolve_semantic_function(&self, callee: &str) -> Option<&FunctionInfo> {
+        if let Some(function) = self.semantic_model.functions.get(callee) {
+            return Some(function);
+        }
+
+        let (receiver_name, method_name) = callee.split_once('.')?;
+        let binding = self.semantic_binding(receiver_name)?;
+        let struct_name = binding.data_type.struct_name()?;
+        self.semantic_model
+            .functions
+            .get(&format!("{struct_name}.{method_name}"))
+    }
+
+    fn binding_scope_depth(&self, name: &str) -> Option<usize> {
+        let depth = self.scopes.len().checked_sub(1)?;
+        self.scopes
+            .iter()
+            .rev()
+            .enumerate()
+            .find_map(|(rev_index, scope)| scope.contains_key(name).then_some(depth - rev_index))
     }
 }
 
@@ -1255,5 +1303,62 @@ mod tests {
             },
         )
         .expect("partial borrow check should skip unchanged impl method");
+    }
+
+    #[test]
+    fn later_global_binding_does_not_hide_local_ref_escape() {
+        let program = Program {
+            statements: vec![
+                Statement::Function {
+                    name: "leak".to_string(),
+                    params: vec![],
+                    body: vec![
+                        let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
+                        Statement::Return(Some(Expression::Reference {
+                            expr: Box::new(ident("x")),
+                            is_mutable: false,
+                            data_type: DataType::Unknown,
+                        })),
+                    ],
+                    return_type: DataType::Ref,
+                    visibility: Visibility::Public,
+                    is_method: false,
+                },
+                let_stmt("x", Some(Expression::Literal(Literal::Int(2)))),
+            ],
+        };
+
+        let semantic_model = semantic::analyze_program(&program);
+        let err = check_program(&program, &semantic_model).unwrap_err();
+        assert!(format!("{err}").contains("Borrow"), "{err}");
+    }
+
+    #[test]
+    fn impl_method_returning_local_ref_is_rejected() {
+        let program = Program {
+            statements: vec![Statement::Impl {
+                trait_name: None,
+                type_name: "Point".to_string(),
+                methods: vec![Statement::Function {
+                    name: "leak".to_string(),
+                    params: vec![("self".to_string(), DataType::StructNamed("Point".to_string()))],
+                    body: vec![
+                        let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
+                        Statement::Return(Some(Expression::Reference {
+                            expr: Box::new(ident("x")),
+                            is_mutable: false,
+                            data_type: DataType::Unknown,
+                        })),
+                    ],
+                    return_type: DataType::Ref,
+                    visibility: Visibility::Public,
+                    is_method: true,
+                }],
+            }],
+        };
+
+        let semantic_model = semantic::analyze_program(&program);
+        let err = check_program(&program, &semantic_model).unwrap_err();
+        assert!(format!("{err}").contains("Borrow"), "{err}");
     }
 }

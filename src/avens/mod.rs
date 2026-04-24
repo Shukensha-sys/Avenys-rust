@@ -48,22 +48,19 @@ fn prepare_program_with_partial_analysis_reuse(
     for statement in current_program.statements.iter_mut() {
         let unit_key = analysis_unit_key(statement);
         let should_recheck = invalidated_units.contains(&unit_key);
-        if !should_recheck {
-            if let Some(previous) = previous_by_key.get(&unit_key) {
-                *statement = previous.clone();
-                selection.statement_mask.push(false);
-                continue;
-            }
+        if !should_recheck && let Some(previous) = previous_by_key.get(&unit_key) {
+            *statement = previous.clone();
+            selection.statement_mask.push(false);
+            continue;
         }
 
-        if let Some(previous) = previous_by_key.get(&unit_key) {
-            if let Some(child_mask) =
+        if let Some(previous) = previous_by_key.get(&unit_key)
+            && let Some(child_mask) =
                 prepare_nested_reuse(&unit_key, statement, previous, &invalidated_units)
-            {
-                selection
-                    .nested_statement_masks
-                    .insert(unit_key.clone(), child_mask);
-            }
+        {
+            selection
+                .nested_statement_masks
+                .insert(unit_key.clone(), child_mask);
         }
         selection.statement_mask.push(true);
     }
@@ -100,12 +97,10 @@ fn prepare_nested_reuse(
     for (child_index, child) in current_children.iter_mut().enumerate() {
         let child_key = analysis_child_unit_key(parent_key, child, child_index);
         let should_recheck = invalidated_units.contains(&child_key);
-        if !should_recheck {
-            if let Some(previous_child) = previous_by_key.get(&child_key) {
-                *child = previous_child.clone();
-                child_mask.push(false);
-                continue;
-            }
+        if !should_recheck && let Some(previous_child) = previous_by_key.get(&child_key) {
+            *child = previous_child.clone();
+            child_mask.push(false);
+            continue;
         }
         child_mask.push(true);
     }
@@ -311,16 +306,16 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let cache_settings = CacheSettings::resolve_for(source_path, options.cache)?;
     let mut cache = IncrementalCache::load_with_settings(source_path, cache_settings)?;
     let loaded = load_program_with_metadata_with_settings(source_path, cache_settings)?;
-    if options.debug_dump {
-        if let Some(report) = cache.analysis_invalidation_report(source_path, &loaded.program) {
-            eprintln!(
-                "[AVENYS][incremental] changed_units={} invalidated_units={} added_units={} removed_units={}",
-                report.changed_units.len(),
-                report.invalidated_units.len(),
-                report.added_units.len(),
-                report.removed_units.len(),
-            );
-        }
+    if options.debug_dump
+        && let Some(report) = cache.analysis_invalidation_report(source_path, &loaded.program)
+    {
+        eprintln!(
+            "[AVENYS][incremental] changed_units={} invalidated_units={} added_units={} removed_units={}",
+            report.changed_units.len(),
+            report.invalidated_units.len(),
+            report.added_units.len(),
+            report.removed_units.len(),
+        );
     }
     let fingerprint = build_fingerprint(
         source_path,
@@ -335,39 +330,37 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         options.mode,
         options.emit_binary,
         options.persist_ir,
-    ) {
-        if entry.fingerprint == fingerprint
-            && (!options.emit_binary || entry.binary_path.exists())
-            && entry.binary_path == binary_path
-            && entry.ir_path == ir_path
-            && entry.optimized_ir_path == optimized_ir_path
-            && entry.ir_path.as_ref().is_none_or(|path| path.exists())
-            && entry
-                .optimized_ir_path
-                .as_ref()
-                .is_none_or(|path| path.exists())
-        {
-            cache.record_build_hit();
-            if options.debug_dump {
-                let metrics = cache.metrics();
-                eprintln!(
-                    "[AVENYS][incremental] cache_metrics file_hit={} file_miss={} analysis_hit={} analysis_miss={} build_hit={} build_miss={} evictions={}",
-                    metrics.file_hits,
-                    metrics.file_misses,
-                    metrics.analysis_hits,
-                    metrics.analysis_misses,
-                    metrics.build_hits,
-                    metrics.build_misses,
-                    metrics.evictions,
-                );
-            }
-            return Ok(BuildResult {
-                binary_path,
-                ir_path,
-                optimized_ir_path,
-                used_optimizations: matches!(options.mode, BuildMode::Release),
-            });
+    ) && entry.fingerprint == fingerprint
+        && (!options.emit_binary || entry.binary_path.exists())
+        && entry.binary_path == binary_path
+        && entry.ir_path == ir_path
+        && entry.optimized_ir_path == optimized_ir_path
+        && entry.ir_path.as_ref().is_none_or(|path| path.exists())
+        && entry
+            .optimized_ir_path
+            .as_ref()
+            .is_none_or(|path| path.exists())
+    {
+        cache.record_build_hit();
+        if options.debug_dump {
+            let metrics = cache.metrics();
+            eprintln!(
+                "[AVENYS][incremental] cache_metrics file_hit={} file_miss={} analysis_hit={} analysis_miss={} build_hit={} build_miss={} evictions={}",
+                metrics.file_hits,
+                metrics.file_misses,
+                metrics.analysis_hits,
+                metrics.analysis_misses,
+                metrics.build_hits,
+                metrics.build_misses,
+                metrics.evictions,
+            );
         }
+        return Ok(BuildResult {
+            binary_path,
+            ir_path,
+            optimized_ir_path,
+            used_optimizations: matches!(options.mode, BuildMode::Release),
+        });
     }
     cache.record_build_miss();
 
@@ -407,12 +400,12 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         };
 
         if let Err(err) = analysis_result {
-            let err = if err.source.is_none() {
+            let err = if err.source().is_none() {
                 err.with_source(source.clone())
             } else {
                 err
             };
-            let err = if err.filename.is_none() {
+            let err = if err.filename().is_none() {
                 err.with_filename(source_filename.clone())
             } else {
                 err
@@ -426,12 +419,12 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     };
 
     let ir = LlvmIrGen::new().compile_program(&program).map_err(|err| {
-        let err = if err.source.is_none() {
+        let err = if err.source().is_none() {
             err.with_source(source.clone())
         } else {
             err
         };
-        if err.filename.is_none() {
+        if err.filename().is_none() {
             err.with_filename(source_filename.clone())
         } else {
             err
@@ -1508,24 +1501,23 @@ impl LlvmIrGen {
                 let mut resolved_name = name.clone();
                 let mut prepend_receiver = None;
 
-                if let Some((receiver_name, method_name)) = name.split_once('.') {
-                    if let Some(struct_name) = self
+                if let Some((receiver_name, method_name)) = name.split_once('.')
+                    && let Some(struct_name) = self
                         .vars
                         .get(receiver_name)
                         .and_then(|info| info.struct_name.clone())
+                {
+                    let candidate_name = format!("{}.{}", struct_name, method_name);
+                    if let Some(candidate_info) = self.user_functions.get(&candidate_name)
+                        && candidate_info.params.len() == args.len() + 1
                     {
-                        let candidate_name = format!("{}.{}", struct_name, method_name);
-                        if let Some(candidate_info) = self.user_functions.get(&candidate_name) {
-                            if candidate_info.params.len() == args.len() + 1 {
-                                resolved_name = candidate_name;
-                                prepend_receiver = Some(Expression::Identifier(Identifier {
-                                    name: receiver_name.to_string(),
-                                    data_type: DataType::StructNamed(struct_name.clone()),
-                                    line: 0,
-                                    column: 0,
-                                }));
-                            }
-                        }
+                        resolved_name = candidate_name;
+                        prepend_receiver = Some(Expression::Identifier(Identifier {
+                            name: receiver_name.to_string(),
+                            data_type: DataType::StructNamed(struct_name.clone()),
+                            line: 0,
+                            column: 0,
+                        }));
                     }
                 }
 
@@ -1662,7 +1654,7 @@ impl LlvmIrGen {
                             return self.compile_pipeline_len(input, input_val);
                         }
 
-                        let all_args = vec![input_val];
+                        let all_args = [input_val];
 
                         if *safe {
                             let tmp = self.tmp();
@@ -1716,17 +1708,15 @@ impl LlvmIrGen {
                         body,
                         return_type,
                         capture,
-                    } => {
-                        return self.compile_pipeline_closure(
-                            input,
-                            input_val,
-                            params,
-                            body,
-                            return_type,
-                            capture,
-                            *safe,
-                        );
-                    }
+                    } => self.compile_pipeline_closure(
+                        input,
+                        input_val,
+                        params,
+                        body,
+                        return_type,
+                        capture,
+                        *safe,
+                    ),
                     _ => Err(MireError::new(ErrorKind::Runtime {
                         message: "Pipeline stage must be a function call, identifier, or closure".to_string(),
                     })),
@@ -1834,7 +1824,12 @@ impl LlvmIrGen {
 
         let param_name = &params[0].0;
         let param_type = params[0].1.clone();
-        let elem_size = self.element_size(&param_type);
+        let result_element_type = if *return_type == DataType::Unknown {
+            param_type.clone()
+        } else {
+            return_type.clone()
+        };
+        let elem_size = self.element_size(&result_element_type);
 
         let var_ptr = self.tmp();
         self.entry_allocas.push(format!("  {var_ptr} = alloca i64"));
