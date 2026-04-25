@@ -336,6 +336,7 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 | Reference types | ✅ Works | infers from target expression via referenced_type |
 | String interpolation | ✅ Works | supports nested function calls {func(x)} |
 | Empty vec literal | ✅ Works | `[] :vec![i64]` now works with `lists.push` |
+| Empty dict literal | ✅ Works | `{} :map![str,i64]` now works with dict operations |
 
 ---
 
@@ -355,5 +356,25 @@ set arr = lists.push(arr 2)
 - Parser: propagates type annotation to list literal (mod.rs:245-256)
 - Typeck: checks for `DataType::Vector` before inferring (typeck.rs:1499-1512)
 - `lists.push`: accepts static vectors by promoting to dynamic (typeck.rs:1384-1400)
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
+## 🆕 Empty Dict Literal with Type Annotation
+
+**Description:**
+Empty dict literals `{}` with type annotation `{} :map![K,V]` now preserve type information.
+
+```mire
+# NOW WORKS:
+set m = {} :map![str,i64] mut
+```
+
+**Fix:**
+- AST: added `key_type` and `value_type` fields to `Expression::Dict` (ast.rs:190-195)
+- Parser: propagates type annotation to dict literal (mod.rs:256-266)
+- Parser: added `apply_map_type_to_dict` helper function (mod.rs:3183-3194)
+- Typeck: checks for `DataType::Map` before inferring (typeck.rs:1520-1538)
 
 **Status**: ✅ RESOLVED (Mayo 2026)

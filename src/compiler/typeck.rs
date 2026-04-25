@@ -1517,18 +1517,23 @@ impl TypeChecker {
                 };
                 Ok(data_type.clone())
             }
-            Expression::Dict { entries, data_type } => {
-                let mut key_type = DataType::Unknown;
-                let mut value_type = DataType::Unknown;
+            Expression::Dict { entries, key_type, value_type, data_type } => {
+                if let DataType::Map { .. } = data_type.clone() {
+                    return Ok(data_type.clone());
+                }
+                let mut kt = DataType::Unknown;
+                let mut vt = DataType::Unknown;
                 for (key, value) in entries.iter_mut() {
                     let next_key = self.check_expression(key)?;
                     let next_value = self.check_expression(value)?;
-                    key_type = Self::unify_types(&key_type, &next_key)?;
-                    value_type = Self::unify_types(&value_type, &next_value)?;
+                    kt = Self::unify_types(&kt, &next_key)?;
+                    vt = Self::unify_types(&vt, &next_value)?;
                 }
+                *key_type = kt.clone();
+                *value_type = vt.clone();
                 *data_type = DataType::Map {
-                    key_type: Box::new(key_type),
-                    value_type: Box::new(value_type),
+                    key_type: Box::new(kt),
+                    value_type: Box::new(vt),
                 };
                 Ok(data_type.clone())
             }

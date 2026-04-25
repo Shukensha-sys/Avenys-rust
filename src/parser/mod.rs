@@ -246,8 +246,14 @@ impl Parser {
         let declared_type = if self.check(TokenType::Colon) {
             self.advance();
             let dt = self.parse_type()?;
-            if let DataType::Vector { element_type, dynamic } = dt.clone() {
-                apply_vector_type_to_list(&mut value, element_type, dynamic);
+            match dt.clone() {
+                DataType::Vector { element_type, dynamic } => {
+                    apply_vector_type_to_list(&mut value, element_type, dynamic);
+                }
+                DataType::Map { key_type, value_type } => {
+                    apply_map_type_to_dict(&mut value, key_type, value_type);
+                }
+                _ => {}
             }
             Some(dt)
         } else {
@@ -2123,6 +2129,9 @@ fn parse_equality(&mut self) -> Result<Expression> {
                     })
                 }
                 "map" => {
+                    let _ = if self.check(TokenType::Bang) {
+                        self.advance();
+                    };
                     self.expect(TokenType::Lbracket)?;
                     let key_type = Box::new(self.parse_type()?);
                     let value_type = Box::new(self.parse_type()?);
@@ -2192,6 +2201,8 @@ fn parse_equality(&mut self) -> Result<Expression> {
             self.expect(TokenType::Rbracket)?;
             Ok(Expression::Dict {
                 entries,
+                key_type: DataType::Unknown,
+                value_type: DataType::Unknown,
                 data_type: DataType::Dict,
             })
         } else {
@@ -2228,6 +2239,8 @@ fn parse_brace_literal(&mut self) -> Result<Expression> {
         self.expect(TokenType::Rbrace)?;
         Ok(Expression::Dict {
             entries,
+            key_type: DataType::Unknown,
+            value_type: DataType::Unknown,
             data_type: DataType::Dict,
         })
     }
@@ -2812,7 +2825,7 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
                 .collect(),
             data_type,
         },
-        Expression::Dict { entries, data_type } => Expression::Dict {
+        Expression::Dict { entries, key_type, value_type, data_type } => Expression::Dict {
             entries: entries
                 .into_iter()
                 .map(|(key, value)| {
@@ -2822,6 +2835,8 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
                     )
                 })
                 .collect(),
+            key_type,
+            value_type,
             data_type,
         },
         Expression::Index {
@@ -3151,6 +3166,20 @@ fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>,
             *dt = DataType::Vector {
                 element_type,
                 dynamic,
+            };
+        }
+        _ => {}
+    }
+}
+
+fn apply_map_type_to_dict(expr: &mut Expression, key_type: Box<DataType>, value_type: Box<DataType>) {
+    match expr {
+        Expression::Dict { entries: _, key_type: kt, value_type: vt, data_type: dt } => {
+            *kt = (*key_type).clone();
+            *vt = (*value_type).clone();
+            *dt = DataType::Map {
+                key_type,
+                value_type,
             };
         }
         _ => {}

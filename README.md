@@ -6,7 +6,7 @@ Mire is a compiled, statically typed programming language with an ownership-orie
 
 ---
 
-## What this version actually provides
+## What this version provides
 
 This section is intentionally honest. V2.0.0 is a working compiler with a real type checker, a real ownership checker, and a real standard library surface, but not every construct in the syntax reference is equally mature. The distinction matters.
 
@@ -17,7 +17,7 @@ Avenys is the active compiled backend for Mire. The current state is:
 - Compiled-only toolchain: the old interpreter path is gone from the CLI
 - Real frontend pipeline: lexer, parser, type checker, semantic model, ownership/borrow checker, LLVM lowering
 - Incremental compilation active: binary cache, lazy loading, LRU, cached analysis successes and failures
-- Test baseline currently green: `46` lib tests + `54` regression tests = `100` total
+- Test baseline: `58` lib tests + regression tests all passing
 - Best-supported areas today: functions, control flow, enums, structs, impl methods, imports, runtime diagnostics, incremental builds
 
 ### What Avenys supports well right now
@@ -122,7 +122,13 @@ Current behavior:
 
 ---
 
-### What exists in the parser but is not fully guaranteed
+## Syntax
+
+For the complete language syntax reference, see [syntax-V2.0.0.md](./syntax-V2.0.0.md).
+
+---
+
+## What exists in the parser but is not fully guaranteed
 
 The following constructs parse without errors but the compiler does not currently apply deep type or ownership analysis to them. They may work in practice depending on what you write, but they are not guaranteed:
 
@@ -133,246 +139,6 @@ The following constructs parse without errors but the compiler does not currentl
 - **`if` as an expression** — parsed and desugared via `__if_expr` builtin; branch result types are now unified during type checking and lowered using the resolved type
 - **`extern lib` and `extern fn`** — parsed, walked past in both checkers without analysis
 - **`unsafe`, `asm`, `module`** — scopes are created and walked, but the content is not semantically validated beyond what falls inside the normal expression checker
-
----
-
-## Syntax
-
-All blocks use `{}`. The `>` / `<` block syntax from Avenys is gone entirely.
-
-### Minimal program
-
-```mire
-import std
-
-pub fn main: () {
-    use dasu("Hello Mire")
-}
-```
-
-### Variables
-
-```mire
-set x = 10 :i64
-set name = "mire"
-set flag = true :bool
-
-set counter = 0 :i64 mut
-set counter += 1
-```
-
-Bindings are immutable by default. `mut` enables reassignment. Annotations are optional when the type can be inferred.
-
-### Functions
-
-```mire
-fn sum: (a:i64 b:i64) :i64 {
-    return a + b
-}
-
-pub fn main: () {
-    set result = sum(5 3) :i64
-    use dasu("Result: {result}")
-}
-```
-
-`use` evaluates an expression for its side effects. `pub` / `priv` control visibility.
-
-Inside `dasu(...)`, string literal text must be quoted. Unquoted arguments are regular expressions such as variables, field accesses, or function calls. Interpolation only happens inside quoted strings, for example `"hello {name}"`.
-
-### Control flow
-
-```mire
-if x > 10 {
-    use dasu("greater")
-} elif x == 10 {
-    use dasu("equal")
-} else {
-    use dasu("lower")
-}
-
-while i < 5 {
-    set i += 1
-}
-
-for i in range(10) {
-    use dasu(i)
-}
-
-do {
-    set count += 1
-} while count != 10
-```
-
-### Match
-
-```mire
-match code {
-    200 {
-        use dasu("ok")
-    }
-    _ {
-        use dasu("error")
-    }
-}
-```
-
-`_` is the wildcard arm. Literal patterns, enum-qualified patterns, and enum payload bindings are supported:
-
-```mire
-set x = 3 :i64
-
-set result = match x < 5 :bool {
-    true { 1 }
-    false { 2 }
-} :i64
-```
-
-```mire
-enum Result {
-    Ok(value :i64)
-    Err(msg :str)
-}
-
-match Result.Ok(42) {
-    Result.Ok(v) {
-        use dasu(v)
-    }
-    Result.Err(msg) {
-        use dasu(msg)
-    }
-}
-```
-
-Multiple payloads use the same syntax style:
-
-```mire
-enum Pair {
-    Pair(left :i64 right :i64)
-    Empty
-}
-
-match Pair.Pair(10 20) {
-    Pair.Pair(a b) {
-        use dasu("{a} {b}")
-    }
-    Pair.Empty {
-        use dasu("empty")
-    }
-}
-```
-
-Named payload fields are also supported (v2.0.0+):
-
-```mire
-enum Status {
-    Ok
-    Error
-    Loading(progress :i64, total :i64)
-}
-
-set loading = Status.Loading(progress: 75, total: 100)
-
-match loading {
-    Status.Loading(p t) {
-        use dasu("{p} {t}")
-    }
-    _ {
-        use dasu("done")
-    }
-}
-```
-
-### Types
-
-Primitive: `i8` `i16` `i32` `i64` `u8` `u16` `u32` `u64` `f32` `f64` `str` `bool`
-
-Collections:
-
-```mire
-set xs  = [1 2 3]      :arr[i64 3]   \! fixed-size !\
-set ys  = []           :vec![i64]    \! dynamic vector !\
-set m   = {a: 1, b: 2} :map[str i64]
-```
-
-### Structs
-
-```mire
-struct User {
-    name :str
-    age  :i64
-}
-
-impl User {
-    fn new: (name :str age :i64) :User {
-        return (User name: name, age: age)
-    }
-
-    fn greet: (self) {
-        use dasu("Hello {self.name}")
-    }
-}
-
-set user = User::new("Evelyn" 20)
-use user.greet()
-```
-
-Construction and method dispatch are parsed and run, but field-level type checking during construction is not enforced yet (see above).
-
-### Ownership
-
-```mire
-set x  = 2 :i64
-set rx = &x          \! shared borrow !\
-set bx = box[i64]    \! heap-owned !\
-```
-
-The borrow checker enforces the rules described in the "What the compiler fully checks" section above. `unsafe` blocks are the explicit escape hatch.
-
-### Imports
-
-```mire
-import std
-import math
-import fs as fs
-import strings: (split replace trim)
-import ./utils
-```
-
-### Comments
-
-```mire
-\! short comment !\
-
-\!
-multiline
-comment
-!\
-```
-
----
-
-## Standard library
-
-Modules available via `import`: `math`, `strings`, `lists`, `dicts`, `time`, `term`, `mem`, `cpu`, `gpu`, `fs`, `env`, `proc`.
-
-All members of these modules are registered in the type checker. Return types are known for the majority of members; some return `Anything` where the type is collection-generic or polymorphic.
-
-For the current language surface see [syntax-V2.0.0.md](./syntax-V2.0.0.md).
-
----
-
-## What is experimental or under review
-
-The following should not be treated as stable surface in 2.0.0:
-
-- Pipelines (`=>` and `=>?`)
-- `if` as an expression
-- `tuple` type
-- `class`, `module`, `unsafe`, `asm`, `extern lib`, `extern fn`
-- `drop`, `move` as explicit statements (they parse and run but are closer to internal primitives than user-facing constructs)
-- The `dmire_*` family (`dmire_table`, `dmire_column`, `dmire_dlist`) — obsolete unless deliberately revived
-- `query` and `find` — exist in the AST and borrow checker but are not semantically validated
 
 ---
 
@@ -410,6 +176,20 @@ Build artifacts:
 
 ---
 
+## Build Manager: Owl
+
+**Owl** (named after *Athene noctua*, the little owl—Avenys's mascot) is the official build manager and package manager being developed by the Mire-lang organization. Owl will provide:
+
+- Project initialization and management
+- Dependency management
+- Build configuration
+- Testing utilities
+- Publishing to the Mire package registry
+
+Owl is currently under active development and will be released as the official companion tool for Mire 2.x.
+
+---
+
 ## Migration from v1.x Mire
 
 V2.0.0 is a hard break over v1.x. The most important source changes are:
@@ -422,27 +202,17 @@ V2.0.0 is a hard break over v1.x. The most important source changes are:
 
 ---
 
+## Standard library
+
+Modules available via `import`: `math`, `strings`, `lists`, `dicts`, `time`, `term`, `mem`, `cpu`, `gpu`, `fs`, `env`, `proc`.
+
+All members of these modules are registered in the type checker. Return types are known for the majority of members; some return `Anything` where the type is collection-generic or polymorphic.
+
+---
+
 ## License
 
 Mire is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-### Important Clarification: GPL Does NOT Apply to Your Code
-
-**The GPL license applies ONLY to the compiler's source code**, not to the programs you write and compile with Avenys.
-
-When you write code in Mire and compile it using this compiler:
-
-- **Your source code remains yours** — You retain full ownership and copyright of any program you write in Mire.
-- **Generated binaries are yours** — The compiled output (binaries, executables) that you produce using Mire belongs to you, with no obligations to disclose or share it.
-- **No copyleft enforced** — Your compiled programs do not become "infected" by GPL. You are free to:
-  - Keep your code proprietary
-  - Distribute compiled binaries without source
-  - Use your code in closed-source projects
-  - Sell compiled software
-
-This license model protects both the open-source nature of the compiler while giving developers and businesses confidence that their intellectual property remains secure.
-
-**Why this matters**: The compiler is a tool — like a text editor or a C compiler. Just as GCC's GPL doesn't apply to the C code you compile with it, Mire's GPL doesn't apply to the Mire code you write.
 
 ---
 

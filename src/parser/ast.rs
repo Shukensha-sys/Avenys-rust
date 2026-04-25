@@ -189,6 +189,8 @@ pub enum Expression {
     },
     Dict {
         entries: Vec<(Expression, Expression)>,
+        key_type: DataType,
+        value_type: DataType,
         data_type: DataType,
     },
     Tuple {
