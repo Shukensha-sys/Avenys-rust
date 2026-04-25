@@ -335,3 +335,25 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 | Pipeline typing | ✅ Works | uses elem_type as fallback |
 | Reference types | ✅ Works | infers from target expression via referenced_type |
 | String interpolation | ✅ Works | supports nested function calls {func(x)} |
+| Empty vec literal | ✅ Works | `[] :vec![i64]` now works with `lists.push` |
+
+---
+
+## 🆕 Empty Vec Literal with Type Annotation
+
+**Description:**
+Empty vec literals `[]` with type annotation `[] :vec![i64]` now work with `lists.push`.
+
+```mire
+# NOW WORKS:
+set arr = [] :vec![i64] mut
+set arr = lists.push(arr 1)
+set arr = lists.push(arr 2)
+```
+
+**Fix:**
+- Parser: propagates type annotation to list literal (mod.rs:245-256)
+- Typeck: checks for `DataType::Vector` before inferring (typeck.rs:1499-1512)
+- `lists.push`: accepts static vectors by promoting to dynamic (typeck.rs:1384-1400)
+
+**Status**: ✅ RESOLVED (Mayo 2026)

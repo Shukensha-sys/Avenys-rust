@@ -71,6 +71,13 @@ pub enum DataType {
 }
 
 impl DataType {
+    pub fn element_type(&self) -> Box<DataType> {
+        match self {
+            DataType::Vector { element_type, .. } => element_type.clone(),
+            _ => Box::new(DataType::Unknown),
+        }
+    }
+
     pub fn from_str(s: &str) -> Self {
         match s {
             "i8" => DataType::I8,

@@ -1375,12 +1375,13 @@ impl TypeChecker {
                             ),
                             dynamic: true,
                         },
-                        DataType::Vector { dynamic: false, .. } => {
-                            return Err(type_error(
-                                "lists.push requires a dynamic vector declared as vec![T]"
-                                    .to_string(),
-                            ));
-                        }
+                        DataType::Vector { dynamic: false, element_type } => DataType::Vector {
+                            element_type: Box::new(
+                                Self::unify_types(&element_type, &value_type)
+                                    .unwrap_or(value_type.clone()),
+                            ),
+                            dynamic: true,
+                        },
                         DataType::List => DataType::Vector {
                             element_type: Box::new(value_type),
                             dynamic: true,
@@ -1501,6 +1502,9 @@ impl TypeChecker {
                 element_type,
                 data_type,
             } => {
+                if let DataType::Vector { dynamic: true, .. } = data_type.clone() {
+                    return Ok(data_type.clone());
+                }
                 let mut current = DataType::Unknown;
                 for element in elements.iter_mut() {
                     let elem_type = self.check_expression(element)?;

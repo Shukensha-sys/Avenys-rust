@@ -242,10 +242,14 @@ impl Parser {
             return Err(self.error("Expected assignment operator after set target"));
         }
 
-        let value = self.parse_expression()?;
+        let mut value = self.parse_expression()?;
         let declared_type = if self.check(TokenType::Colon) {
             self.advance();
-            Some(self.parse_type()?)
+            let dt = self.parse_type()?;
+            if let DataType::Vector { element_type, dynamic } = dt.clone() {
+                apply_vector_type_to_list(&mut value, element_type, dynamic);
+            }
+            Some(dt)
         } else {
             None
         };
@@ -3137,5 +3141,18 @@ mod tests {
         let source = "pub fn main: () >\nuse dasu(\"no\")\n<\n";
         let program = parse(source);
         assert!(program.is_err(), "legacy angle blocks should be rejected");
+    }
+}
+
+fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>, dynamic: bool) {
+    match expr {
+        Expression::List { elements: _, element_type: elem, data_type: dt } => {
+            *elem = (*element_type).clone();
+            *dt = DataType::Vector {
+                element_type,
+                dynamic,
+            };
+        }
+        _ => {}
     }
 }
