@@ -1282,6 +1282,7 @@ fn parse_equality(&mut self) -> Result<Expression> {
                 expr: Box::new(expr),
                 is_mutable: false,
                 data_type: DataType::Ref,
+                referenced_type: DataType::Unknown,
             });
         }
 
@@ -2841,10 +2842,12 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
             expr,
             is_mutable,
             data_type,
+            referenced_type,
         } => Expression::Reference {
             expr: Box::new(replace_self_placeholder(*expr, replacement)),
             is_mutable,
             data_type,
+            referenced_type,
         },
         Expression::Dereference { expr, data_type } => Expression::Dereference {
             expr: Box::new(replace_self_placeholder(*expr, replacement)),

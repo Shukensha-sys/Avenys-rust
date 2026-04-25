@@ -1680,8 +1680,10 @@ impl TypeChecker {
                 expr,
                 is_mutable,
                 data_type,
+                referenced_type,
             } => {
-                let _ = self.check_expression(expr)?;
+                let target_type = self.check_expression(expr)?;
+                *referenced_type = target_type.clone();
                 *data_type = if *is_mutable {
                     DataType::RefMut
                 } else {

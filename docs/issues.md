@@ -212,13 +212,15 @@ El tipado de Pipeline usar defaults cuando no puede inferir.
 ### T3 - Referencias Sin Tipo Apuntado
 
 **Descripción:**
-Las referencias no almacenan tipo detallado en el AST.
+Las referencias no almacenaban tipo detallado en el AST.
 
-**Status:** ✅ INVESTIGATED (Mayo 2026) - Enhancement Requerido
-- El AST solo distingue Ref/RefMut (ast.rs:207-211)
-- Requiere cambio en el AST para almacenar tipo en Reference
-- No es bug crítico, es mejora de diseño
-- Considerar para v2.1.0
+**Fix:**
+- AST ahora tiene campo `referenced_type: DataType` (ast.rs:207-211)
+- Parser poblá el campo como `DataType::Unknown` (mod.rs:1285)
+- Type checker poblá con el tipo real del valor referido (typeck.rs:1686)
+- Permite mejor inferencia y mensajes de error precisos
+
+**Status:** ✅ RESOLVED (Mayo 2026)
 
 ---
 
@@ -260,53 +262,24 @@ Las referencias no almacenan tipo detallado en el AST.
 ## ❌ PENDING
 
 ### High Priority (Type Checking)
-- T1: Member access fallback too permissive
-- T2: Pipeline typing incomplete
-
----
-
-## 🆕 NEW ISSUES (Abril 2026)
-
-### Parser Issue: String Interpolation with Nested Function Calls
-
-**Description:**
-String interpolation now fully supports nested function calls.
-
-```mire
-# NOW WORKS:
-use dasu("x: {x}")
-use dasu("len {len(result)}")
-use dasu("wall_ms {time.elapsed_ms(wall)}")
-```
-
-**Status**: ✅ RESOLVED (Mayo 2026)
-- Proper brace and parenthesis depth tracking
-- Supports {variable}, {len(x)}, {func(arg)} patterns
-- Byte-level parsing for efficiency
-
----
-
-### Type Issue: Vec Push Generic Recognition
-
-**Description:**
-`lists.push` not recognizing `vec![i64]` type annotation properly.
-
-```mire
-set arr = [] :vec![i64] mut
-set arr = lists.push(arr 1)  # Error: requires vec![T]
-```
-
-**Status**: ⚠️ INVESTIGATED (Mayo 2026)
-- Type annotation syntax parsed correctly
-- Literal empty list `[]` has type `DataType::Vector { dynamic: false }`
-- This is different from the runtime dynamic vector
-- Parser properly handles `vec![T]` syntax since v2.0.0
-
-**Workaround**: Use `[1 2 3]` syntax instead of `[]` with push, OR use `lists.set(index, value)`
+- None remaining
 
 ---
 
 ## ✅ RESOLVED (Mayo 2026)
+
+### T3: References Con Tipo Apuntado
+
+**Description:**
+Expression::Reference now stores the type of the referenced value.
+
+**Fix:**
+- AST field `referenced_type: DataType` added (ast.rs:207-211)
+- Parser initializes to `DataType::Unknown` (mod.rs:1285)
+- Type checker populates with actual target type (typeck.rs:1686)
+- Enables better type inference and error messages
+
+**Status**: ✅ RESOLVED (Mayo 2026)
 
 ### T1: Member Access Fallback
 
@@ -360,4 +333,5 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 | Unsafe tracking | ✅ Works | unsafe_depth tracked |
 | Member access | ✅ Works | throws errors when not found |
 | Pipeline typing | ✅ Works | uses elem_type as fallback |
-| Reference types | ✅ Works | infers from target expression |
+| Reference types | ✅ Works | infers from target expression via referenced_type |
+| String interpolation | ✅ Works | supports nested function calls {func(x)} |

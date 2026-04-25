@@ -208,6 +208,7 @@ pub enum Expression {
         expr: Box<Expression>,
         is_mutable: bool,
         data_type: DataType,
+        referenced_type: DataType,
     },
     Dereference {
         expr: Box<Expression>,

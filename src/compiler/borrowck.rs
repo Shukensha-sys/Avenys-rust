@@ -969,6 +969,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }),
                 ),
                 Statement::Assignment {
@@ -995,6 +996,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }),
                 ),
                 let_stmt(
@@ -1003,6 +1005,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: true,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }),
                 ),
             ],
@@ -1044,6 +1047,7 @@ mod tests {
                             expr: Box::new(ident("x")),
                             is_mutable: false,
                             data_type: DataType::Unknown,
+                            referenced_type: DataType::Unknown,
                         }),
                     )],
                     else_branch: None,
@@ -1072,6 +1076,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }),
                 ),
                 Statement::Unsafe {
@@ -1101,6 +1106,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     })),
                 ],
                 return_type: DataType::Ref,
@@ -1133,6 +1139,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }],
                     data_type: DataType::Unknown,
                 }),
@@ -1216,6 +1223,7 @@ mod tests {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
                         data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
                     }),
                 ),
                 Statement::Assignment {
@@ -1265,14 +1273,15 @@ mod tests {
                             name: "bad".to_string(),
                             params: vec![],
                             body: vec![
-                                let_stmt(
-                                    "r",
-                                    Some(Expression::Reference {
-                                        expr: Box::new(ident("x")),
-                                        is_mutable: false,
-                                        data_type: DataType::Unknown,
-                                    }),
-                                ),
+let_stmt(
+                    "r",
+                    Some(Expression::Reference {
+                        expr: Box::new(ident("x")),
+                        is_mutable: false,
+                        data_type: DataType::Unknown,
+                        referenced_type: DataType::Unknown,
+                    }),
+                ),
                                 Statement::Assignment {
                                     target: "x".to_string(),
                                     value: Expression::Literal(Literal::Int(2)),
@@ -1318,6 +1327,7 @@ mod tests {
                             expr: Box::new(ident("x")),
                             is_mutable: false,
                             data_type: DataType::Unknown,
+                            referenced_type: DataType::Unknown,
                         })),
                     ],
                     return_type: DataType::Ref,
@@ -1348,6 +1358,7 @@ mod tests {
                             expr: Box::new(ident("x")),
                             is_mutable: false,
                             data_type: DataType::Unknown,
+                            referenced_type: DataType::Unknown,
                         })),
                     ],
                     return_type: DataType::Ref,
