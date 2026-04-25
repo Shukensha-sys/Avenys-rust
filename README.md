@@ -176,20 +176,6 @@ Build artifacts:
 
 ---
 
-## Build Manager: Owl
-
-**Owl** (named after *Athene noctua*, the little owl—Avenys's mascot) is the official build manager and package manager being developed by the Mire-lang organization. Owl will provide:
-
-- Project initialization and management
-- Dependency management
-- Build configuration
-- Testing utilities
-- Publishing to the Mire package registry
-
-Owl is currently under active development and will be released as the official companion tool for Mire 2.x.
-
----
-
 ## Migration from v1.x Mire
 
 V2.0.0 is a hard break over v1.x. The most important source changes are:

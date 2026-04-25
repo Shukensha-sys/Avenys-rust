@@ -378,3 +378,36 @@ set m = {} :map![str,i64] mut
 - Typeck: checks for `DataType::Map` before inferring (typeck.rs:1520-1538)
 
 **Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
+## 🆕 Test Suite Observations
+
+### Array Indexing
+
+**Issue**: Arrays may use 1-based indexing in some contexts.
+
+```mire
+set arr = [1 2 3 4 5] :arr[i64 5]
+set first = lists.get(arr 0)  # Returns 3 instead of 1
+set last = lists.get(arr 2)    # Returns 2 instead of 3
+```
+
+**Status**: ⚠️ UNDER INVESTIGATION
+
+### Reference Lowering
+
+**Issue**: Reference expressions `&x` pass type checking but fail at LLVM lowering.
+
+```mire
+set x = 1 :i64
+set rx = &x  # Typeck OK, but Avenys cannot lower Ref type
+```
+
+**Status**: ⚠️ KNOWN LIMITATION - References work in typeck but fail at codegen
+
+### math.avg Function
+
+**Issue**: `math.avg` function not available in standard library.
+
+**Status**: ⚠️ MISSING FUNCTION - Use `math.sum(x) / len(x)` instead
