@@ -385,15 +385,24 @@ set m = {} :map![str,i64] mut
 
 ### Array Indexing
 
-**Issue**: Arrays may use 1-based indexing in some contexts.
+**Issue**: Array indexing with `at` returns incorrect values.
 
 ```mire
-set arr = [1 2 3 4 5] :arr[i64 5]
-set first = lists.get(arr 0)  # Returns 3 instead of 1
-set last = lists.get(arr 2)    # Returns 2 instead of 3
+set arr = [10 20 30 40 50] :arr[i64 5]
+arr at 0  # Returns 5 (first element of array, but offset by 5)
+arr at 1  # Returns 10
+arr at 2  # Returns 20
 ```
 
-**Status**: ⚠️ UNDER INVESTIGATION
+**Observed**: Index appears to be offset by the size of the array minus 5.
+
+```mire
+set arr = [1 2 3 4 5 6 7 8 9 10] :arr[i64 10]
+arr at 0  # Returns 10 (arr[10])
+arr at 1  # Returns 1 (correct)
+```
+
+**Status**: ⚠️ KNOWN BUG - Array indexing returns wrong element
 
 ### Reference Lowering
 
@@ -411,3 +420,36 @@ set rx = &x  # Typeck OK, but Avenys cannot lower Ref type
 **Issue**: `math.avg` function not available in standard library.
 
 **Status**: ⚠️ MISSING FUNCTION - Use `math.sum(x) / len(x)` instead
+
+### High-Order Functions
+
+**Issue**: `lists.fold`, `lists.map`, `lists.filter` not implemented in standard library.
+
+```mire
+set result = lists.fold(0 (a b) => a + b [1 2 3 4 5])  # Fails
+```
+
+**Status**: ⚠️ MISSING FEATURE - Use explicit loops instead
+
+### Array Mutation Syntax
+
+**Issue**: Cannot assign to array element with `at` syntax.
+
+```mire
+set arr = [1 2 3] :arr[i64 3]
+set arr at 0 = 10  # Parser error: "Expected assignment operator"
+```
+
+**Status**: ⚠️ KNOWN LIMITATION - Use functional approach (create new array)
+
+### Struct impl with Mutable Fields
+
+**Issue**: Struct methods cannot modify mutable fields via `self.field = value`.
+
+```mire
+fn increment: (self) {
+    set self.value = self.value + 1  # Fails with "Cannot reassign"
+}
+```
+
+**Status**: ⚠️ KNOWN LIMITATION - Field mutation in impl methods not supported
