@@ -3,7 +3,8 @@ pub mod ast;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::lexer::{Token, TokenType, tokenize};
 use crate::parser::ast::{
-    DataType, Expression, Identifier, Literal, Statement, TraitMethodSig, Visibility,
+    AssignmentTarget, DataType, Expression, Identifier, Literal, Statement, TraitMethodSig,
+    Visibility,
 };
 use std::collections::HashSet;
 
@@ -247,10 +248,16 @@ impl Parser {
             self.advance();
             let dt = self.parse_type()?;
             match dt.clone() {
-                DataType::Vector { element_type, dynamic } => {
+                DataType::Vector {
+                    element_type,
+                    dynamic,
+                } => {
                     apply_vector_type_to_list(&mut value, element_type, dynamic);
                 }
-                DataType::Map { key_type, value_type } => {
+                DataType::Map {
+                    key_type,
+                    value_type,
+                } => {
                     apply_map_type_to_dict(&mut value, key_type, value_type);
                 }
                 _ => {}
@@ -281,12 +288,7 @@ impl Parser {
                 TokenType::PercentAssign => "%",
                 _ => unreachable!(),
             };
-            let left = Expression::Identifier(Identifier {
-                name: target.clone(),
-                data_type: DataType::Unknown,
-                line: 0,
-                column: 0,
-            });
+            let left = target.as_expression();
             let expr = Expression::BinaryOp {
                 operator: operator.to_string(),
                 left: Box::new(left),
@@ -300,7 +302,10 @@ impl Parser {
             });
         }
 
-        if target.contains('.') {
+        if matches!(
+            target,
+            AssignmentTarget::Field(_) | AssignmentTarget::Index { .. }
+        ) {
             return Ok(Statement::Assignment {
                 target,
                 value,
@@ -308,7 +313,10 @@ impl Parser {
             });
         }
 
-        let already_declared = self.is_declared(&target);
+        let AssignmentTarget::Variable(target_name) = &target else {
+            unreachable!("non-variable assignment target handled above");
+        };
+        let already_declared = self.is_declared(target_name);
         if declared_type.is_none() && !is_constant && already_declared {
             return Ok(Statement::Assignment {
                 target,
@@ -318,9 +326,9 @@ impl Parser {
         }
 
         let data_type = declared_type.unwrap_or(DataType::Unknown);
-        self.declare(&target);
+        self.declare(target_name);
         Ok(Statement::Let {
-            name: target,
+            name: target_name.clone(),
             data_type,
             value: Some(value),
             is_constant,
@@ -891,7 +899,7 @@ impl Parser {
         self.apply_type_ascription(expr, data_type)
     }
 
-fn apply_type_ascription(
+    fn apply_type_ascription(
         &self,
         mut expr: Expression,
         data_type: DataType,
@@ -1011,7 +1019,7 @@ fn apply_type_ascription(
         Ok(expr)
     }
 
-fn parse_equality(&mut self) -> Result<Expression> {
+    fn parse_equality(&mut self) -> Result<Expression> {
         let mut expr = self.parse_bitwise_or()?;
         loop {
             if self.check(TokenType::Eq) {
@@ -1953,7 +1961,7 @@ fn parse_equality(&mut self) -> Result<Expression> {
 
     fn parse_string_template_parts(&self, value: &str) -> Result<Vec<Expression>> {
         let mut parts = Vec::new();
-        
+
         if !value.contains('{') {
             parts.push(string_expr(value));
             return Ok(parts);
@@ -1965,7 +1973,7 @@ fn parse_equality(&mut self) -> Result<Expression> {
 
         while i < bytes.len() {
             let b = bytes[i];
-            
+
             if b == b'{' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
                 current_text.push('{');
                 i += 2;
@@ -1977,12 +1985,12 @@ fn parse_equality(&mut self) -> Result<Expression> {
                     parts.push(string_expr(&current_text));
                     current_text.clear();
                 }
-                
+
                 let inner_start = i + 1;
                 let mut depth = 1;
                 let mut paren_depth = 0;
                 i += 1;
-                
+
                 while i < bytes.len() && depth > 0 {
                     match bytes[i] {
                         b'{' => depth += 1,
@@ -1995,12 +2003,12 @@ fn parse_equality(&mut self) -> Result<Expression> {
                     }
                     i += 1;
                 }
-                
+
                 if depth != 0 {
                     return Err(self.error("Unclosed interpolation in template string"));
                 }
-                
-                let inner = &value[inner_start..i-1];
+
+                let inner = &value[inner_start..i - 1];
                 let interp = self.parse_interpolation_source(inner)?;
                 parts.push(interp);
             } else {
@@ -2219,7 +2227,7 @@ fn parse_equality(&mut self) -> Result<Expression> {
         }
     }
 
-fn parse_brace_literal(&mut self) -> Result<Expression> {
+    fn parse_brace_literal(&mut self) -> Result<Expression> {
         self.expect(TokenType::Lbrace)?;
         let mut entries = Vec::new();
 
@@ -2270,7 +2278,7 @@ fn parse_brace_literal(&mut self) -> Result<Expression> {
         })
     }
 
-    fn parse_assignment_target(&mut self) -> Result<String> {
+    fn parse_assignment_target(&mut self) -> Result<AssignmentTarget> {
         let mut target = if self.check(TokenType::SelfToken) {
             self.advance();
             "self".to_string()
@@ -2284,7 +2292,22 @@ fn parse_brace_literal(&mut self) -> Result<Expression> {
             target.push_str(&self.expect_ident()?);
         }
 
-        Ok(target)
+        let base = if target.contains('.') {
+            AssignmentTarget::Field(target)
+        } else {
+            AssignmentTarget::Variable(target)
+        };
+
+        if self.check(TokenType::At) {
+            self.advance();
+            let index = self.parse_additive()?;
+            Ok(AssignmentTarget::Index {
+                target: base.as_expression(),
+                index,
+            })
+        } else {
+            Ok(base)
+        }
     }
 
     fn expect_ident(&mut self) -> Result<String> {
@@ -2693,7 +2716,9 @@ fn contains_self_placeholder(expr: &Expression) -> bool {
 fn statement_contains_self_placeholder(statement: &Statement) -> bool {
     match statement {
         Statement::Let { value, .. } => value.as_ref().is_some_and(contains_self_placeholder),
-        Statement::Assignment { value, .. } => contains_self_placeholder(value),
+        Statement::Assignment { target, value, .. } => {
+            contains_self_placeholder(&target.as_expression()) || contains_self_placeholder(value)
+        }
         Statement::Function { body, .. }
         | Statement::Unsafe { body }
         | Statement::Module { body, .. }
@@ -2825,7 +2850,12 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
                 .collect(),
             data_type,
         },
-        Expression::Dict { entries, key_type, value_type, data_type } => Expression::Dict {
+        Expression::Dict {
+            entries,
+            key_type,
+            value_type,
+            data_type,
+        } => Expression::Dict {
             entries: entries
                 .into_iter()
                 .map(|(key, value)| {
@@ -3161,7 +3191,11 @@ mod tests {
 
 fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>, dynamic: bool) {
     match expr {
-        Expression::List { elements: _, element_type: elem, data_type: dt } => {
+        Expression::List {
+            elements: _,
+            element_type: elem,
+            data_type: dt,
+        } => {
             *elem = (*element_type).clone();
             *dt = DataType::Vector {
                 element_type,
@@ -3172,9 +3206,18 @@ fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>,
     }
 }
 
-fn apply_map_type_to_dict(expr: &mut Expression, key_type: Box<DataType>, value_type: Box<DataType>) {
+fn apply_map_type_to_dict(
+    expr: &mut Expression,
+    key_type: Box<DataType>,
+    value_type: Box<DataType>,
+) {
     match expr {
-        Expression::Dict { entries: _, key_type: kt, value_type: vt, data_type: dt } => {
+        Expression::Dict {
+            entries: _,
+            key_type: kt,
+            value_type: vt,
+            data_type: dt,
+        } => {
             *kt = (*key_type).clone();
             *vt = (*value_type).clone();
             *dt = DataType::Map {

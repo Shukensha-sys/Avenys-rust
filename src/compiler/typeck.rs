@@ -8,8 +8,8 @@ use crate::incremental::analysis_unit_key;
 use crate::lexer::tokenize;
 use crate::parser::Parser;
 use crate::parser::ast::{
-    DataType, Expression, Identifier, Literal, MireValue, Program, QueryOp, Statement,
-    TraitMethodSig,
+    AssignmentTarget, DataType, Expression, Identifier, Literal, MireValue, Program, QueryOp,
+    Statement, TraitMethodSig,
 };
 
 #[derive(Debug, Clone)]
@@ -771,10 +771,9 @@ impl TypeChecker {
             }
             Statement::Assignment { target, value, .. } => {
                 let value_type = self.check_expression(value)?;
-                let (mut target_type, is_target_mutable) =
-                    self.resolve_assignment_target(target)?.ok_or_else(|| {
-                        type_error(format!("Assignment to undefined variable '{}'", target))
-                    })?;
+                let (mut target_type, is_target_mutable) = self
+                    .resolve_assignment_target(target)?
+                    .ok_or_else(|| type_error("Assignment to undefined variable".to_string()))?;
 
                 if !self.is_assignable(&target_type, &value_type) {
                     return Err(type_error(format!(
@@ -790,63 +789,84 @@ impl TypeChecker {
                     )));
                 }
 
-                if target.contains('.') {
-                    if let Some((owner, field_name)) = target.split_once('.') {
-                        let (owner_type, owner_mutable) = self.lookup_var(owner).ok_or_else(
-                            || type_error(format!("Cannot find variable '{}' for field assignment", owner))
-                        )?;
+                match target {
+                    AssignmentTarget::Field(path) => {
+                        if let Some((owner, field_name)) = path.split_once('.') {
+                            let (owner_type, owner_mutable) =
+                                self.lookup_var(owner).ok_or_else(|| {
+                                    type_error(format!(
+                                        "Cannot find variable '{}' for field assignment",
+                                        owner
+                                    ))
+                                })?;
 
-                        if let DataType::StructNamed(ref struct_name) = owner_type {
-                            if let Some(class_sig) = self.classes.get(struct_name) {
-                                let field = class_sig.fields.iter().find(|f| f.name == field_name).ok_or_else(
-                                    || type_error(format!("Struct '{}' has no field '{}'", struct_name, field_name))
-                                )?;
+                            if let DataType::StructNamed(ref struct_name) = owner_type {
+                                if let Some(class_sig) = self.classes.get(struct_name) {
+                                    let field = class_sig
+                                        .fields
+                                        .iter()
+                                        .find(|f| f.name == field_name)
+                                        .ok_or_else(|| {
+                                            type_error(format!(
+                                                "Struct '{}' has no field '{}'",
+                                                struct_name, field_name
+                                            ))
+                                        })?;
 
-                                if !self.is_assignable(&field.data_type, &value_type) {
-                                    return Err(type_error(format!(
-                                        "Type mismatch for field '{}': expected {:?}, got {:?}",
-                                        field_name, field.data_type, value_type
-                                    )));
-                                }
-
-                                let mut new_fields: Vec<Expression> = Vec::new();
-                                for f in &class_sig.fields {
-                                    if f.name == field_name {
-                                        new_fields.push(value.clone());
-                                    } else {
-                                        let field_access = Expression::MemberAccess {
-                                            target: Box::new(Expression::Identifier(Identifier {
-                                                name: owner.to_string(),
-                                                data_type: owner_type.clone(),
-                                                line: 0,
-                                                column: 0,
-                                            })),
-                                            member: f.name.clone(),
-                                            data_type: f.data_type.clone(),
-                                        };
-                                        new_fields.push(field_access);
+                                    if !self.is_assignable(&field.data_type, &value_type) {
+                                        return Err(type_error(format!(
+                                            "Type mismatch for field '{}': expected {:?}, got {:?}",
+                                            field_name, field.data_type, value_type
+                                        )));
                                     }
+
+                                    let mut new_fields: Vec<Expression> = Vec::new();
+                                    for f in &class_sig.fields {
+                                        if f.name == field_name {
+                                            new_fields.push(value.clone());
+                                        } else {
+                                            let field_access = Expression::MemberAccess {
+                                                target: Box::new(Expression::Identifier(
+                                                    Identifier {
+                                                        name: owner.to_string(),
+                                                        data_type: owner_type.clone(),
+                                                        line: 0,
+                                                        column: 0,
+                                                    },
+                                                )),
+                                                member: f.name.clone(),
+                                                data_type: f.data_type.clone(),
+                                            };
+                                            new_fields.push(field_access);
+                                        }
+                                    }
+
+                                    let struct_constructor = Expression::Call {
+                                        name: struct_name.clone(),
+                                        args: new_fields,
+                                        data_type: owner_type.clone(),
+                                    };
+
+                                    self.insert_var(
+                                        owner.to_string(),
+                                        owner_type.clone(),
+                                        owner_mutable,
+                                    );
+                                    self.bind_struct_name(owner, Some(&struct_constructor));
+                                    self.bind_reference_type(owner, Some(&struct_constructor));
                                 }
-
-                                let struct_constructor = Expression::Call {
-                                    name: struct_name.clone(),
-                                    args: new_fields,
-                                    data_type: owner_type.clone(),
-                                };
-
-                                self.insert_var(owner.to_string(), owner_type.clone(), owner_mutable);
-                                self.bind_struct_name(owner, Some(&struct_constructor));
-                                self.bind_reference_type(owner, Some(&struct_constructor));
                             }
                         }
                     }
-                } else {
-                    Self::validate_explicit_nested_literal(&target_type, value)?;
+                    AssignmentTarget::Index { .. } => {}
+                    AssignmentTarget::Variable(name) => {
+                        Self::validate_explicit_nested_literal(&target_type, value)?;
 
-                    target_type = Self::unify_types(&target_type, &value_type)?;
-                    self.insert_var(target.clone(), target_type, is_target_mutable);
-                    self.bind_struct_name(target, Some(value));
-                    self.bind_reference_type(target, Some(value));
+                        target_type = Self::unify_types(&target_type, &value_type)?;
+                        self.insert_var(name.clone(), target_type, is_target_mutable);
+                        self.bind_struct_name(name, Some(value));
+                        self.bind_reference_type(name, Some(value));
+                    }
                 }
             }
             Statement::Function {
@@ -1068,7 +1088,9 @@ impl TypeChecker {
                 }
                 let old_self = self.impl_self_type.take();
                 let old_self_name = self.impl_self_name.take();
-                let method_mask = self.current_nested_statement_mask().map(|mask| mask.to_vec());
+                let method_mask = self
+                    .current_nested_statement_mask()
+                    .map(|mask| mask.to_vec());
 
                 for (method_index, method) in methods.iter_mut().enumerate() {
                     if method_mask
@@ -1273,9 +1295,7 @@ impl TypeChecker {
                 data_type,
             } => {
                 // `ireru(...) :Type` propagates the explicit type annotation to the call node.
-                if name == "ireru"
-                    && *data_type != DataType::Unknown
-                {
+                if name == "ireru" && *data_type != DataType::Unknown {
                     *data_type = data_type.clone();
                     return Ok(data_type.clone());
                 }
@@ -1375,7 +1395,10 @@ impl TypeChecker {
                             ),
                             dynamic: true,
                         },
-                        DataType::Vector { dynamic: false, element_type } => DataType::Vector {
+                        DataType::Vector {
+                            dynamic: false,
+                            element_type,
+                        } => DataType::Vector {
                             element_type: Box::new(
                                 Self::unify_types(&element_type, &value_type)
                                     .unwrap_or(value_type.clone()),
@@ -1520,7 +1543,12 @@ impl TypeChecker {
                 };
                 Ok(data_type.clone())
             }
-            Expression::Dict { entries, key_type, value_type, data_type } => {
+            Expression::Dict {
+                entries,
+                key_type,
+                value_type,
+                data_type,
+            } => {
                 if let DataType::Map { .. } = data_type.clone() {
                     return Ok(data_type.clone());
                 }
@@ -1773,15 +1801,13 @@ impl TypeChecker {
                     }
                     self.pop_scope();
                     DataType::Vector {
-                        element_type: Box::new(
-                            if *return_type == DataType::Unknown {
-                                return Err(type_error(
+                        element_type: Box::new(if *return_type == DataType::Unknown {
+                            return Err(type_error(
                                     "Cannot determine pipeline output element type - specify return type in closure".to_string(),
                                 ));
-                            } else {
-                                return_type.clone()
-                            },
-                        ),
+                        } else {
+                            return_type.clone()
+                        }),
                         dynamic: true,
                     }
                 } else if let Some(stage_type) =
@@ -1792,7 +1818,8 @@ impl TypeChecker {
                     let stage_check = self.check_expression(stage)?;
                     if stage_check == DataType::Unknown {
                         return Err(type_error(
-                            "Pipeline stage has unknown type - cannot infer output type".to_string(),
+                            "Pipeline stage has unknown type - cannot infer output type"
+                                .to_string(),
                         ));
                     }
                     stage_check
@@ -2857,46 +2884,94 @@ impl TypeChecker {
         }
     }
 
-    fn resolve_assignment_target(&self, target: &str) -> Result<Option<(DataType, bool)>> {
-        let Some((owner, field_path)) = target.split_once('.') else {
-            return Ok(self.lookup_var(target));
-        };
+    fn resolve_assignment_target(
+        &mut self,
+        target: &AssignmentTarget,
+    ) -> Result<Option<(DataType, bool)>> {
+        match target {
+            AssignmentTarget::Variable(name) => Ok(self.lookup_var(name)),
+            AssignmentTarget::Field(path) => {
+                let Some((owner, field_path)) = path.split_once('.') else {
+                    return Ok(self.lookup_var(path));
+                };
 
-        let (mut current_type, is_mutable) = self
-            .lookup_var(owner)
-            .ok_or_else(|| type_error(format!("Assignment to undefined variable '{}'", owner)))?;
+                let (mut current_type, is_mutable) = self.lookup_var(owner).ok_or_else(|| {
+                    type_error(format!("Assignment to undefined variable '{}'", owner))
+                })?;
 
-        for field_name in field_path.split('.') {
-            let struct_name = match &current_type {
-                DataType::StructNamed(name) => name.clone(),
-                other => {
+                for field_name in field_path.split('.') {
+                    let struct_name = match &current_type {
+                        DataType::StructNamed(name) => name.clone(),
+                        other => {
+                            return Err(type_error(format!(
+                                "Cannot assign field '{}' on non-struct target '{}': {:?}",
+                                field_name, owner, other
+                            )));
+                        }
+                    };
+
+                    let class_sig = self.classes.get(&struct_name).ok_or_else(|| {
+                        type_error(format!(
+                            "Struct '{}' has no field metadata for assignment '{}'",
+                            struct_name, path
+                        ))
+                    })?;
+                    let field = class_sig
+                        .fields
+                        .iter()
+                        .find(|field| field.name == field_name)
+                        .ok_or_else(|| {
+                            type_error(format!(
+                                "Struct '{}' has no field '{}'",
+                                struct_name, field_name
+                            ))
+                        })?;
+                    current_type = field.data_type.clone();
+                }
+
+                Ok(Some((current_type, is_mutable)))
+            }
+            AssignmentTarget::Index {
+                target: index_target,
+                index,
+            } => {
+                let owner_name = target.binding_name().ok_or_else(|| {
+                    type_error(
+                        "Indexed assignment requires an identifier-backed target".to_string(),
+                    )
+                })?;
+                let (_, is_mutable) = self.lookup_var(owner_name).ok_or_else(|| {
+                    type_error(format!("Assignment to undefined variable '{}'", owner_name))
+                })?;
+                let mut target_expr = index_target.clone();
+                let mut index_expr = index.clone();
+                let target_type = self.check_expression(&mut target_expr)?;
+                let index_type = self.check_expression(&mut index_expr)?;
+                if !Self::is_numeric(&index_type) && index_type != DataType::Unknown {
                     return Err(type_error(format!(
-                        "Cannot assign field '{}' on non-struct target '{}': {:?}",
-                        field_name, owner, other
+                        "Index must be numeric for indexed assignment, got {:?}",
+                        index_type
                     )));
                 }
-            };
 
-            let class_sig = self.classes.get(&struct_name).ok_or_else(|| {
-                type_error(format!(
-                    "Struct '{}' has no field metadata for assignment '{}'",
-                    struct_name, target
-                ))
-            })?;
-            let field = class_sig
-                .fields
-                .iter()
-                .find(|field| field.name == field_name)
-                .ok_or_else(|| {
-                    type_error(format!(
-                        "Struct '{}' has no field '{}'",
-                        struct_name, field_name
-                    ))
-                })?;
-            current_type = field.data_type.clone();
+                let element_type = match target_type {
+                    DataType::Array { element_type, .. }
+                    | DataType::Slice { element_type }
+                    | DataType::Vector { element_type, .. } => *element_type,
+                    DataType::Map { value_type, .. } => *value_type,
+                    DataType::List | DataType::Tuple | DataType::Dict => DataType::Anything,
+                    DataType::Unknown => DataType::Unknown,
+                    other => {
+                        return Err(type_error(format!(
+                            "Type {:?} does not support indexed assignment",
+                            other
+                        )));
+                    }
+                };
+
+                Ok(Some((element_type, is_mutable)))
+            }
         }
-
-        Ok(Some((current_type, is_mutable)))
     }
 
     fn lookup_var(&self, name: &str) -> Option<(DataType, bool)> {
@@ -3147,9 +3222,7 @@ fn type_error_at(line: usize, column: usize, message: String) -> MireError {
 }
 
 fn statements_contain_explicit_return(statements: &[Statement]) -> bool {
-    statements
-        .iter()
-        .any(statement_contains_explicit_return)
+    statements.iter().any(statement_contains_explicit_return)
 }
 
 fn statement_contains_explicit_return(statement: &Statement) -> bool {
@@ -3200,7 +3273,7 @@ mod tests {
     use crate::compiler::AnalysisSelection;
     use crate::parse;
     use crate::parser::ast::{
-        DataType, Expression, Identifier, Literal, Program, Statement, Visibility,
+        AssignmentTarget, DataType, Expression, Identifier, Literal, Program, Statement, Visibility,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -3339,7 +3412,7 @@ mod tests {
                     visibility: Visibility::Public,
                 },
                 Statement::Assignment {
-                    target: "x".to_string(),
+                    target: AssignmentTarget::Variable("x".to_string()),
                     value: Expression::Literal(Literal::Str("bad".to_string())),
                     is_mutable: true,
                 },
@@ -3701,7 +3774,11 @@ mod tests {
         };
         let Statement::Let {
             data_type,
-            value: Some(Expression::Dereference { data_type: deref_type, .. }),
+            value:
+                Some(Expression::Dereference {
+                    data_type: deref_type,
+                    ..
+                }),
             ..
         } = &body[2]
         else {
@@ -3713,8 +3790,7 @@ mod tests {
 
     #[test]
     fn pipeline_closure_infers_vector_of_return_type() {
-        let source =
-            "pub fn main: () {\n    set nums = [1 2 3] :vec![i64]\n    set doubled = nums => (x => x * 2)\n}\n";
+        let source = "pub fn main: () {\n    set nums = [1 2 3] :vec![i64]\n    set doubled = nums => (x => x * 2)\n}\n";
         let mut program = parse(source).expect("source should parse");
 
         check_program_types(&mut program, source).expect("pipeline should type check");

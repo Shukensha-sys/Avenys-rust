@@ -1,5 +1,0 @@
-pub fn main: () {
-    set x = 10 :i64
-    set y = x.field
-    use dasu(y)
-}

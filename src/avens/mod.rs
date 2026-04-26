@@ -8,7 +8,9 @@ use crate::incremental::{
     analysis_units_for_program, build_fingerprint, compute_invalidation_report,
 };
 use crate::loader::load_program_with_metadata_with_settings;
-use crate::parser::ast::{DataType, Expression, Identifier, Literal, Program, Statement};
+use crate::parser::ast::{
+    AssignmentTarget, DataType, Expression, Identifier, Literal, Program, Statement,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -1038,26 +1040,29 @@ impl LlvmIrGen {
                 self.store_variable(name, &ptr, ll_ty, data_type.clone(), init)?;
                 Ok(())
             }
-            Statement::Assignment { target, value, .. } => {
-                if target.contains('.') {
-                    return self.compile_field_assignment(target, value);
+            Statement::Assignment { target, value, .. } => match target {
+                AssignmentTarget::Field(path) => self.compile_field_assignment(path, value),
+                AssignmentTarget::Index { target, index } => {
+                    self.compile_index_assignment(target, index, value)
                 }
-                let var = self.vars.get(target).cloned().ok_or_else(|| {
-                    MireError::new(ErrorKind::Runtime {
-                        message: format!("Avenys does not know variable '{}'", target),
-                    })
-                })?;
-                if self.try_compile_in_place_string_append(target, &var, value)? {
-                    return Ok(());
+                AssignmentTarget::Variable(name) => {
+                    let var = self.vars.get(name).cloned().ok_or_else(|| {
+                        MireError::new(ErrorKind::Runtime {
+                            message: format!("Avenys does not know variable '{}'", name),
+                        })
+                    })?;
+                    if self.try_compile_in_place_string_append(name, &var, value)? {
+                        return Ok(());
+                    }
+                    let compiled = self.compile_expr(value)?;
+                    self.store_variable(name, &var.ptr, var.ty, var.data_type.clone(), compiled)?;
+                    let struct_name = self.struct_name_from_expr(value);
+                    if let Some(slot) = self.vars.get_mut(name) {
+                        slot.struct_name = struct_name;
+                    }
+                    Ok(())
                 }
-                let compiled = self.compile_expr(value)?;
-                self.store_variable(target, &var.ptr, var.ty, var.data_type.clone(), compiled)?;
-                let struct_name = self.struct_name_from_expr(value);
-                if let Some(slot) = self.vars.get_mut(target) {
-                    slot.struct_name = struct_name;
-                }
-                Ok(())
-            }
+            },
             Statement::While { condition, body } => {
                 let cond_label = self.label("while_cond");
                 let body_label = self.label("while_body");
@@ -1125,8 +1130,7 @@ impl LlvmIrGen {
             Statement::Expression(Expression::Call { name, args, .. }) if name == "__do_while" => {
                 self.compile_do_while(args)
             }
-            Statement::Expression(Expression::Call { name, args, .. }) if name == "dasu" =>
-            {
+            Statement::Expression(Expression::Call { name, args, .. }) if name == "dasu" => {
                 for arg in args {
                     self.emit_dasu_expr(arg)?;
                 }
@@ -1197,6 +1201,10 @@ impl LlvmIrGen {
                 repr: "0".to_string(),
                 owned: false,
             }),
+            Expression::Reference { expr, .. } => self.compile_reference_expr(expr),
+            Expression::Dereference { expr, data_type } => {
+                self.compile_dereference_expr(expr, data_type)
+            }
             Expression::Identifier(Identifier { name, .. }) => {
                 let var = self.vars.get(name).cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
@@ -1375,11 +1383,12 @@ impl LlvmIrGen {
                 let target_val = self.compile_expr(target)?;
                 let index_val = self.compile_expr(index)?;
                 let target_type = self.expression_data_type(target);
-                let effective_type = if matches!(target_type, DataType::Vector { dynamic: false, .. }) {
-                    target_type.clone()
-                } else {
-                    target_type
-                };
+                let effective_type =
+                    if matches!(target_type, DataType::Vector { dynamic: false, .. }) {
+                        target_type.clone()
+                    } else {
+                        target_type
+                    };
                 self.compile_index(target_val, index_val, &effective_type, data_type)
             }
             Expression::MemberAccess { target, member, .. } => {
@@ -1723,7 +1732,8 @@ impl LlvmIrGen {
                         *safe,
                     ),
                     _ => Err(MireError::new(ErrorKind::Runtime {
-                        message: "Pipeline stage must be a function call, identifier, or closure".to_string(),
+                        message: "Pipeline stage must be a function call, identifier, or closure"
+                            .to_string(),
                     })),
                 }
             }
@@ -1840,19 +1850,20 @@ impl LlvmIrGen {
         self.entry_allocas.push(format!("  {var_ptr} = alloca i64"));
 
         let list_result_ptr = self.tmp();
-        self.entry_allocas.push(format!("  {list_result_ptr} = alloca ptr"));
+        self.entry_allocas
+            .push(format!("  {list_result_ptr} = alloca ptr"));
 
         let index_ptr = self.tmp();
-        self.entry_allocas.push(format!("  {index_ptr} = alloca i64"));
+        self.entry_allocas
+            .push(format!("  {index_ptr} = alloca i64"));
 
         let initial_list = self.tmp();
         self.body.push(format!(
             "  {initial_list} = call ptr @mire_list_create(i64 4, i64 {})",
             elem_size
         ));
-        self.body.push(format!(
-            "  store ptr {initial_list}, ptr {list_result_ptr}"
-        ));
+        self.body
+            .push(format!("  store ptr {initial_list}, ptr {list_result_ptr}"));
         self.body.push(format!("  store i64 0, ptr {index_ptr}"));
 
         let is_null = self.tmp();
@@ -1871,8 +1882,11 @@ impl LlvmIrGen {
         let has_more = self.tmp();
         let current_list = self.tmp();
 
-        self.body.push(format!("  {current_list} = load ptr, ptr {list_result_ptr}"));
-        self.body.push(format!("  {input_len} = load i64, ptr {}", input_val.repr));
+        self.body.push(format!(
+            "  {current_list} = load ptr, ptr {list_result_ptr}"
+        ));
+        self.body
+            .push(format!("  {input_len} = load i64, ptr {}", input_val.repr));
         self.body
             .push(format!("  {index} = load i64, ptr {index_ptr}"));
         self.body
@@ -1900,15 +1914,13 @@ impl LlvmIrGen {
         match param_type {
             DataType::Bool => {
                 let raw = self.tmp();
-                self.body
-                    .push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+                self.body.push(format!("  {raw} = load i8, ptr {elem_ptr}"));
                 self.body
                     .push(format!("  {elem_val} = trunc i8 {raw} to i1"));
             }
             DataType::I8 | DataType::U8 => {
                 let raw = self.tmp();
-                self.body
-                    .push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+                self.body.push(format!("  {raw} = load i8, ptr {elem_ptr}"));
                 self.body
                     .push(format!("  {elem_val} = zext i8 {raw} to i64"));
             }
@@ -1945,10 +1957,8 @@ impl LlvmIrGen {
             },
         );
 
-        self.body.push(format!(
-            "  store i64 {}, ptr {}",
-            elem_val, param_var_ptr
-        ));
+        self.body
+            .push(format!("  store i64 {}, ptr {}", elem_val, param_var_ptr));
 
         let result_val = self.compile_closure_body(body, return_type);
         self.vars = old_vars;
@@ -1980,7 +1990,8 @@ impl LlvmIrGen {
 
         self.body.push(format!("{end_label}:"));
         let final_list = self.tmp();
-        self.body.push(format!("  {final_list} = load ptr, ptr {list_result_ptr}"));
+        self.body
+            .push(format!("  {final_list} = load ptr, ptr {list_result_ptr}"));
 
         Ok(LlValue {
             ty: LlType::Ptr,
@@ -2004,20 +2015,16 @@ impl LlvmIrGen {
 
         if let Some(last) = body.last() {
             match last {
-                Statement::Return(Some(expr)) => {
-                    self.compile_expr(expr).unwrap_or(LlValue {
-                        ty: LlType::I64,
-                        repr: "0".to_string(),
-                        owned: false,
-                    })
-                }
-                Statement::Expression(expr) => {
-                    self.compile_expr(expr).unwrap_or(LlValue {
-                        ty: LlType::I64,
-                        repr: "0".to_string(),
-                        owned: false,
-                    })
-                }
+                Statement::Return(Some(expr)) => self.compile_expr(expr).unwrap_or(LlValue {
+                    ty: LlType::I64,
+                    repr: "0".to_string(),
+                    owned: false,
+                }),
+                Statement::Expression(expr) => self.compile_expr(expr).unwrap_or(LlValue {
+                    ty: LlType::I64,
+                    repr: "0".to_string(),
+                    owned: false,
+                }),
                 _ => {
                     let _ = self.compile_statement(last);
                     LlValue {
@@ -2061,6 +2068,220 @@ impl LlvmIrGen {
         }
 
         self.store_casted(&field_ptr, field_ty, compiled)
+    }
+
+    fn compile_reference_expr(&mut self, expr: &Expression) -> Result<LlValue> {
+        let (ptr, _) = self.resolve_lvalue_ptr(expr)?;
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: ptr,
+            owned: false,
+        })
+    }
+
+    fn compile_dereference_expr(
+        &mut self,
+        expr: &Expression,
+        data_type: &DataType,
+    ) -> Result<LlValue> {
+        let ptr = self.compile_expr(expr)?;
+        if ptr.ty != LlType::Ptr {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys cannot dereference non-pointer value".to_string(),
+            }));
+        }
+        self.load_from_ptr(&ptr.repr, data_type)
+    }
+
+    fn compile_index_assignment(
+        &mut self,
+        target: &Expression,
+        index: &Expression,
+        value: &Expression,
+    ) -> Result<()> {
+        let target_data_type = self.expression_data_type(target);
+        let element_data_type = match &target_data_type {
+            DataType::Array { element_type, .. }
+            | DataType::Slice { element_type }
+            | DataType::Vector { element_type, .. } => *element_type.clone(),
+            _ => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Indexed assignment is not supported for type {:?}",
+                        target_data_type
+                    ),
+                }));
+            }
+        };
+        let (elem_ptr, elem_ty) =
+            self.resolve_index_ptr(target, index, &target_data_type, &element_data_type)?;
+        let compiled = self.compile_expr(value)?;
+        self.store_casted(&elem_ptr, elem_ty, compiled)
+    }
+
+    fn resolve_index_ptr(
+        &mut self,
+        target: &Expression,
+        index: &Expression,
+        target_data_type: &DataType,
+        element_data_type: &DataType,
+    ) -> Result<(String, LlType)> {
+        let target_val = self.compile_expr(target)?;
+        if target_val.ty != LlType::Ptr {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys cannot assign through non-pointer index target".to_string(),
+            }));
+        }
+        let compiled_index = self.compile_expr(index)?;
+        let index_val = self.cast_to_i64(compiled_index)?;
+        let elem_size = self.element_size(element_data_type);
+        let (base_ptr, do_bounds_check) = match target_data_type {
+            DataType::Array { size, .. } => {
+                let len_val = LlValue {
+                    ty: LlType::I64,
+                    repr: size.to_string(),
+                    owned: false,
+                };
+                self.emit_bounds_check(index_val.clone(), len_val, "index out of bounds");
+                let base = self.tmp();
+                self.body.push(format!(
+                    "  {base} = getelementptr inbounds i8, ptr {}, i64 8",
+                    target_val.repr
+                ));
+                (base, false)
+            }
+            DataType::Vector { .. } | DataType::Slice { .. } => {
+                let base = self.tmp();
+                self.body.push(format!(
+                    "  {base} = getelementptr inbounds i8, ptr {}, i64 8",
+                    target_val.repr
+                ));
+                (base, true)
+            }
+            other => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!("Type {:?} does not support indexed assignment", other),
+                }));
+            }
+        };
+        if do_bounds_check {
+            let len = self.compile_list_len_value(target_val)?;
+            self.emit_bounds_check(index_val.clone(), len, "index out of bounds");
+        }
+        let offset = self.tmp();
+        self.body.push(format!(
+            "  {offset} = mul i64 {}, {}",
+            index_val.repr, elem_size
+        ));
+        let elem_ptr = self.tmp();
+        self.body.push(format!(
+            "  {elem_ptr} = getelementptr inbounds i8, ptr {base_ptr}, i64 {offset}"
+        ));
+        Ok((elem_ptr, self.map_type(element_data_type)?))
+    }
+
+    fn resolve_lvalue_ptr(&mut self, expr: &Expression) -> Result<(String, DataType)> {
+        match expr {
+            Expression::Identifier(Identifier { name, .. }) => {
+                let var = self.vars.get(name).cloned().ok_or_else(|| {
+                    MireError::new(ErrorKind::Runtime {
+                        message: format!("Avenys unknown identifier '{}'", name),
+                    })
+                })?;
+                Ok((var.ptr, var.data_type))
+            }
+            Expression::MemberAccess { target, member, .. } => {
+                let (field_ptr, _, field_data_type) =
+                    self.resolve_struct_field_ptr(target, &[member.as_str()])?;
+                Ok((field_ptr, field_data_type))
+            }
+            Expression::Index {
+                target,
+                index,
+                data_type,
+            } => {
+                let target_data_type = self.expression_data_type(target);
+                let element_data_type = if *data_type != DataType::Unknown {
+                    data_type.clone()
+                } else {
+                    self.expression_data_type(expr)
+                };
+                let (elem_ptr, _) =
+                    self.resolve_index_ptr(target, index, &target_data_type, &element_data_type)?;
+                Ok((elem_ptr, element_data_type))
+            }
+            other => Err(MireError::new(ErrorKind::Runtime {
+                message: format!("Avenys cannot take a reference to expression {:?}", other),
+            })),
+        }
+    }
+
+    fn load_from_ptr(&mut self, ptr: &str, data_type: &DataType) -> Result<LlValue> {
+        let ll_ty = self.map_type(data_type)?;
+        if ll_ty == LlType::Ptr {
+            let value = self.tmp();
+            self.body.push(format!("  {value} = load ptr, ptr {ptr}"));
+            return Ok(LlValue {
+                ty: LlType::Ptr,
+                repr: value,
+                owned: false,
+            });
+        }
+        if ll_ty == LlType::I1 {
+            let value = self.tmp();
+            self.body.push(format!("  {value} = load i1, ptr {ptr}"));
+            return Ok(LlValue {
+                ty: LlType::I1,
+                repr: value,
+                owned: false,
+            });
+        }
+
+        let raw_ty = self.scalar_storage_ir_type(data_type);
+        let raw = self.tmp();
+        self.body.push(format!("  {raw} = load {raw_ty}, ptr {ptr}"));
+        let value = match raw_ty {
+            "i8" => {
+                let widened = self.tmp();
+                let ext = if matches!(data_type, DataType::U8) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i8 {raw} to i64"));
+                widened
+            }
+            "i16" => {
+                let widened = self.tmp();
+                let ext = if matches!(data_type, DataType::U16) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i16 {raw} to i64"));
+                widened
+            }
+            "i32" => {
+                let widened = self.tmp();
+                let ext = if matches!(data_type, DataType::U32) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i32 {raw} to i64"));
+                widened
+            }
+            _ => raw,
+        };
+
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: value,
+            owned: false,
+        })
     }
 
     fn resolve_struct_field_ptr_from_target(
@@ -2357,7 +2578,7 @@ impl LlvmIrGen {
             }));
         }
 
-match target_data_type {
+        match target_data_type {
             DataType::List | DataType::Vector { .. } | DataType::Slice { .. } | DataType::Tuple => {
                 let index = self.cast_to_i64(index)?;
                 let len = self.compile_list_len_value(target.clone())?;
@@ -2445,9 +2666,18 @@ match target_data_type {
                     })
                 }
             }
-            DataType::Array { element_type, size: _ } => {
+            DataType::Array {
+                element_type,
+                size,
+            } => {
                 let index = self.cast_to_i64(index)?;
                 let elem_size = self.element_size(element_type);
+                let size_val = LlValue {
+                    ty: LlType::I64,
+                    repr: size.to_string(),
+                    owned: false,
+                };
+                self.emit_bounds_check(index.clone(), size_val, "index out of bounds");
                 let base = self.tmp();
                 self.body.push(format!(
                     "  {base} = getelementptr inbounds i8, ptr {}, i64 8",
@@ -4414,7 +4644,16 @@ match target_data_type {
                 value_type: Box::new(DataType::Unknown),
             },
             Expression::Literal(_) => DataType::Unknown,
-            Expression::Identifier(identifier) => identifier.data_type.clone(),
+            Expression::Identifier(identifier) => {
+                if identifier.data_type != DataType::Unknown {
+                    identifier.data_type.clone()
+                } else {
+                    self.vars
+                        .get(&identifier.name)
+                        .map(|var| var.data_type.clone())
+                        .unwrap_or(DataType::Unknown)
+                }
+            }
             Expression::BinaryOp { data_type, .. }
             | Expression::UnaryOp { data_type, .. }
             | Expression::NamedArg { data_type, .. }
@@ -4422,8 +4661,6 @@ match target_data_type {
             | Expression::List { data_type, .. }
             | Expression::Dict { data_type, .. }
             | Expression::Tuple { data_type, .. }
-            | Expression::Index { data_type, .. }
-            | Expression::MemberAccess { data_type, .. }
             | Expression::Reference { data_type, .. }
             | Expression::Dereference { data_type, .. }
             | Expression::Box { data_type, .. }
@@ -4431,6 +4668,46 @@ match target_data_type {
             | Expression::Match { data_type, .. }
             | Expression::EnumVariantPath { data_type, .. }
             | Expression::EnumVariant { data_type, .. } => data_type.clone(),
+            Expression::MemberAccess {
+                target,
+                member,
+                data_type,
+            } => {
+                if *data_type != DataType::Unknown {
+                    return data_type.clone();
+                }
+                let target_type = self.expression_data_type(target);
+                let Some(struct_name) = target_type
+                    .struct_name()
+                    .map(ToOwned::to_owned)
+                    .or_else(|| self.struct_name_from_expr(target))
+                else {
+                    return DataType::Unknown;
+                };
+                self.user_structs
+                    .get(&struct_name)
+                    .and_then(|info| {
+                        info.field_indices
+                            .get(member)
+                            .and_then(|index| info.field_data_types.get(*index))
+                            .cloned()
+                    })
+                    .unwrap_or(DataType::Unknown)
+            }
+            Expression::Index {
+                target, data_type, ..
+            } => {
+                if *data_type != DataType::Unknown {
+                    return data_type.clone();
+                }
+                match self.expression_data_type(target) {
+                    DataType::Array { element_type, .. }
+                    | DataType::Slice { element_type }
+                    | DataType::Vector { element_type, .. } => *element_type,
+                    DataType::Map { value_type, .. } => *value_type,
+                    _ => DataType::Unknown,
+                }
+            }
             Expression::Closure { return_type, .. } => return_type.clone(),
         }
     }
@@ -4455,7 +4732,9 @@ match target_data_type {
             | DataType::Struct
             | DataType::StructNamed(_)
             | DataType::Enum
-            | DataType::EnumNamed(_) => Ok(LlType::Ptr),
+            | DataType::EnumNamed(_)
+            | DataType::Ref { .. }
+            | DataType::RefMut { .. } => Ok(LlType::Ptr),
             DataType::None => Ok(LlType::I64),
             other => Err(MireError::new(ErrorKind::Backend {
                 message: format!("Avenys does not yet lower type {:?}", other),
@@ -4849,7 +5128,8 @@ match target_data_type {
     ) -> Result<LlValue> {
         let end_label = self.label("logical_end");
         let result_ptr = self.tmp();
-        self.entry_allocas.push(format!("  {result_ptr} = alloca i1"));
+        self.entry_allocas
+            .push(format!("  {result_ptr} = alloca i1"));
 
         let left_val = self.compile_expr(left)?;
         let left_cond = self.cast_to_i1(left_val)?;
@@ -4867,7 +5147,8 @@ match target_data_type {
             self.body.push(format!("{rhs_label}:"));
             let right_val = self.compile_expr(right)?;
             let right_cond = self.cast_to_i1(right_val)?;
-            self.body.push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
+            self.body
+                .push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
             self.body.push(format!("  br label %{end_label}"));
         } else {
             let skip_label = self.label("or_skip_rhs");
@@ -4882,13 +5163,15 @@ match target_data_type {
             self.body.push(format!("{rhs_label}:"));
             let right_val = self.compile_expr(right)?;
             let right_cond = self.cast_to_i1(right_val)?;
-            self.body.push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
+            self.body
+                .push(format!("  store i1 {}, ptr {result_ptr}", right_cond.repr));
             self.body.push(format!("  br label %{end_label}"));
         }
 
         self.body.push(format!("{end_label}:"));
         let loaded = self.tmp();
-        self.body.push(format!("  {loaded} = load i1, ptr {result_ptr}"));
+        self.body
+            .push(format!("  {loaded} = load i1, ptr {result_ptr}"));
         Ok(LlValue {
             ty: LlType::I1,
             repr: loaded,
@@ -4910,10 +5193,8 @@ match target_data_type {
             }
             "!" => {
                 let bool_val = self.cast_to_i1(value)?;
-                self.body.push(format!(
-                    "  {result} = xor i1 {}, 1",
-                    bool_val.repr
-                ));
+                self.body
+                    .push(format!("  {result} = xor i1 {}, 1", bool_val.repr));
                 Ok(LlValue {
                     ty: LlType::I1,
                     repr: result,
@@ -5256,7 +5537,9 @@ match target_data_type {
                     let ty_str = format!("{}", self.ty(param_ty.clone()));
                     self.user_structs
                         .iter()
-                        .find(|(_, info)| format!("{}", self.render_struct_ty(&info.fields)) == ty_str)
+                        .find(|(_, info)| {
+                            format!("{}", self.render_struct_ty(&info.fields)) == ty_str
+                        })
                         .map(|(name, _)| name.clone())
                 }
             };
@@ -5293,7 +5576,10 @@ match target_data_type {
         }
 
         let ret_clone = ret.clone();
-        if body.iter().all(|stmt| !matches!(stmt, Statement::Return(_))) {
+        if body
+            .iter()
+            .all(|stmt| !matches!(stmt, Statement::Return(_)))
+        {
             if fn_info.returns_value {
                 if let Some(Statement::Expression(expr)) = body.last() {
                     let value = self.compile_expr(expr)?;

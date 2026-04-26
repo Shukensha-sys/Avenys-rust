@@ -60,7 +60,7 @@ for f in tests/level/beginner/*.mire; do ./target/release/mire run "$f"; done
 | complex/algorithms | 9 | 7 ✅, 2 ⚠️ |
 | complex/data_structures | 14 | 11 ✅, 3 ⚠️ |
 | complex/math | 2 | ✅ Passing |
-| edge/arrays | 4 | ⚠️ Known bug |
+| edge/arrays | 4 | ✅ Passing |
 | edge/loops | 3 | ✅ Passing |
 | edge/recursion | 1 | ✅ Passing |
 | edge/error_handling | 1 | ✅ Passing |
@@ -72,10 +72,8 @@ for f in tests/level/beginner/*.mire; do ./target/release/mire run "$f"; done
 
 See `docs/issues.md` for documented issues and limitations:
 
-- **Array Indexing Bug**: `arr at N` returns wrong element (offset by array size - 5)
 - **High-Order Functions**: `lists.fold`, `lists.map`, `lists.filter` not yet implemented
 - **References**: Pass type checking but fail at LLVM lowering
-- **Array Mutation**: Cannot assign to `arr at index` directly
 - **math.avg**: Function not available, use `math.sum(x) / len(x)`
 
 ## Incremental Compilation

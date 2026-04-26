@@ -1752,7 +1752,13 @@ fn collect_statement_dependencies(statement: &Statement, deps: &mut Vec<String>)
             }
         }
         Statement::Assignment { target, value, .. } => {
-            deps.push(target.clone());
+            if let Some(name) = target.binding_name() {
+                deps.push(name.to_string());
+            }
+            if let crate::parser::ast::AssignmentTarget::Index { target, index } = target {
+                collect_expression_dependencies(target, deps);
+                collect_expression_dependencies(index, deps);
+            }
             collect_expression_dependencies(value, deps);
         }
         Statement::Function { body, params, .. } => {

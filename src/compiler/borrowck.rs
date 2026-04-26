@@ -6,7 +6,7 @@ use crate::compiler::semantic::{BindingInfo, BindingKind, FunctionInfo, Semantic
 use crate::error::mss::MssError;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::incremental::analysis_unit_key;
-use crate::parser::ast::{DataType, Expression, Program, QueryOp, Statement};
+use crate::parser::ast::{AssignmentTarget, DataType, Expression, Program, QueryOp, Statement};
 
 pub fn check_program(program: &Program, semantic_model: &SemanticModel) -> Result<()> {
     let mut checker = BorrowChecker::new(semantic_model);
@@ -198,9 +198,16 @@ impl<'a> BorrowChecker<'a> {
                 let binding_target = assignment_binding_target(target);
                 self.ensure_binding_available(&binding_target)?;
                 self.ensure_can_write(&binding_target)?;
+                if let AssignmentTarget::Index { target, index } = target {
+                    self.check_expression(target)?;
+                    self.check_expression(index)?;
+                }
                 self.check_expression(value)?;
-                if target == &binding_target {
-                    self.rebind_reference_target(target, Self::reference_target(Some(value)))?;
+                if matches!(target, AssignmentTarget::Variable(name) if name == &binding_target) {
+                    self.rebind_reference_target(
+                        &binding_target,
+                        Self::reference_target(Some(value)),
+                    )?;
                 }
                 if let Some(state) = self.lookup_binding_mut(&binding_target) {
                     state.is_moved = false;
@@ -294,7 +301,9 @@ impl<'a> BorrowChecker<'a> {
                 type_name, methods, ..
             } => {
                 self.impl_owner_stack.push(type_name.clone());
-                let method_mask = self.current_nested_statement_mask().map(|mask| mask.to_vec());
+                let method_mask = self
+                    .current_nested_statement_mask()
+                    .map(|mask| mask.to_vec());
                 for (method_index, method) in methods.iter().enumerate() {
                     if method_mask
                         .as_ref()
@@ -690,9 +699,11 @@ impl<'a> BorrowChecker<'a> {
             .functions
             .get(name)
             .or_else(|| {
-                self.impl_owner_stack
-                    .last()
-                    .and_then(|owner| self.semantic_model.functions.get(&format!("{owner}.{name}")))
+                self.impl_owner_stack.last().and_then(|owner| {
+                    self.semantic_model
+                        .functions
+                        .get(&format!("{owner}.{name}"))
+                })
             })
             .map(|info| info.scope_id)
     }
@@ -870,18 +881,15 @@ fn ownership_error(kind: MssError) -> MireError {
     MireError::ownership_error(1, 1, kind)
 }
 
-fn assignment_binding_target(target: &str) -> String {
+fn assignment_binding_target(target: &AssignmentTarget) -> String {
     target
-        .split('.')
-        .next()
+        .binding_name()
         .map(ToString::to_string)
         .unwrap_or_else(|| target.to_string())
 }
 
 fn statements_contain_explicit_return(statements: &[Statement]) -> bool {
-    statements
-        .iter()
-        .any(statement_contains_explicit_return)
+    statements.iter().any(statement_contains_explicit_return)
 }
 
 fn statement_contains_explicit_return(statement: &Statement) -> bool {
@@ -932,7 +940,7 @@ mod tests {
     use crate::compiler::AnalysisSelection;
     use crate::compiler::semantic;
     use crate::parser::ast::{
-        DataType, Expression, Identifier, Literal, Program, Statement, Visibility,
+        AssignmentTarget, DataType, Expression, Identifier, Literal, Program, Statement, Visibility,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -973,7 +981,7 @@ mod tests {
                     }),
                 ),
                 Statement::Assignment {
-                    target: "x".to_string(),
+                    target: AssignmentTarget::Variable("x".to_string()),
                     value: Expression::Literal(Literal::Int(2)),
                     is_mutable: true,
                 },
@@ -1053,7 +1061,7 @@ mod tests {
                     else_branch: None,
                 },
                 Statement::Assignment {
-                    target: "x".to_string(),
+                    target: AssignmentTarget::Variable("x".to_string()),
                     value: Expression::Literal(Literal::Int(2)),
                     is_mutable: true,
                 },
@@ -1081,7 +1089,7 @@ mod tests {
                 ),
                 Statement::Unsafe {
                     body: vec![Statement::Assignment {
-                        target: "x".to_string(),
+                        target: AssignmentTarget::Variable("x".to_string()),
                         value: Expression::Literal(Literal::Int(2)),
                         is_mutable: true,
                     }],
@@ -1227,7 +1235,7 @@ mod tests {
                     }),
                 ),
                 Statement::Assignment {
-                    target: "x".to_string(),
+                    target: AssignmentTarget::Variable("x".to_string()),
                     value: Expression::Literal(Literal::Int(2)),
                     is_mutable: true,
                 },
@@ -1273,17 +1281,17 @@ mod tests {
                             name: "bad".to_string(),
                             params: vec![],
                             body: vec![
-let_stmt(
-                    "r",
-                    Some(Expression::Reference {
-                        expr: Box::new(ident("x")),
-                        is_mutable: false,
-                        data_type: DataType::Unknown,
-                        referenced_type: DataType::Unknown,
-                    }),
-                ),
+                                let_stmt(
+                                    "r",
+                                    Some(Expression::Reference {
+                                        expr: Box::new(ident("x")),
+                                        is_mutable: false,
+                                        data_type: DataType::Unknown,
+                                        referenced_type: DataType::Unknown,
+                                    }),
+                                ),
                                 Statement::Assignment {
-                                    target: "x".to_string(),
+                                    target: AssignmentTarget::Variable("x".to_string()),
                                     value: Expression::Literal(Literal::Int(2)),
                                     is_mutable: true,
                                 },
@@ -1351,7 +1359,10 @@ let_stmt(
                 type_name: "Point".to_string(),
                 methods: vec![Statement::Function {
                     name: "leak".to_string(),
-                    params: vec![("self".to_string(), DataType::StructNamed("Point".to_string()))],
+                    params: vec![(
+                        "self".to_string(),
+                        DataType::StructNamed("Point".to_string()),
+                    )],
                     body: vec![
                         let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                         Statement::Return(Some(Expression::Reference {

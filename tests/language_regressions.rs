@@ -57,7 +57,10 @@ fn unknown_identifier_error_for_removed_keyword_add() {
     let result: Result<_, MireError> = parse("add std\npub fn main: () {}\n");
     let err = result.expect_err("source should fail to parse");
     let err_str = err.to_string();
-    assert!(err_str.contains("Legacy `add` imports are no longer supported"), "{err_str}");
+    assert!(
+        err_str.contains("Legacy `add` imports are no longer supported"),
+        "{err_str}"
+    );
 }
 
 #[test]
@@ -278,7 +281,10 @@ fn match_pattern_binding_is_available_to_template_output() {
         panic!("expected dasu call");
     };
 
-    assert!(matches!(args.first(), Some(Expression::Identifier(_))), "{args:?}");
+    assert!(
+        matches!(args.first(), Some(Expression::Identifier(_))),
+        "{args:?}"
+    );
 }
 
 #[test]
@@ -1004,6 +1010,80 @@ fn runtime_out_of_bounds_exits_with_error() {
 }
 
 #[test]
+fn array_index_assignment_mutates_elements_in_place() {
+    let root = make_temp_project_root("mire_array_index_assignment");
+    let source_path = root.join("array_index_assignment.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"array-index-assignment\"\nversion = \"0.1.0\"\nentry = \"array_index_assignment.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\nfn swap_edges: (arr :arr[i64 4]) {\n    set left = arr at 0\n    set right = arr at 3\n    set arr at 0 = right\n    set arr at 3 = left\n}\n\npub fn main: () {\n    set arr = [10 20 30 40] :arr[i64 4]\n    swap_edges(arr)\n    use dasu(\"{arr at 0} {arr at 1} {arr at 2} {arr at 3}\")\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("40 20 30 10"), "{stdout}");
+}
+
+#[test]
+fn struct_array_field_index_assignment_compiles_and_runs() {
+    let root = make_temp_project_root("mire_struct_array_index_assignment");
+    let source_path = root.join("struct_array_index_assignment.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"struct-array-index-assignment\"\nversion = \"0.1.0\"\nentry = \"struct_array_index_assignment.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\nstruct Matrix {\n    data :arr[i64 4]\n    cols :i64\n}\n\nimpl Matrix {\n    fn new: () :Matrix {\n        return (Matrix data: [0 0 0 0] :arr[i64 4], cols: 2)\n    }\n\n    fn update: (self, row :i64, col :i64, val :i64) {\n        set idx = row * self.cols + col\n        set self.data at idx = val\n    }\n\n    fn get: (self, row :i64, col :i64) :i64 {\n        set idx = row * self.cols + col\n        return self.data at idx\n    }\n}\n\npub fn main: () {\n    set m = Matrix::new()\n    m.update(0 1 7)\n    m.update(1 0 9)\n    use dasu(\"{m.get(0 1)} {m.get(1 0)}\")\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("7 9"), "{stdout}");
+}
+
+#[test]
 fn parses_local_import_with_selection() {
     let program = parse("import ./utils: (helper value)\n").expect("source should parse");
     let Statement::Use {
@@ -1306,7 +1386,11 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
     fs::create_dir_all(root.join("code")).expect("mkdir code");
 
     let helper_path = root.join("code").join("helper.mire");
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"one\")\n}\n").expect("write helper");
+    fs::write(
+        &helper_path,
+        "pub fn helper: () {\n    use dasu(\"one\")\n}\n",
+    )
+    .expect("write helper");
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
@@ -1326,7 +1410,11 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
         .expect("helper metadata")
         .hash;
 
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"two\")\n}\n").expect("rewrite helper");
+    fs::write(
+        &helper_path,
+        "pub fn helper: () {\n    use dasu(\"two\")\n}\n",
+    )
+    .expect("rewrite helper");
 
     let second = load_program_with_metadata(&main_path).expect("load second");
     let second_main_hash = second
@@ -1412,7 +1500,11 @@ fn incremental_build_invalidates_on_local_import_change() {
     fs::create_dir_all(root.join("code")).expect("mkdir code");
 
     let helper_path = root.join("code").join("helper.mire");
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"one\")\n}\n").expect("write helper");
+    fs::write(
+        &helper_path,
+        "pub fn helper: () {\n    use dasu(\"one\")\n}\n",
+    )
+    .expect("write helper");
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
@@ -1438,7 +1530,11 @@ fn incremental_build_invalidates_on_local_import_change() {
         .expect("bin modified");
 
     thread::sleep(Duration::from_millis(50));
-    fs::write(&helper_path, "pub fn helper: () {\n    use dasu(\"two\")\n}\n").expect("rewrite helper");
+    fs::write(
+        &helper_path,
+        "pub fn helper: () {\n    use dasu(\"two\")\n}\n",
+    )
+    .expect("rewrite helper");
 
     let second = compile_file_with_avenys(
         &main_path,

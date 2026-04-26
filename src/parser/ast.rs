@@ -367,6 +367,82 @@ impl From<MireFloat32> for f32 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AssignmentTarget {
+    Variable(String),
+    Field(String),
+    Index {
+        target: Expression,
+        index: Expression,
+    },
+}
+
+impl AssignmentTarget {
+    pub fn binding_name(&self) -> Option<&str> {
+        match self {
+            AssignmentTarget::Variable(name) | AssignmentTarget::Field(name) => {
+                name.split('.').next()
+            }
+            AssignmentTarget::Index { target, .. } => Self::root_identifier(target),
+        }
+    }
+
+    pub fn as_expression(&self) -> Expression {
+        match self {
+            AssignmentTarget::Variable(name) => Expression::Identifier(Identifier {
+                name: name.clone(),
+                data_type: DataType::Unknown,
+                line: 0,
+                column: 0,
+            }),
+            AssignmentTarget::Field(path) => {
+                let mut parts = path.split('.');
+                let root = parts.next().unwrap_or_default().to_string();
+                let mut expr = Expression::Identifier(Identifier {
+                    name: root,
+                    data_type: DataType::Unknown,
+                    line: 0,
+                    column: 0,
+                });
+                for member in parts {
+                    expr = Expression::MemberAccess {
+                        target: Box::new(expr),
+                        member: member.to_string(),
+                        data_type: DataType::Unknown,
+                    };
+                }
+                expr
+            }
+            AssignmentTarget::Index { target, index } => Expression::Index {
+                target: Box::new(target.clone()),
+                index: Box::new(index.clone()),
+                data_type: DataType::Unknown,
+            },
+        }
+    }
+
+    fn root_identifier(expr: &Expression) -> Option<&str> {
+        match expr {
+            Expression::Identifier(ident) => Some(ident.name.as_str()),
+            Expression::MemberAccess { target, .. } | Expression::Index { target, .. } => {
+                Self::root_identifier(target)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for AssignmentTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AssignmentTarget::Variable(name) | AssignmentTarget::Field(name) => {
+                write!(f, "{name}")
+            }
+            AssignmentTarget::Index { target, index } => write!(f, "{target:?} at {index:?}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Statement {
     Let {
         name: String,
@@ -378,7 +454,7 @@ pub enum Statement {
         visibility: Visibility,
     },
     Assignment {
-        target: String,
+        target: AssignmentTarget,
         value: Expression,
         is_mutable: bool,
     },

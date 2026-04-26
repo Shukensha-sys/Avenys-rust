@@ -14,6 +14,8 @@ This section is intentionally honest. V2.0.0 is a working compiler with a real t
 
 Avenys is the active compiled backend for Mire. The current state is:
 
+If you want the practical version: today the compiler is usable for real experiments, small apps, algorithms, structs/enums, and a fair amount of collection work. It is not at the point where every construct in the syntax reference has identical maturity, so it is better to read the supported surface as "working and tested" versus "accepted but still growing".
+
 - Compiled-only toolchain: the old interpreter path is gone from the CLI
 - Real frontend pipeline: lexer, parser, type checker, semantic model, ownership/borrow checker, LLVM lowering
 - Incremental compilation active: binary cache, lazy loading, LRU, cached analysis successes and failures
@@ -26,6 +28,7 @@ Avenys is the active compiled backend for Mire. The current state is:
 - Ownership/MSS checks for moves, borrows, mutable/shared aliasing, drop safety, and returning local refs
 - Structs and nominal types through parse, type checking, and lowering
 - Enums with qualified variants and payload matching in statements
+- Array reads and in-place indexed writes with `arr at i` / `set arr at i = value`, including indexed writes on struct fields
 - Associated/static methods via `Type::method(...)`
 - Instance methods with explicit `self`
 - Standard runtime modules already wired into type checking and lowering paths used by the shipped apps/tests
@@ -36,6 +39,7 @@ Avenys is the active compiled backend for Mire. The current state is:
 - Match expressions are improving, but exhaustive enum-return expressions without an explicit fallback still need more work
 - Traits/skills only cover direct conformance today
 - Field-level validation during struct/type construction is still incomplete
+- Some impl ergonomics are still rough; for example, not every direct field-mutation pattern is equally mature yet even though indexed writes on array fields now work
 - `extern`, `unsafe`, `asm`, and `module` are parsed and walked, but not deeply validated end-to-end
 
 ### v2.0.0 New Features

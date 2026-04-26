@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::parser::ast::{DataType, Expression, MireValue, Program, QueryOp, Statement};
+use crate::parser::ast::{
+    AssignmentTarget, DataType, Expression, MireValue, Program, QueryOp, Statement,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionInfo {
@@ -115,7 +117,9 @@ impl SemanticModelBuilder {
 #[cfg(test)]
 mod tests {
     use super::analyze_program;
-    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Program, Statement, Visibility};
+    use crate::parser::ast::{
+        DataType, Expression, Identifier, Literal, Program, Statement, Visibility,
+    };
 
     fn ident(name: &str) -> Expression {
         Expression::Identifier(Identifier {
@@ -134,7 +138,10 @@ mod tests {
                 type_name: "Point".to_string(),
                 methods: vec![Statement::Function {
                     name: "draw".to_string(),
-                    params: vec![("self".to_string(), DataType::StructNamed("Point".to_string()))],
+                    params: vec![(
+                        "self".to_string(),
+                        DataType::StructNamed("Point".to_string()),
+                    )],
                     body: vec![],
                     return_type: DataType::None,
                     visibility: Visibility::Public,
@@ -174,7 +181,12 @@ mod tests {
         assert_eq!(model.unsafe_blocks, 1);
         assert_eq!(model.move_statements, 1);
         assert_eq!(model.drop_statements, 1);
-        assert!(model.bindings.iter().any(|binding| binding.declared_in_unsafe));
+        assert!(
+            model
+                .bindings
+                .iter()
+                .any(|binding| binding.declared_in_unsafe)
+        );
     }
 }
 
@@ -211,10 +223,17 @@ impl SemanticModelBuilder {
                 if let Some((owner, kind)) = Self::reference_details(value) {
                     self.model.borrow_facts.push(BorrowFact {
                         owner,
-                        borrower: target.clone(),
+                        borrower: target
+                            .binding_name()
+                            .map(ToOwned::to_owned)
+                            .unwrap_or_else(|| target.to_string()),
                         kind,
                         scope_id: self.current_scope_id(),
                     });
+                }
+                if let AssignmentTarget::Index { target, index } = target {
+                    self.visit_expression(target);
+                    self.visit_expression(index);
                 }
                 self.visit_expression(value)
             }
@@ -449,7 +468,10 @@ impl SemanticModelBuilder {
             }
             Expression::Closure { .. } => {
                 if let Expression::Closure {
-                    params, capture, body, ..
+                    params,
+                    capture,
+                    body,
+                    ..
                 } = expression
                 {
                     self.with_scope(|builder| {

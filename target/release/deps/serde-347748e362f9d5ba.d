@@ -1,0 +1,14 @@
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/serde-347748e362f9d5ba.d: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/serde-20a4026a61887415/out/private.rs
+
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/libserde-347748e362f9d5ba.rlib: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/serde-20a4026a61887415/out/private.rs
+
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/deps/libserde-347748e362f9d5ba.rmeta: /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/serde-20a4026a61887415/out/private.rs
+
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/Evelyn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/serde-20a4026a61887415/out/private.rs:
+
+# env-dep:OUT_DIR=/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire/target/release/build/serde-20a4026a61887415/out

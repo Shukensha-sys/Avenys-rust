@@ -1,7 +1,0 @@
-import lists as lists
-
-pub fn main: () {
-    set arr = [] :vec![i64]
-    
-    use dasu("arr_type")
-}

@@ -215,6 +215,14 @@ match m {
 
 ```mire
 set arr = [1 2 3] :arr[i64 3]
+set first = arr at 0
+set arr at 1 = 99
+```
+
+También funciona cuando el array vive dentro de una struct:
+
+```mire
+set self.data at idx = val
 ```
 
 ### Vectors (dynamic)

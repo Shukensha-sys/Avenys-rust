@@ -385,24 +385,19 @@ set m = {} :map![str,i64] mut
 
 ### Array Indexing
 
-**Issue**: Array indexing with `at` returns incorrect values.
+**Issue**: Se había reportado que `arr at N` devolvía elementos desplazados.
 
 ```mire
 set arr = [10 20 30 40 50] :arr[i64 5]
-arr at 0  # Returns 5 (first element of array, but offset by 5)
-arr at 1  # Returns 10
-arr at 2  # Returns 20
+arr at 0  # 10
+arr at 1  # 20
+arr at 2  # 30
 ```
 
-**Observed**: Index appears to be offset by the size of the array minus 5.
-
-```mire
-set arr = [1 2 3 4 5 6 7 8 9 10] :arr[i64 10]
-arr at 0  # Returns 10 (arr[10])
-arr at 1  # Returns 1 (correct)
-```
-
-**Status**: ⚠️ KNOWN BUG - Array indexing returns wrong element
+**Status**: ✅ RESOLVED (Abril 2026)
+- Validado otra vez con `tests/edge/arrays/03_array_index_bug.mire`
+- El acceso `arr at index` produce el elemento correcto
+- Se mantiene la comprobación de bounds en runtime
 
 ### Reference Lowering
 
@@ -433,14 +428,18 @@ set result = lists.fold(0 (a b) => a + b [1 2 3 4 5])  # Fails
 
 ### Array Mutation Syntax
 
-**Issue**: Cannot assign to array element with `at` syntax.
+**Issue**: Antes no se podía asignar a un elemento con `at`.
 
 ```mire
 set arr = [1 2 3] :arr[i64 3]
-set arr at 0 = 10  # Parser error: "Expected assignment operator"
+set arr at 0 = 10
 ```
 
-**Status**: ⚠️ KNOWN LIMITATION - Use functional approach (create new array)
+**Status**: ✅ RESOLVED (Abril 2026)
+- Parser: `set arr at i = value` ya se reconoce como target indexado
+- Type checker: valida el tipo del elemento y conserva el tipo del contenedor
+- Backend: escribe in-place con bounds checks
+- También funciona sobre fields indexables, por ejemplo `set self.data at idx = val`
 
 ### Struct impl with Mutable Fields
 

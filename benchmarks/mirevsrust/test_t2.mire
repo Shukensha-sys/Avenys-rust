@@ -1,5 +1,0 @@
-pub fn main: () {
-    set nums = [1 2 3] :vec![i64]
-    set doubled = nums => (x => x * 2)
-    use dasu(doubled)
-}
