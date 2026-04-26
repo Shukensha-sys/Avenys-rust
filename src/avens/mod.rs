@@ -1375,7 +1375,12 @@ impl LlvmIrGen {
                 let target_val = self.compile_expr(target)?;
                 let index_val = self.compile_expr(index)?;
                 let target_type = self.expression_data_type(target);
-                self.compile_index(target_val, index_val, &target_type, data_type)
+                let effective_type = if matches!(target_type, DataType::Vector { dynamic: false, .. }) {
+                    target_type.clone()
+                } else {
+                    target_type
+                };
+                self.compile_index(target_val, index_val, &effective_type, data_type)
             }
             Expression::MemberAccess { target, member, .. } => {
                 self.compile_member_access(target, member)
@@ -2352,19 +2357,17 @@ impl LlvmIrGen {
             }));
         }
 
-        match target_data_type {
-            DataType::List
-            | DataType::Vector { .. }
-            | DataType::Array { .. }
-            | DataType::Slice { .. }
-            | DataType::Tuple => {
+match target_data_type {
+            DataType::List | DataType::Vector { .. } | DataType::Slice { .. } | DataType::Tuple => {
                 let index = self.cast_to_i64(index)?;
                 let len = self.compile_list_len_value(target.clone())?;
                 self.emit_bounds_check(index.clone(), len, "index out of bounds");
                 let elem_size = self.element_size(result_data_type);
-                let data_ptr = self.tmp();
-                self.body
-                    .push(format!("  {data_ptr} = bitcast ptr {} to ptr", target.repr));
+                let base = self.tmp();
+                self.body.push(format!(
+                    "  {base} = getelementptr inbounds i8, ptr {}, i64 8",
+                    target.repr
+                ));
                 let offset = self.tmp();
                 self.body.push(format!(
                     "  {offset} = mul i64 {}, {}",
@@ -2372,7 +2375,7 @@ impl LlvmIrGen {
                 ));
                 let elem_ptr = self.tmp();
                 self.body.push(format!(
-                    "  {elem_ptr} = getelementptr inbounds i8, ptr {data_ptr}, i64 {offset}"
+                    "  {elem_ptr} = getelementptr inbounds i8, ptr {base}, i64 {offset}"
                 ));
                 let elem_ty = self.map_type(result_data_type)?;
                 if elem_ty == LlType::Ptr {
@@ -2431,6 +2434,76 @@ impl LlvmIrGen {
                             };
                             self.body
                                 .push(format!("  {widened} = {ext} i32 {raw} to i64"));
+                            widened
+                        }
+                        _ => raw,
+                    };
+                    Ok(LlValue {
+                        ty: LlType::I64,
+                        repr: val,
+                        owned: false,
+                    })
+                }
+            }
+            DataType::Array { element_type, size: _ } => {
+                let index = self.cast_to_i64(index)?;
+                let elem_size = self.element_size(element_type);
+                let base = self.tmp();
+                self.body.push(format!(
+                    "  {base} = getelementptr inbounds i8, ptr {}, i64 8",
+                    target.repr
+                ));
+                let offset_val = self.tmp();
+                self.body.push(format!(
+                    "  {offset_val} = mul i64 {}, {}",
+                    index.repr, elem_size
+                ));
+                let elem_ptr = self.tmp();
+                self.body.push(format!(
+                    "  {elem_ptr} = getelementptr inbounds i8, ptr {base}, i64 {offset_val}"
+                ));
+                let elem_ty = self.map_type(element_type)?;
+                if elem_ty == LlType::Ptr {
+                    let val = self.tmp();
+                    self.body
+                        .push(format!("  {val} = load ptr, ptr {elem_ptr}"));
+                    Ok(LlValue {
+                        ty: LlType::Ptr,
+                        repr: val,
+                        owned: false,
+                    })
+                } else if elem_ty == LlType::I1 {
+                    let raw = self.tmp();
+                    let val = self.tmp();
+                    self.body.push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+                    self.body.push(format!("  {val} = icmp ne i8 {raw}, 0"));
+                    Ok(LlValue {
+                        ty: LlType::I1,
+                        repr: val,
+                        owned: false,
+                    })
+                } else {
+                    let raw_ty = self.scalar_storage_ir_type(element_type);
+                    let raw = self.tmp();
+                    self.body
+                        .push(format!("  {raw} = load {raw_ty}, ptr {elem_ptr}"));
+                    let val = match raw_ty {
+                        "i8" => {
+                            let widened = self.tmp();
+                            self.body
+                                .push(format!("  {widened} = zext i8 {raw} to i64"));
+                            widened
+                        }
+                        "i16" => {
+                            let widened = self.tmp();
+                            self.body
+                                .push(format!("  {widened} = zext i16 {raw} to i64"));
+                            widened
+                        }
+                        "i32" => {
+                            let widened = self.tmp();
+                            self.body
+                                .push(format!("  {widened} = zext i32 {raw} to i64"));
                             widened
                         }
                         _ => raw,

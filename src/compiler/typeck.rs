@@ -1505,6 +1505,9 @@ impl TypeChecker {
                 if let DataType::Vector { dynamic: true, .. } = data_type.clone() {
                     return Ok(data_type.clone());
                 }
+                if let DataType::Array { .. } = data_type.clone() {
+                    return Ok(data_type.clone());
+                }
                 let mut current = DataType::Unknown;
                 for element in elements.iter_mut() {
                     let elem_type = self.check_expression(element)?;
