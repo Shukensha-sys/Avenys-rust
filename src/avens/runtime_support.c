@@ -17,17 +17,17 @@ void *mire_list_create(int64_t initial_cap, int64_t elem_size) {
     if (!ptr) return NULL;
     ptr[0] = initial_cap;
     ptr[1] = 0;
-    return ptr + 2;
+    return ptr + 1;
 }
 
 static inline int64_t mire_list_len(void *list_ptr) {
     if (!list_ptr) return 0;
-    return ((int64_t *)list_ptr)[-1];
+    return ((int64_t *)list_ptr)[0];
 }
 
 static inline int64_t mire_list_cap(void *list_ptr) {
     if (!list_ptr) return 0;
-    return ((int64_t *)list_ptr)[-2];
+    return ((int64_t *)list_ptr)[-1];
 }
 
 static inline void *mire_list_grow(void *list_ptr, int64_t elem_size) {
@@ -35,12 +35,13 @@ static inline void *mire_list_grow(void *list_ptr, int64_t elem_size) {
     int64_t old_len = mire_list_len(list_ptr);
     int64_t new_cap = old_cap < 4 ? 4 : old_cap + (old_cap >> 1);  // 1.5x growth
     
-    int64_t *old_ptr = ((int64_t *)list_ptr) - 2;
+    int64_t *old_ptr = ((int64_t *)list_ptr) - 1;
     int64_t *new_ptr = (int64_t *)realloc(old_ptr, 16 + new_cap * elem_size);
     if (!new_ptr) return list_ptr;
     
     new_ptr[0] = new_cap;
-    return new_ptr + 2;
+    new_ptr[1] = old_len;
+    return new_ptr + 1;
 }
 
 void *mire_list_push_i64(void *list_ptr, int64_t value) {
@@ -56,8 +57,8 @@ void *mire_list_push_i64(void *list_ptr, int64_t value) {
         list_ptr = mire_list_grow(list_ptr, 8);
     }
     
-    ((int64_t *)list_ptr)[len] = value;
-    ((int64_t *)list_ptr)[-1] = len + 1;
+    ((int64_t *)list_ptr)[len + 1] = value;
+    ((int64_t *)list_ptr)[0] = len + 1;
     return list_ptr;
 }
 
@@ -75,18 +76,18 @@ void *mire_list_push_scalar(void *list_ptr, int64_t value, int64_t elem_size) {
     }
     
     if (elem_size == 8) {
-        ((int64_t *)list_ptr)[len] = value;
+        ((int64_t *)list_ptr)[len + 1] = value;
     } else if (elem_size == 4) {
-        ((int32_t *)list_ptr)[len] = (int32_t)value;
+        *(int32_t *)((char *)list_ptr + 8 + len * 4) = (int32_t)value;
     } else if (elem_size == 2) {
-        ((int16_t *)list_ptr)[len] = (int16_t)value;
+        *(int16_t *)((char *)list_ptr + 8 + len * 2) = (int16_t)value;
     } else if (elem_size == 1) {
-        ((int8_t *)list_ptr)[len] = (int8_t)value;
+        *((int8_t *)list_ptr + 8 + len) = (int8_t)value;
     } else {
-        memcpy((char *)list_ptr + len * elem_size, &value, elem_size);
+        memcpy((char *)list_ptr + 8 + len * elem_size, &value, elem_size);
     }
     
-    ((int64_t *)list_ptr)[-1] = len + 1;
+    ((int64_t *)list_ptr)[0] = len + 1;
     return list_ptr;
 }
 
@@ -875,8 +876,8 @@ void *mire_list_push_ptr(void *list_ptr, void *value) {
         list_ptr = mire_list_grow(list_ptr, sizeof(void *));
     }
     
-    ((void **)list_ptr)[len] = value;
-    ((int64_t *)list_ptr)[-1] = len + 1;
+    ((void **)((int64_t *)list_ptr + 1))[len] = value;
+    ((int64_t *)list_ptr)[0] = len + 1;
     return list_ptr;
 }
 
@@ -1151,14 +1152,14 @@ void *mire_list_concat(void *left_ptr, void *right_ptr) {
     
     new_base[0] = new_cap;
     new_base[1] = total_len;
-    int64_t *new_data = new_base + 2;
+    int64_t *new_data = new_base + 1;
     
     if (left_ptr && left_len > 0) {
-        memcpy(new_data, left_ptr, (size_t)left_len * 8);
+        memcpy(new_data + 1, (int64_t *)left_ptr + 1, (size_t)left_len * 8);
     }
     
     if (right_ptr && right_len > 0) {
-        memcpy(new_data + left_len, right_ptr, (size_t)right_len * 8);
+        memcpy(new_data + 1 + left_len, (int64_t *)right_ptr + 1, (size_t)right_len * 8);
     }
     
     return new_data;
@@ -1181,9 +1182,9 @@ void *mire_list_slice(void *list_ptr, int64_t start, int64_t end) {
     
     new_base[0] = new_cap;
     new_base[1] = new_len;
-    int64_t *new_data = new_base + 2;
+    int64_t *new_data = new_base + 1;
     
-    memcpy(new_data, (int64_t *)list_ptr + start, (size_t)new_len * 8);
+    memcpy(new_data + 1, (int64_t *)list_ptr + 1 + start, (size_t)new_len * 8);
     
     return new_data;
 }

@@ -501,7 +501,7 @@ pub fn format_error_chain(errors: &[MireError], _use_color: bool) -> String {
     for (i, error) in errors.iter().enumerate() {
         output.push_str(&error.format_color());
         if i < errors.len() - 1 {
-            output.push_str("\n");
+            output.push('\n');
         }
     }
 

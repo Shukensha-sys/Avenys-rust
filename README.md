@@ -29,8 +29,11 @@ If you want the practical version: today the compiler is usable for real experim
 - Structs and nominal types through parse, type checking, and lowering
 - Enums with qualified variants and payload matching in statements
 - Array reads and in-place indexed writes with `arr at i` / `set arr at i = value`, including indexed writes on struct fields
+- Shared references and dereference lowering, including typed params such as `value :&i64`
+- List high-order functions with inline closures: `lists.fold`, `lists.map`, `lists.filter`
 - Associated/static methods via `Type::method(...)`
 - Instance methods with explicit `self`
+- Direct mutable field updates inside `impl`, for example `set self.value = self.value + 1`
 - Standard runtime modules already wired into type checking and lowering paths used by the shipped apps/tests
 - Incremental build reuse for unchanged programs and unchanged local-import dependency graphs
 
@@ -39,7 +42,8 @@ If you want the practical version: today the compiler is usable for real experim
 - Match expressions are improving, but exhaustive enum-return expressions without an explicit fallback still need more work
 - Traits/skills only cover direct conformance today
 - Field-level validation during struct/type construction is still incomplete
-- Some impl ergonomics are still rough; for example, not every direct field-mutation pattern is equally mature yet even though indexed writes on array fields now work
+- Struct fields marked `mut` now parse correctly and direct `self.field = ...` updates in `impl` are working, but field-level mutability validation itself is still not fully enforced everywhere
+- List HOF are currently closure-based at the call site; they are not yet exposed as generic first-class callback slots for named functions/values
 - `extern`, `unsafe`, `asm`, and `module` are parsed and walked, but not deeply validated end-to-end
 
 ### v2.0.0 New Features
@@ -138,7 +142,7 @@ The following constructs parse without errors but the compiler does not currentl
 
 - **`struct` and `type` construction** — object creation (`User(name="Evelyn" age=20)`) is parsed, and type signatures are collected by the type checker, but field-level type checking during construction is not enforced
 - **`impl` and method calls** — instance methods require explicit `self` as the first parameter; associated/static methods use `Type::method(...)`; nominal structs/enums now preserve their concrete identity through parsing, type checking, and lowering
-- **Pipelines (`=>`)** — pipelines are walked by both the type checker and borrow checker but their semantics are not fully resolved; `x => len()` may or may not behave as `len(x)` depending on the runtime
+- **Pipelines (`=>`)** — inline closure stages are lowered and tested, but the broader pipeline surface is still less mature than direct calls and standard control flow
 - **`trait` and `skill` declarations** — registered in the type checker's scope and checked for direct conformance, but deeper trait semantics are still incomplete
 - **`if` as an expression** — parsed and desugared via `__if_expr` builtin; branch result types are now unified during type checking and lowered using the resolved type
 - **`extern lib` and `extern fn`** — parsed, walked past in both checkers without analysis

@@ -788,7 +788,7 @@ impl LlvmIrGen {
                 self.vars.insert(
                     name.clone(),
                     VarInfo {
-                        ptr: format!("@enum_{}", sanitize_symbol(&name)),
+                        ptr: format!("@enum_{}", sanitize_symbol(name)),
                         ty: LlType::Ptr,
                         data_type: DataType::EnumNamed(name.clone()),
                         owns_heap_string: false,
@@ -924,72 +924,67 @@ impl LlvmIrGen {
             self.body.push("  ret i32 0".to_string());
         }
 
-        let mut out = Vec::new();
-        out.push("declare i32 @printf(ptr, ...)".to_string());
-        out.push("declare i32 @scanf(ptr, ...)".to_string());
-        out.push("declare i64 @strlen(ptr)".to_string());
-        out.push("declare i64 @clock()".to_string());
-        out.push("declare ptr @malloc(i64)".to_string());
-        out.push("declare void @free(ptr)".to_string());
-        out.push("declare ptr @realloc(ptr, i64)".to_string());
-        out.push("declare ptr @memcpy(ptr, ptr, i64)".to_string());
-        out.push("declare i32 @memcmp(ptr, ptr, i64)".to_string());
-        out.push("declare i32 @strcmp(ptr, ptr)".to_string());
-        out.push("declare i32 @getpagesize()".to_string());
-        out.push("declare i64 @getpid()".to_string());
-        out.push("declare i64 @mire_wall_mark_ns()".to_string());
-        out.push("declare i64 @mire_wall_elapsed_ms(i64)".to_string());
-        out.push("declare ptr @mire_wall_elapsed_ms_str(i64)".to_string());
-        out.push("declare i64 @mire_cpu_mark_ns()".to_string());
-        out.push("declare i64 @mire_cpu_elapsed_ms(i64)".to_string());
-        out.push("declare ptr @mire_cpu_elapsed_ms_str(i64)".to_string());
-        out.push("declare i64 @mire_cpu_cycles_est(i64)".to_string());
-        out.push("declare i64 @mire_mem_process_bytes()".to_string());
-        out.push("declare ptr @mire_mem_format(i64)".to_string());
-        out.push("declare ptr @mire_gpu_snapshot()".to_string());
-        out.push("declare ptr @mire_i64_to_string(i64)".to_string());
-        out.push("declare ptr @mire_bool_to_string(i64)".to_string());
-        out.push("declare ptr @mire_string_copy(ptr)".to_string());
-        out.push("declare ptr @mire_string_concat(ptr, ptr)".to_string());
-        out.push("declare ptr @mire_string_append_owned(ptr, ptr)".to_string());
-        out.push("declare void @mire_string_free(ptr)".to_string());
-        out.push("declare ptr @mire_string_to_upper(ptr)".to_string());
-        out.push("declare ptr @mire_string_to_lower(ptr)".to_string());
-        out.push("declare ptr @mire_strings_replace(ptr, ptr, ptr)".to_string());
-        out.push("declare ptr @mire_strings_split(ptr, ptr)".to_string());
-        out.push("declare ptr @mire_strings_join(ptr, i64, ptr)".to_string());
-        out.push("declare ptr @mire_strings_trim(ptr)".to_string());
-        out.push("declare ptr @mire_list_create(i64, i64)".to_string());
-        out.push("declare ptr @mire_list_push_i64(ptr, i64)".to_string());
-        out.push("declare ptr @mire_list_new()".to_string());
-        out.push("declare ptr @mire_list_push_scalar(ptr, i64, i64)".to_string());
-        out.push("declare ptr @mire_list_push_ptr(ptr, ptr)".to_string());
-        out.push("declare ptr @mire_list_concat(ptr, ptr)".to_string());
-        out.push("declare i64 @mire_dict_get_i64(ptr, i64, i64, ptr, i64)".to_string());
-        out.push("declare ptr @mire_dict_get_ptr(ptr, i64, i64, ptr, ptr)".to_string());
-        out.push("declare ptr @mire_dict_set_i64(ptr, i64, i64, i64, ptr, i64)".to_string());
-        out.push("declare ptr @mire_dict_set_ptr(ptr, i64, i64, i64, ptr, ptr)".to_string());
-        out.push("declare ptr @mire_dict_to_string(ptr)".to_string());
-        out.push("declare ptr @mire_dict_keys(ptr)".to_string());
-        out.push("declare ptr @mire_dict_values(ptr)".to_string());
-        out.push("declare ptr @mire_list_slice(ptr, i64, i64)".to_string());
-        out.push("declare void @mire_runtime_panic(ptr)".to_string());
-        out.push("declare ptr @fgets(ptr, i64, ptr)".to_string());
-        out.push("@.fmt_i64 = private unnamed_addr constant [5 x i8] c\"%ld\\0A\\00\"".to_string());
-        out.push("@.fmt_str = private unnamed_addr constant [4 x i8] c\"%s\\0A\\00\"".to_string());
-        out.push(
+        let mut out = vec![
+            "declare i32 @printf(ptr, ...)".to_string(),
+            "declare i32 @scanf(ptr, ...)".to_string(),
+            "declare i64 @strlen(ptr)".to_string(),
+            "declare i64 @clock()".to_string(),
+            "declare ptr @malloc(i64)".to_string(),
+            "declare void @free(ptr)".to_string(),
+            "declare ptr @realloc(ptr, i64)".to_string(),
+            "declare ptr @memcpy(ptr, ptr, i64)".to_string(),
+            "declare i32 @memcmp(ptr, ptr, i64)".to_string(),
+            "declare i32 @strcmp(ptr, ptr)".to_string(),
+            "declare i32 @getpagesize()".to_string(),
+            "declare i64 @getpid()".to_string(),
+            "declare i64 @mire_wall_mark_ns()".to_string(),
+            "declare i64 @mire_wall_elapsed_ms(i64)".to_string(),
+            "declare ptr @mire_wall_elapsed_ms_str(i64)".to_string(),
+            "declare i64 @mire_cpu_mark_ns()".to_string(),
+            "declare i64 @mire_cpu_elapsed_ms(i64)".to_string(),
+            "declare ptr @mire_cpu_elapsed_ms_str(i64)".to_string(),
+            "declare i64 @mire_cpu_cycles_est(i64)".to_string(),
+            "declare i64 @mire_mem_process_bytes()".to_string(),
+            "declare ptr @mire_mem_format(i64)".to_string(),
+            "declare ptr @mire_gpu_snapshot()".to_string(),
+            "declare ptr @mire_i64_to_string(i64)".to_string(),
+            "declare ptr @mire_bool_to_string(i64)".to_string(),
+            "declare ptr @mire_string_copy(ptr)".to_string(),
+            "declare ptr @mire_string_concat(ptr, ptr)".to_string(),
+            "declare ptr @mire_string_append_owned(ptr, ptr)".to_string(),
+            "declare void @mire_string_free(ptr)".to_string(),
+            "declare ptr @mire_string_to_upper(ptr)".to_string(),
+            "declare ptr @mire_string_to_lower(ptr)".to_string(),
+            "declare ptr @mire_strings_replace(ptr, ptr, ptr)".to_string(),
+            "declare ptr @mire_strings_split(ptr, ptr)".to_string(),
+            "declare ptr @mire_strings_join(ptr, i64, ptr)".to_string(),
+            "declare ptr @mire_strings_trim(ptr)".to_string(),
+            "declare ptr @mire_list_create(i64, i64)".to_string(),
+            "declare ptr @mire_list_push_i64(ptr, i64)".to_string(),
+            "declare ptr @mire_list_new()".to_string(),
+            "declare ptr @mire_list_push_scalar(ptr, i64, i64)".to_string(),
+            "declare ptr @mire_list_push_ptr(ptr, ptr)".to_string(),
+            "declare ptr @mire_list_concat(ptr, ptr)".to_string(),
+            "declare i64 @mire_dict_get_i64(ptr, i64, i64, ptr, i64)".to_string(),
+            "declare ptr @mire_dict_get_ptr(ptr, i64, i64, ptr, ptr)".to_string(),
+            "declare ptr @mire_dict_set_i64(ptr, i64, i64, i64, ptr, i64)".to_string(),
+            "declare ptr @mire_dict_set_ptr(ptr, i64, i64, i64, ptr, ptr)".to_string(),
+            "declare ptr @mire_dict_to_string(ptr)".to_string(),
+            "declare ptr @mire_dict_keys(ptr)".to_string(),
+            "declare ptr @mire_dict_values(ptr)".to_string(),
+            "declare ptr @mire_list_slice(ptr, i64, i64)".to_string(),
+            "declare void @mire_runtime_panic(ptr)".to_string(),
+            "declare ptr @fgets(ptr, i64, ptr)".to_string(),
+            "@.fmt_i64 = private unnamed_addr constant [5 x i8] c\"%ld\\0A\\00\"".to_string(),
+            "@.fmt_str = private unnamed_addr constant [4 x i8] c\"%s\\0A\\00\"".to_string(),
             "@.fmt_float = private unnamed_addr constant [4 x i8] c\"%f\\0A\\00\"".to_string(),
-        );
-        out.push(
             "@.fmt_bool_true = private unnamed_addr constant [5 x i8] c\"true\\00\"".to_string(),
-        );
-        out.push(
             "@.fmt_bool_false = private unnamed_addr constant [6 x i8] c\"false\\00\"".to_string(),
-        );
-        out.push("@.fmt_i32 = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\"".to_string());
-        out.push("@.fmt_prompt = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string());
-        out.push("@.scanf_str = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string());
-        out.push("@.scanf_i64 = private unnamed_addr constant [4 x i8] c\"%ld\\00\"".to_string());
+            "@.fmt_i32 = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\"".to_string(),
+            "@.fmt_prompt = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string(),
+            "@.scanf_str = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string(),
+            "@.scanf_i64 = private unnamed_addr constant [4 x i8] c\"%ld\\00\"".to_string(),
+        ];
         out.extend(self.strings);
         out.push(String::new());
         let has_functions = !self.functions.is_empty();
@@ -1496,6 +1491,15 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "lists.push" => {
                 self.compile_lists_push(args)
             }
+            Expression::Call { name, args, .. } if name == "lists.fold" => {
+                self.compile_lists_fold(args)
+            }
+            Expression::Call { name, args, .. } if name == "lists.map" => {
+                self.compile_lists_map(args)
+            }
+            Expression::Call { name, args, .. } if name == "lists.filter" => {
+                self.compile_lists_filter(args)
+            }
             Expression::Call { name, args, .. } if name == "math.sum" => {
                 self.compile_math_sum(args)
             }
@@ -1721,15 +1725,12 @@ impl LlvmIrGen {
                         params,
                         body,
                         return_type,
-                        capture,
+                        capture: _,
                     } => self.compile_pipeline_closure(
-                        input,
                         input_val,
                         params,
                         body,
                         return_type,
-                        capture,
-                        *safe,
                     ),
                     _ => Err(MireError::new(ErrorKind::Runtime {
                         message: "Pipeline stage must be a function call, identifier, or closure"
@@ -1823,13 +1824,10 @@ impl LlvmIrGen {
 
     fn compile_pipeline_closure(
         &mut self,
-        _input: &Expression,
         input_val: LlValue,
         params: &[(String, DataType)],
         body: &[Statement],
         return_type: &DataType,
-        _capture: &[(String, crate::MireValue)],
-        _safe: bool,
     ) -> Result<LlValue> {
         if params.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
@@ -2043,6 +2041,175 @@ impl LlvmIrGen {
         }
     }
 
+    fn compile_bound_closure(
+        &mut self,
+        params: &[(String, DataType)],
+        bound_values: &[LlValue],
+        body: &[Statement],
+        return_type: &DataType,
+    ) -> Result<LlValue> {
+        let old_vars = self.vars.clone();
+
+        for ((name, data_type), value) in params.iter().zip(bound_values.iter()) {
+            let ll_ty = self.map_type(data_type)?;
+            let ptr = self.tmp();
+            self.entry_allocas
+                .push(format!("  {ptr} = alloca {}", self.ty(ll_ty.clone())));
+            self.store_casted(&ptr, ll_ty.clone(), value.clone())?;
+            self.vars.insert(
+                name.clone(),
+                VarInfo {
+                    ptr,
+                    ty: ll_ty,
+                    data_type: data_type.clone(),
+                    owns_heap_string: false,
+                    struct_name: data_type.struct_name().map(ToOwned::to_owned),
+                },
+            );
+        }
+
+        let result = self.compile_closure_body(body, return_type);
+        self.vars = old_vars;
+        Ok(result)
+    }
+
+    fn load_list_element_unchecked(
+        &mut self,
+        list_ptr: &str,
+        index_repr: &str,
+        element_type: &DataType,
+    ) -> Result<LlValue> {
+        let base_ptr = self.tmp();
+        let offset = self.tmp();
+        let elem_ptr = self.tmp();
+        let elem_size = self.element_size(element_type);
+
+        self.body.push(format!(
+            "  {base_ptr} = getelementptr i8, ptr {list_ptr}, i64 8"
+        ));
+        self.body
+            .push(format!("  {offset} = mul i64 {index_repr}, {elem_size}"));
+        self.body.push(format!(
+            "  {elem_ptr} = getelementptr i8, ptr {base_ptr}, i64 {offset}"
+        ));
+
+        let elem_ty = self.map_type(element_type)?;
+        if elem_ty == LlType::Ptr {
+            let val = self.tmp();
+            self.body
+                .push(format!("  {val} = load ptr, ptr {elem_ptr}"));
+            return Ok(LlValue {
+                ty: LlType::Ptr,
+                repr: val,
+                owned: false,
+            });
+        }
+
+        if matches!(element_type, DataType::Bool) {
+            let raw = self.tmp();
+            let val = self.tmp();
+            self.body.push(format!("  {raw} = load i8, ptr {elem_ptr}"));
+            self.body.push(format!("  {val} = icmp ne i8 {raw}, 0"));
+            return Ok(LlValue {
+                ty: LlType::I1,
+                repr: val,
+                owned: false,
+            });
+        }
+
+        let raw_ty = self.scalar_storage_ir_type(element_type);
+        let raw = self.tmp();
+        self.body
+            .push(format!("  {raw} = load {raw_ty}, ptr {elem_ptr}"));
+        let val = match raw_ty {
+            "i8" => {
+                let widened = self.tmp();
+                let ext = if matches!(element_type, DataType::U8) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i8 {raw} to i64"));
+                widened
+            }
+            "i16" => {
+                let widened = self.tmp();
+                let ext = if matches!(element_type, DataType::U16) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i16 {raw} to i64"));
+                widened
+            }
+            "i32" => {
+                let widened = self.tmp();
+                let ext = if matches!(element_type, DataType::U32) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i32 {raw} to i64"));
+                widened
+            }
+            _ => raw,
+        };
+
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: val,
+            owned: false,
+        })
+    }
+
+    fn load_slot_value(&mut self, ptr: &str, data_type: &DataType) -> Result<LlValue> {
+        let ll_ty = self.map_type(data_type)?;
+        let tmp = self.tmp();
+        self.body.push(format!(
+            "  {tmp} = load {}, ptr {ptr}",
+            self.ty(ll_ty.clone())
+        ));
+        Ok(LlValue {
+            ty: ll_ty,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    fn push_list_value(
+        &mut self,
+        list: LlValue,
+        value: LlValue,
+        data_type: &DataType,
+    ) -> Result<LlValue> {
+        let result = self.tmp();
+        let ll_ty = self.map_type(data_type)?;
+        let elem_size = self.element_size(data_type);
+
+        if ll_ty == LlType::I64 && elem_size == 8 {
+            let casted = self.cast_to_i64(value)?;
+            self.body.push(format!(
+                "  {result} = call ptr @mire_list_push_i64(ptr {}, i64 {})",
+                list.repr, casted.repr
+            ));
+        } else {
+            let casted = self.cast_to_i64(value)?;
+            self.body.push(format!(
+                "  {result} = call ptr @mire_list_push_scalar(ptr {}, i64 {}, i64 {})",
+                list.repr, casted.repr, elem_size
+            ));
+        }
+
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: result,
+            owned: true,
+        })
+    }
+
     fn compile_field_assignment(&mut self, target: &str, value: &Expression) -> Result<()> {
         let (field_ptr, field_ty, field_data_type) =
             self.resolve_struct_field_ptr_from_target(target)?;
@@ -2239,7 +2406,8 @@ impl LlvmIrGen {
 
         let raw_ty = self.scalar_storage_ir_type(data_type);
         let raw = self.tmp();
-        self.body.push(format!("  {raw} = load {raw_ty}, ptr {ptr}"));
+        self.body
+            .push(format!("  {raw} = load {raw_ty}, ptr {ptr}"));
         let value = match raw_ty {
             "i8" => {
                 let widened = self.tmp();
@@ -2666,10 +2834,7 @@ impl LlvmIrGen {
                     })
                 }
             }
-            DataType::Array {
-                element_type,
-                size,
-            } => {
+            DataType::Array { element_type, size } => {
                 let index = self.cast_to_i64(index)?;
                 let elem_size = self.element_size(element_type);
                 let size_val = LlValue {
@@ -3067,11 +3232,9 @@ impl LlvmIrGen {
 
         if let (_, Expression::Literal(Literal::Str(from)), Expression::Literal(Literal::Str(to))) =
             (&args[0], &args[1], &args[2])
-        {
-            if from.is_empty() || from == to {
+            && (from.is_empty() || from == to) {
                 return self.compile_expr(&args[0]);
             }
-        }
 
         let input = self.compile_expr(&args[0])?;
         let from = self.compile_expr(&args[1])?;
@@ -3535,6 +3698,370 @@ impl LlvmIrGen {
         })
     }
 
+    fn compile_lists_fold(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 3 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.fold expects 3 arguments (initial, fn, list)".to_string(),
+            }));
+        }
+
+        let initial = self.compile_expr(&args[0])?;
+        let list = self.compile_expr(&args[2])?;
+        let acc_type = self.expression_data_type(&args[0]);
+        let list_type = self.expression_data_type(&args[2]);
+
+        let elem_type = match &list_type {
+            DataType::Vector { element_type, .. } => *element_type.clone(),
+            DataType::Array { element_type, .. } => *element_type.clone(),
+            DataType::Slice { element_type } => *element_type.clone(),
+            other => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Avenys lists.fold expects vec/arr/slice input, got {:?}",
+                        other
+                    ),
+                }));
+            }
+        };
+        let Expression::Closure {
+            params,
+            body,
+            return_type,
+            ..
+        } = &args[1]
+        else {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.fold expects a closure as second argument".to_string(),
+            }));
+        };
+        if params.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.fold closure must have exactly 2 parameters".to_string(),
+            }));
+        }
+
+        let acc_ty = self.map_type(&acc_type)?;
+        let result_ptr = self.tmp();
+        let index_ptr = self.tmp();
+        self.entry_allocas.push(format!(
+            "  {result_ptr} = alloca {}",
+            self.ty(acc_ty.clone())
+        ));
+        self.entry_allocas
+            .push(format!("  {index_ptr} = alloca i64"));
+        self.store_casted(&result_ptr, acc_ty, initial)?;
+        self.body.push(format!("  store i64 0, ptr {index_ptr}"));
+
+        let is_null = self.tmp();
+        let null_label = self.label("fold_null");
+        let loop_cond_label = self.label("fold_cond");
+        let loop_body_label = self.label("fold_body");
+        let end_label = self.label("fold_end");
+        self.body
+            .push(format!("  {is_null} = icmp eq ptr {}, null", list.repr));
+        self.body.push(format!(
+            "  br i1 {is_null}, label %{null_label}, label %{loop_cond_label}"
+        ));
+
+        self.body.push(format!("{null_label}:"));
+        self.body.push(format!("  br label %{end_label}"));
+
+        let len = self.tmp();
+        let index = self.tmp();
+        let has_more = self.tmp();
+        self.body.push(format!("{loop_cond_label}:"));
+        self.body
+            .push(format!("  {len} = load i64, ptr {}", list.repr));
+        self.body
+            .push(format!("  {index} = load i64, ptr {index_ptr}"));
+        self.body
+            .push(format!("  {has_more} = icmp slt i64 {index}, {len}"));
+        self.body.push(format!(
+            "  br i1 {has_more}, label %{loop_body_label}, label %{end_label}"
+        ));
+
+        self.body.push(format!("{loop_body_label}:"));
+        let next_index = self.tmp();
+        let elem = self.load_list_element_unchecked(&list.repr, &index, &elem_type)?;
+        let current_acc = self.load_slot_value(&result_ptr, &acc_type)?;
+        let next_acc =
+            self.compile_bound_closure(params, &[current_acc, elem], body, return_type)?;
+        self.store_casted(&result_ptr, self.map_type(&acc_type)?, next_acc)?;
+        self.body
+            .push(format!("  {next_index} = add i64 {index}, 1"));
+        self.body
+            .push(format!("  store i64 {next_index}, ptr {index_ptr}"));
+        self.body.push(format!("  br label %{loop_cond_label}"));
+
+        self.body.push(format!("{end_label}:"));
+        self.load_slot_value(&result_ptr, &acc_type)
+    }
+
+    fn compile_lists_map(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.map expects 2 arguments (fn, list)".to_string(),
+            }));
+        }
+
+        let list = self.compile_expr(&args[1])?;
+        let list_type = self.expression_data_type(&args[1]);
+
+        let elem_type = match &list_type {
+            DataType::Vector { element_type, .. } => *element_type.clone(),
+            DataType::Array { element_type, .. } => *element_type.clone(),
+            DataType::Slice { element_type } => *element_type.clone(),
+            other => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Avenys lists.map expects vec/arr/slice input, got {:?}",
+                        other
+                    ),
+                }));
+            }
+        };
+        let Expression::Closure {
+            params,
+            body,
+            return_type,
+            ..
+        } = &args[0]
+        else {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.map expects a closure as first argument".to_string(),
+            }));
+        };
+        if params.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.map closure must have exactly 1 parameter".to_string(),
+            }));
+        }
+        let mapped_type = if *return_type == DataType::Unknown {
+            params[0].1.clone()
+        } else {
+            return_type.clone()
+        };
+
+        let result_ptr = self.tmp();
+        self.entry_allocas
+            .push(format!("  {result_ptr} = alloca ptr"));
+        let initial_result = self.tmp();
+        self.body.push(format!(
+            "  {initial_result} = call ptr @mire_list_create(i64 4, i64 {})",
+            self.element_size(&mapped_type)
+        ));
+        self.body
+            .push(format!("  store ptr {initial_result}, ptr {result_ptr}"));
+
+        let len = self.tmp();
+        let index_ptr = self.tmp();
+        let is_null = self.tmp();
+        self.entry_allocas
+            .push(format!("  {index_ptr} = alloca i64"));
+        self.body.push(format!("  store i64 0, ptr {index_ptr}"));
+
+        self.body
+            .push(format!("  {is_null} = icmp eq ptr {}, null", list.repr));
+        let null_label = self.label("map_null");
+        let loop_cond_label = self.label("map_cond");
+        let loop_body_label = self.label("map_body");
+        let end_label = self.label("map_end");
+        self.body.push(format!(
+            "  br i1 {is_null}, label %{null_label}, label %{loop_cond_label}"
+        ));
+
+        self.body.push(format!("{null_label}:"));
+        self.body.push(format!("  br label %{end_label}"));
+
+        let index = self.tmp();
+        let has_more = self.tmp();
+        self.body.push(format!("{loop_cond_label}:"));
+        self.body
+            .push(format!("  {len} = load i64, ptr {}", list.repr));
+        self.body
+            .push(format!("  {index} = load i64, ptr {index_ptr}"));
+        self.body
+            .push(format!("  {has_more} = icmp slt i64 {index}, {len}"));
+        self.body.push(format!(
+            "  br i1 {has_more}, label %{loop_body_label}, label %{end_label}"
+        ));
+
+        self.body.push(format!("{loop_body_label}:"));
+        let next_index = self.tmp();
+        let elem = self.load_list_element_unchecked(&list.repr, &index, &elem_type)?;
+        let mapped = self.compile_bound_closure(params, &[elem], body, return_type)?;
+        let current_result = self.tmp();
+        self.body
+            .push(format!("  {current_result} = load ptr, ptr {result_ptr}"));
+        let updated = self.push_list_value(
+            LlValue {
+                ty: LlType::Ptr,
+                repr: current_result,
+                owned: true,
+            },
+            mapped,
+            &mapped_type,
+        )?;
+        self.body
+            .push(format!("  store ptr {}, ptr {result_ptr}", updated.repr));
+
+        self.body
+            .push(format!("  {next_index} = add i64 {index}, 1"));
+        self.body
+            .push(format!("  store i64 {next_index}, ptr {index_ptr}"));
+        self.body.push(format!("  br label %{loop_cond_label}"));
+
+        self.body.push(format!("{end_label}:"));
+        let final_result = self.tmp();
+        self.body
+            .push(format!("  {final_result} = load ptr, ptr {result_ptr}"));
+
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: final_result,
+            owned: true,
+        })
+    }
+
+    fn compile_lists_filter(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.filter expects 2 arguments (fn, list)".to_string(),
+            }));
+        }
+
+        let list = self.compile_expr(&args[1])?;
+        let list_type = self.expression_data_type(&args[1]);
+
+        let elem_type = match &list_type {
+            DataType::Vector { element_type, .. } => *element_type.clone(),
+            DataType::Array { element_type, .. } => *element_type.clone(),
+            DataType::Slice { element_type } => *element_type.clone(),
+            other => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Avenys lists.filter expects vec/arr/slice input, got {:?}",
+                        other
+                    ),
+                }));
+            }
+        };
+        let Expression::Closure {
+            params,
+            body,
+            return_type,
+            ..
+        } = &args[0]
+        else {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.filter expects a closure as first argument".to_string(),
+            }));
+        };
+        if params.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys lists.filter closure must have exactly 1 parameter".to_string(),
+            }));
+        }
+
+        let result_ptr = self.tmp();
+        self.entry_allocas
+            .push(format!("  {result_ptr} = alloca ptr"));
+        let initial_result = self.tmp();
+        self.body.push(format!(
+            "  {initial_result} = call ptr @mire_list_create(i64 4, i64 {})",
+            self.element_size(&elem_type)
+        ));
+        self.body
+            .push(format!("  store ptr {initial_result}, ptr {result_ptr}"));
+
+        let len = self.tmp();
+        let index_ptr = self.tmp();
+        let is_null = self.tmp();
+        self.entry_allocas
+            .push(format!("  {index_ptr} = alloca i64"));
+        self.body.push(format!("  store i64 0, ptr {index_ptr}"));
+
+        self.body
+            .push(format!("  {is_null} = icmp eq ptr {}, null", list.repr));
+        let null_label = self.label("filter_null");
+        let loop_cond_label = self.label("filter_cond");
+        let loop_body_label = self.label("filter_body");
+        let end_label = self.label("filter_end");
+        self.body.push(format!(
+            "  br i1 {is_null}, label %{null_label}, label %{loop_cond_label}"
+        ));
+
+        self.body.push(format!("{null_label}:"));
+        self.body.push(format!("  br label %{end_label}"));
+
+        let index = self.tmp();
+        let has_more = self.tmp();
+        self.body.push(format!("{loop_cond_label}:"));
+        self.body
+            .push(format!("  {len} = load i64, ptr {}", list.repr));
+        self.body
+            .push(format!("  {index} = load i64, ptr {index_ptr}"));
+        self.body
+            .push(format!("  {has_more} = icmp slt i64 {index}, {len}"));
+        self.body.push(format!(
+            "  br i1 {has_more}, label %{loop_body_label}, label %{end_label}"
+        ));
+
+        self.body.push(format!("{loop_body_label}:"));
+        let next_index = self.tmp();
+        let elem = self.load_list_element_unchecked(&list.repr, &index, &elem_type)?;
+        let keep =
+            self.compile_bound_closure(params, std::slice::from_ref(&elem), body, return_type)?;
+        let keep = self.cast_to_i1(keep)?;
+
+        let new_list = self.tmp();
+        let cond_filter = self.label("filter_conditional");
+        let after_filter = self.label("filter_after");
+        self.body.push(format!(
+            "  br i1 {}, label %{cond_filter}, label %{after_filter}",
+            keep.repr
+        ));
+
+        self.body.push(format!("{cond_filter}:"));
+        let current_result = self.tmp();
+        self.body
+            .push(format!("  {current_result} = load ptr, ptr {result_ptr}"));
+        let updated = self.push_list_value(
+            LlValue {
+                ty: LlType::Ptr,
+                repr: current_result,
+                owned: true,
+            },
+            elem,
+            &elem_type,
+        )?;
+        self.body
+            .push(format!("  store ptr {}, ptr {result_ptr}", updated.repr));
+        self.body.push(format!(
+            "  {new_list} = ptrtoint ptr {} to i64",
+            updated.repr
+        ));
+        self.body.push(format!("  br label %{after_filter}"));
+
+        self.body.push(format!("{after_filter}:"));
+        self.body
+            .push(format!("  {next_index} = add i64 {index}, 1"));
+        self.body
+            .push(format!("  store i64 {next_index}, ptr {index_ptr}"));
+        self.body.push(format!("  br label %{loop_cond_label}"));
+
+        self.body.push(format!("{end_label}:"));
+        let final_result = self.tmp();
+        self.body
+            .push(format!("  {final_result} = load ptr, ptr {result_ptr}"));
+
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: final_result,
+            owned: true,
+        })
+    }
+
     fn compile_lists_slice(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
@@ -3586,8 +4113,8 @@ impl LlvmIrGen {
         let struct_ty = self.render_struct_ty(&struct_info.fields);
 
         for arg in args {
-            if let Expression::NamedArg { name, value, .. } = arg {
-                if let Some(field_index) = struct_info.field_indices.get(name) {
+            if let Expression::NamedArg { name, value, .. } = arg
+                && let Some(field_index) = struct_info.field_indices.get(name) {
                     let field_value = self.compile_expr(value)?;
                     let field_ptr = self.tmp();
                     self.body.push(format!(
@@ -3617,7 +4144,6 @@ impl LlvmIrGen {
                         }
                     }
                 }
-            }
         }
 
         Ok(LlValue {
@@ -4008,8 +4534,8 @@ impl LlvmIrGen {
         pattern: &Expression,
     ) -> Result<LlValue> {
         // Handle wildcard pattern - always matches (true)
-        if let Expression::Identifier(ident) = pattern {
-            if ident.name == "_" {
+        if let Expression::Identifier(ident) = pattern
+            && ident.name == "_" {
                 let result = self.tmp();
                 self.body.push(format!("  {result} = add i1 0, 1"));
                 return Ok(LlValue {
@@ -4018,7 +4544,6 @@ impl LlvmIrGen {
                     owned: false,
                 });
             }
-        }
 
         // Handle enum variant patterns (Status.Ok or Result.Ok(value))
         if let Expression::EnumVariantPath {
@@ -4026,8 +4551,7 @@ impl LlvmIrGen {
             variant_name,
             ..
         } = pattern
-        {
-            if value.ty == LlType::Ptr {
+            && value.ty == LlType::Ptr {
                 let (enum_ty, tag) = {
                     let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
                     (enum_info.llvm_type.clone(), variant.tag)
@@ -4049,7 +4573,6 @@ impl LlvmIrGen {
                     owned: false,
                 });
             }
-        }
 
         // Handle enum variant with payloads: Ok(value) / Pair(a b) in match pattern
         if let Expression::EnumVariant {
@@ -4058,8 +4581,7 @@ impl LlvmIrGen {
             payloads: _,
             ..
         } = pattern
-        {
-            if value.ty == LlType::Ptr {
+            && value.ty == LlType::Ptr {
                 let (enum_ty, tag) = {
                     let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
                     (enum_info.llvm_type.clone(), variant.tag)
@@ -4082,7 +4604,6 @@ impl LlvmIrGen {
                     owned: false,
                 });
             }
-        }
 
         let pattern_value = self.compile_expr(pattern)?;
         let result = self.tmp();
@@ -5534,11 +6055,11 @@ impl LlvmIrGen {
             let param_struct_name = match param_data_type {
                 DataType::StructNamed(name) => Some(name.clone()),
                 _ => {
-                    let ty_str = format!("{}", self.ty(param_ty.clone()));
+                    let ty_str = self.ty(param_ty.clone());
                     self.user_structs
                         .iter()
                         .find(|(_, info)| {
-                            format!("{}", self.render_struct_ty(&info.fields)) == ty_str
+                            self.render_struct_ty(&info.fields) == ty_str
                         })
                         .map(|(name, _)| name.clone())
                 }
@@ -5652,7 +6173,7 @@ impl LlvmIrGen {
 }
 
 fn string_byte_len(value: &str) -> usize {
-    value.as_bytes().len()
+    value.len()
 }
 
 fn escape_llvm_string(value: &str) -> String {

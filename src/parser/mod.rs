@@ -62,18 +62,15 @@ impl Parser {
                     if index + 2 < tokens.len()
                         && tokens[index + 1].ttype == keyword
                         && tokens[index + 2].ttype == TokenType::Ident
-                    {
-                        if let Some(name) = tokens[index + 2].value.clone() {
+                        && let Some(name) = tokens[index + 2].value.clone() {
                             names.insert(name);
                         }
-                    }
                 }
                 ttype if brace_depth == 0 && ttype == keyword => {
-                    if index + 1 < tokens.len() && tokens[index + 1].ttype == TokenType::Ident {
-                        if let Some(name) = tokens[index + 1].value.clone() {
+                    if index + 1 < tokens.len() && tokens[index + 1].ttype == TokenType::Ident
+                        && let Some(name) = tokens[index + 1].value.clone() {
                             names.insert(name);
                         }
-                    }
                 }
                 _ => {}
             }
@@ -416,12 +413,18 @@ impl Parser {
                 } else {
                     DataType::Unknown
                 };
+                let is_mutable = if self.check(TokenType::Mut) {
+                    self.advance();
+                    true
+                } else {
+                    false
+                };
                 fields.push(Statement::Let {
                     name: field_name,
                     data_type: field_type,
                     value: None,
                     is_constant: false,
-                    is_mutable: true,
+                    is_mutable,
                     is_static: false,
                     visibility: Visibility::Private,
                 });
@@ -1093,11 +1096,7 @@ impl Parser {
         loop {
             if self.check(TokenType::Pipeline) || self.check(TokenType::PipelineSafe) {
                 let is_safe = self.check(TokenType::PipelineSafe);
-                if self.check(TokenType::PipelineSafe) {
-                    self.advance();
-                } else {
-                    self.advance();
-                }
+                self.advance();
                 let stage = self.parse_additive()?;
                 expr = self.apply_pipeline(expr, stage, is_safe)?;
                 continue;
@@ -1299,7 +1298,7 @@ impl Parser {
             return Ok(Expression::Reference {
                 expr: Box::new(expr),
                 is_mutable: false,
-                data_type: DataType::Ref,
+                data_type: DataType::shared_ref(DataType::Unknown),
                 referenced_type: DataType::Unknown,
             });
         }
@@ -1474,6 +1473,11 @@ impl Parser {
             }
             TokenType::Lparen => {
                 self.advance();
+
+                if let Some(closure) = self.try_parse_signature_closure()? {
+                    return Ok(closure);
+                }
+
                 // Check for method call pattern: (Type.method(args))
                 // Pattern: (Ident . Ident ...)
                 if self.check(TokenType::Ident) && self.peek_n(1).ttype == TokenType::Dot {
@@ -1580,6 +1584,33 @@ impl Parser {
         }
     }
 
+    fn try_parse_signature_closure(&mut self) -> Result<Option<Expression>> {
+        let start = self.pos;
+        let params = match self.parse_param_list() {
+            Ok(params) => params,
+            Err(_) => {
+                self.pos = start;
+                return Ok(None);
+            }
+        };
+
+        if !self.check(TokenType::Rparen) || self.peek_n(1).ttype != TokenType::Pipeline {
+            self.pos = start;
+            return Ok(None);
+        }
+
+        self.advance(); // consume )
+        self.advance(); // consume =>
+        let body_expr = self.parse_or()?;
+
+        Ok(Some(Expression::Closure {
+            params,
+            body: vec![Statement::Return(Some(body_expr))],
+            return_type: DataType::Unknown,
+            capture: Vec::new(),
+        }))
+    }
+
     fn parse_if_expression(&mut self) -> Result<Expression> {
         self.expect(TokenType::If)?;
         let condition = self.parse_expression_until_block_open()?;
@@ -1625,20 +1656,13 @@ impl Parser {
                 args: Vec::new(),
                 data_type: DataType::Unknown,
             }
-        } else if let Expression::Call { name: _, args, .. } = &expr {
-            if args.is_empty() { expr } else { expr }
         } else {
             expr
         };
-
         let mut final_expr = result;
         while self.check(TokenType::Pipeline) || self.check(TokenType::PipelineSafe) {
             let is_safe = self.check(TokenType::PipelineSafe);
-            if self.check(TokenType::PipelineSafe) {
-                self.advance();
-            } else {
-                self.advance();
-            }
+            self.advance();
             let stage = self.parse_pipeline_free_expression()?;
             final_expr = self.apply_pipeline(final_expr, stage, is_safe)?;
         }
@@ -1950,11 +1974,10 @@ impl Parser {
     }
 
     fn normalize_io_argument(&self, expr: &mut Expression) -> Result<()> {
-        if let Expression::Literal(Literal::Str(value)) = expr {
-            if value.contains('{') {
+        if let Expression::Literal(Literal::Str(value)) = expr
+            && value.contains('{') {
                 *expr = concat_expressions(self.parse_string_template_parts(value)?);
             }
-        }
 
         Ok(())
     }
@@ -2089,8 +2112,8 @@ impl Parser {
     fn parse_type(&mut self) -> Result<DataType> {
         if self.check(TokenType::Amp) {
             self.advance();
-            let _ = self.parse_type()?;
-            return Ok(DataType::Ref);
+            let inner = self.parse_type()?;
+            return Ok(DataType::shared_ref(inner));
         }
 
         if self.check(TokenType::NoneLit) {
@@ -2137,7 +2160,7 @@ impl Parser {
                     })
                 }
                 "map" => {
-                    let _ = if self.check(TokenType::Bang) {
+                    if self.check(TokenType::Bang) {
                         self.advance();
                     };
                     self.expect(TokenType::Lbracket)?;
@@ -2957,7 +2980,7 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::parser::ast::{Expression, Literal, Statement};
+    use crate::parser::ast::{DataType, Expression, Literal, Statement};
 
     #[test]
     fn parses_dynamic_vector_type_annotation() {
@@ -3182,6 +3205,54 @@ mod tests {
     }
 
     #[test]
+    fn parses_closure_signature_syntax_with_multiple_params() {
+        let source =
+            "pub fn main: () {\nset result = lists.fold(0, (acc elem) => acc + elem, [1 2 3])\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let {
+            value: Some(Expression::Call { args, .. }),
+            ..
+        } = &body[0]
+        else {
+            panic!("expected let call");
+        };
+        let Expression::Closure { params, .. } = &args[1] else {
+            panic!("expected closure");
+        };
+
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0].0, "acc");
+        assert_eq!(params[1].0, "elem");
+    }
+
+    #[test]
+    fn parses_closure_signature_syntax_with_annotations() {
+        let source = "pub fn main: () {\nset result = lists.map((x: i64) => x * 2, [1 2 3])\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let {
+            value: Some(Expression::Call { args, .. }),
+            ..
+        } = &body[0]
+        else {
+            panic!("expected let call");
+        };
+        let Expression::Closure { params, .. } = &args[0] else {
+            panic!("expected closure");
+        };
+
+        assert_eq!(params[0].0, "x");
+        assert_eq!(params[0].1, DataType::I64);
+    }
+
+    #[test]
     fn rejects_legacy_angle_block_syntax() {
         let source = "pub fn main: () >\nuse dasu(\"no\")\n<\n";
         let program = parse(source);
@@ -3190,19 +3261,16 @@ mod tests {
 }
 
 fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>, dynamic: bool) {
-    match expr {
-        Expression::List {
+    if let Expression::List {
             elements: _,
             element_type: elem,
             data_type: dt,
-        } => {
-            *elem = (*element_type).clone();
-            *dt = DataType::Vector {
-                element_type,
-                dynamic,
-            };
-        }
-        _ => {}
+        } = expr {
+        *elem = (*element_type).clone();
+        *dt = DataType::Vector {
+            element_type,
+            dynamic,
+        };
     }
 }
 
@@ -3211,20 +3279,18 @@ fn apply_map_type_to_dict(
     key_type: Box<DataType>,
     value_type: Box<DataType>,
 ) {
-    match expr {
-        Expression::Dict {
-            entries: _,
-            key_type: kt,
-            value_type: vt,
-            data_type: dt,
-        } => {
-            *kt = (*key_type).clone();
-            *vt = (*value_type).clone();
-            *dt = DataType::Map {
-                key_type,
-                value_type,
-            };
-        }
-        _ => {}
+    if let Expression::Dict {
+        entries: _,
+        key_type: kt,
+        value_type: vt,
+        data_type: dt,
+    } = expr
+    {
+        *kt = (*key_type).clone();
+        *vt = (*value_type).clone();
+        *dt = DataType::Map {
+            key_type,
+            value_type,
+        };
     }
 }

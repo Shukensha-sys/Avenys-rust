@@ -1084,6 +1084,108 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
 }
 
 #[test]
+fn shared_reference_lowering_compiles_and_runs() {
+    let root = make_temp_project_root("mire_shared_reference_lowering");
+    let source_path = root.join("shared_reference_lowering.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"shared-reference-lowering\"\nversion = \"0.1.0\"\nentry = \"shared_reference_lowering.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\nfn read_ref: (value :&i64) :i64 {\n    return *value\n}\n\npub fn main: () {\n    set x = 41 :i64\n    set rx = &x\n    set y = read_ref(rx)\n    use dasu(y + 1)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "{stdout}");
+}
+
+#[test]
+fn impl_method_can_mutate_self_field_and_run() {
+    let root = make_temp_project_root("mire_impl_self_field_mutation");
+    let source_path = root.join("impl_self_field_mutation.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"impl-self-field-mutation\"\nversion = \"0.1.0\"\nentry = \"impl_self_field_mutation.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\nstruct Counter {\n    value :i64 mut\n    step :i64\n}\n\nimpl Counter {\n    fn new: (step :i64) :Counter {\n        return (Counter value: 0, step: step)\n    }\n\n    fn increment: (self) {\n        set self.value = self.value + self.step\n    }\n\n    fn reset: (self) {\n        set self.value = 0\n    }\n\n    fn get: (self) :i64 {\n        return self.value\n    }\n}\n\npub fn main: () {\n    set c = Counter::new(5)\n    c.increment()\n    c.increment()\n    c.reset()\n    c.increment()\n    use dasu(c.get())\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("5"), "{stdout}");
+}
+
+#[test]
+fn impl_method_self_field_assignment_typechecks() {
+    let source = "struct Counter {\n    value :i64 mut\n    step :i64\n}\n\nimpl Counter {\n    fn increment: (self) {\n        set self.value = self.value + self.step\n    }\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    check_program_types(&mut program, source).expect("source should typecheck");
+}
+
+#[test]
+fn impl_method_self_field_assignment_parses() {
+    let source = "struct Counter {\n    value :i64 mut\n    step :i64\n}\n\nimpl Counter {\n    fn increment: (self) {\n        set self.value = self.value + self.step\n    }\n}\n";
+    let program = parse(source).expect("source should parse");
+    assert_eq!(program.statements.len(), 2);
+}
+
+#[test]
+fn impl_method_empty_body_parses() {
+    let source = "struct Counter {\n    value :i64 mut\n}\n\nimpl Counter {\n    fn increment: (self) {\n    }\n}\n";
+    let program = parse(source).expect("source should parse");
+    assert_eq!(program.statements.len(), 2);
+}
+
+#[test]
+fn impl_method_local_assignment_parses() {
+    let source = "struct Counter {\n    value :i64 mut\n}\n\nimpl Counter {\n    fn increment: (self) {\n        set x = 1\n    }\n}\n";
+    let program = parse(source).expect("source should parse");
+    assert_eq!(program.statements.len(), 2);
+}
+
+#[test]
 fn parses_local_import_with_selection() {
     let program = parse("import ./utils: (helper value)\n").expect("source should parse");
     let Statement::Use {
@@ -1615,6 +1717,44 @@ fn contains_call_named(expr: &Expression, target: &str) -> bool {
         }
         _ => false,
     }
+}
+
+#[test]
+fn list_hofs_infer_closure_params_and_execute() {
+    let root = make_temp_project_root("mire_list_hofs");
+    let source_path = root.join("list_hofs.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"list-hofs\"\nversion = \"0.1.0\"\nentry = \"list_hofs.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set sum = lists.fold(0, (acc elem) => acc + elem, [1 2 3 4 5])\n    set doubled = lists.map((x) => x * 2, [1 2 3])\n    set filtered = lists.filter((x) => x > 2, [1 2 3 4])\n    use dasu(\"{sum} {lists.get(doubled 2)} {lists.get(filtered 1)}\")\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("list hof sample should compile");
+
+    let output = Command::new(&build.binary_path)
+        .current_dir(&root)
+        .output()
+        .expect("run compiled binary");
+    assert!(output.status.success(), "{output:?}");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("15 6 4"), "{stdout}");
 }
 
 fn make_temp_project_root(prefix: &str) -> PathBuf {

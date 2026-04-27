@@ -46,8 +46,12 @@ pub enum DataType {
     Set,
     Datetime,
     Unknown,
-    Ref,
-    RefMut,
+    Ref {
+        inner: Box<DataType>,
+    },
+    RefMut {
+        inner: Box<DataType>,
+    },
     Box,
     Enum,
     EnumNamed(String),
@@ -132,6 +136,25 @@ impl DataType {
     pub fn enum_name(&self) -> Option<&str> {
         match self {
             DataType::EnumNamed(name) => Some(name.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn shared_ref(inner: DataType) -> Self {
+        Self::Ref {
+            inner: Box::new(inner),
+        }
+    }
+
+    pub fn mutable_ref(inner: DataType) -> Self {
+        Self::RefMut {
+            inner: Box::new(inner),
+        }
+    }
+
+    pub fn ref_inner(&self) -> Option<&DataType> {
+        match self {
+            Self::Ref { inner } | Self::RefMut { inner } => Some(inner.as_ref()),
             _ => None,
         }
     }

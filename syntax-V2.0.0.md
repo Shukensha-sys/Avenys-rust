@@ -91,6 +91,11 @@ struct Stack {
     items :arr[i64 10]
     count :i64
 }
+
+struct Counter {
+    value :i64 mut
+    step :i64
+}
 ```
 
 Construction with named fields:
@@ -105,6 +110,16 @@ Field access:
 ```mire
 use dasu(p.x)
 set p.x = 5
+```
+
+Direct mutation inside `impl` works when the field is declared with `mut`:
+
+```mire
+impl Counter {
+    fn increment: (self) {
+        set self.value = self.value + self.step
+    }
+}
 ```
 
 ---
@@ -396,6 +411,13 @@ set result = a >> b
 ```mire
 set x = 1 :i64
 set shared = &x
+set copied = *shared
+
+fn read_ref: (value :&i64) :i64 {
+    return *value
+}
+
+set y = read_ref(shared)
 set owned = box[i64]
 ```
 

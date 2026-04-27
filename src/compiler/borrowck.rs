@@ -163,13 +163,11 @@ impl<'a> BorrowChecker<'a> {
             err
         };
 
-        if err.source().is_none() {
-            if let Some(filename) = err.filename() {
-                if let Some(source) = self.sources_by_filename.get(filename) {
+        if err.source().is_none()
+            && let Some(filename) = err.filename()
+                && let Some(source) = self.sources_by_filename.get(filename) {
                     return err.with_source(source.clone());
                 }
-            }
-        }
 
         err
     }
@@ -225,11 +223,10 @@ impl<'a> BorrowChecker<'a> {
                     self.insert_binding(name.clone(), BindingState::default());
                 }
                 let result = self.check_statements(body);
-                if result.is_ok() && !statements_contain_explicit_return(body) {
-                    if let Some(expr) = implicit_return_expression(body) {
+                if result.is_ok() && !statements_contain_explicit_return(body)
+                    && let Some(expr) = implicit_return_expression(body) {
                         self.ensure_return_is_safe(expr)?;
                     }
-                }
                 self.function_stack.pop();
                 self.pop_scope();
                 result?;
@@ -517,11 +514,10 @@ impl<'a> BorrowChecker<'a> {
     }
 
     fn ensure_binding_available(&self, name: &str) -> Result<()> {
-        if let Some(state) = self.lookup_binding(name) {
-            if state.is_moved {
+        if let Some(state) = self.lookup_binding(name)
+            && state.is_moved {
                 return Err(ownership_error(MssError::UseAfterMove));
             }
-        }
         Ok(())
     }
 
@@ -745,7 +741,7 @@ impl<'a> BorrowChecker<'a> {
         };
 
         match expected {
-            DataType::Ref => {
+            DataType::Ref { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if is_mutable {
                         return Err(ownership_error(MssError::MultipleMutableRefs));
@@ -753,8 +749,7 @@ impl<'a> BorrowChecker<'a> {
                     self.ensure_borrow_allowed(&target, false)?;
                 } else if let Some(binding) =
                     Self::identifier_name(arg).and_then(|name| self.semantic_binding(&name))
-                {
-                    if !matches!(
+                    && !matches!(
                         binding.kind,
                         BindingKind::SharedRef | BindingKind::MutableRef
                     ) {
@@ -764,9 +759,8 @@ impl<'a> BorrowChecker<'a> {
                             index + 1
                         )));
                     }
-                }
             }
-            DataType::RefMut => {
+            DataType::RefMut { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if !is_mutable {
                         return Err(MireError::type_error(format!(
@@ -778,15 +772,13 @@ impl<'a> BorrowChecker<'a> {
                     self.ensure_borrow_allowed(&target, true)?;
                 } else if let Some(binding) =
                     Self::identifier_name(arg).and_then(|name| self.semantic_binding(&name))
-                {
-                    if !matches!(binding.kind, BindingKind::MutableRef) {
+                    && !matches!(binding.kind, BindingKind::MutableRef) {
                         return Err(MireError::type_error(format!(
                             "Function '{}' argument {} requires a mutable reference",
                             callee,
                             index + 1
                         )));
                     }
-                }
             }
             _ => {
                 if let Some(name) = Self::identifier_name(arg) {
@@ -795,13 +787,12 @@ impl<'a> BorrowChecker<'a> {
                         .map(|binding| Self::is_move_type(&binding.data_type))
                         .unwrap_or(false);
 
-                    if let Some(state) = self.lookup_binding(&name) {
-                        if self.unsafe_depth == 0
+                    if let Some(state) = self.lookup_binding(&name)
+                        && self.unsafe_depth == 0
                             && (state.mutable_borrow || state.immutable_borrows > 0)
                         {
                             return Err(ownership_error(MssError::MoveWhileBorrowed));
                         }
-                    }
 
                     if should_consume {
                         self.ensure_can_move(&name)?;
@@ -1117,7 +1108,7 @@ mod tests {
                         referenced_type: DataType::Unknown,
                     })),
                 ],
-                return_type: DataType::Ref,
+                return_type: DataType::shared_ref(DataType::Unknown),
                 visibility: Visibility::Public,
                 is_method: false,
             }],
@@ -1134,7 +1125,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "mutate".to_string(),
-                    params: vec![("value".to_string(), DataType::RefMut)],
+                    params: vec![("value".to_string(), DataType::mutable_ref(DataType::Unknown))],
                     body: vec![],
                     return_type: DataType::None,
                     visibility: Visibility::Public,
@@ -1338,7 +1329,7 @@ mod tests {
                             referenced_type: DataType::Unknown,
                         })),
                     ],
-                    return_type: DataType::Ref,
+                    return_type: DataType::shared_ref(DataType::Unknown),
                     visibility: Visibility::Public,
                     is_method: false,
                 },
@@ -1372,7 +1363,7 @@ mod tests {
                             referenced_type: DataType::Unknown,
                         })),
                     ],
-                    return_type: DataType::Ref,
+                    return_type: DataType::shared_ref(DataType::Unknown),
                     visibility: Visibility::Public,
                     is_method: true,
                 }],

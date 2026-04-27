@@ -80,6 +80,7 @@ if a || expensive_check() { }
 
 - `mem.format()` y `mem.process()`
 - `lists.push()` y `lists.get()` para rutas numéricas
+- `lists.fold()`, `lists.map()` y `lists.filter()` con closures inline
 - `math.sum()`
 - Diccionarios dinámicos `map[str i64]` con `dicts.get()` y `dicts.set()`
 - Indexación con `value at index`
@@ -92,6 +93,12 @@ if a || expensive_check() { }
   - vectores
   - mapas
   - arrays anidados
+
+### Alcance actual a documentar bien:
+
+- Los HOF de listas ya funcionan en Avenys con closures inline del estilo `(x) => ...` y `(acc elem) => ...`
+- La inferencia de tipos de parámetros ya no requiere anotaciones explícitas en `fold/map/filter`
+- Lo que sigue pendiente no es el lowering de HOF, sino generalizar callbacks de primer nivel más allá de closures inline
 
 ### Tipos soportados en LLVM:
 

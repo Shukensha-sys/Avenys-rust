@@ -98,7 +98,7 @@ pub fn check_program_types_partial_with_origins(
 }
 
 thread_local! {
-    static TYPE_CHECKER_SOURCE: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+    static TYPE_CHECKER_SOURCE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 struct TypeChecker {
@@ -241,13 +241,11 @@ impl TypeChecker {
             err
         };
 
-        if err.source().is_none() {
-            if let Some(filename) = err.filename() {
-                if let Some(source) = self.sources_by_filename.get(filename) {
+        if err.source().is_none()
+            && let Some(filename) = err.filename()
+                && let Some(source) = self.sources_by_filename.get(filename) {
                     return err.with_source(source.clone());
                 }
-            }
-        }
 
         err
     }
@@ -339,6 +337,11 @@ impl TypeChecker {
                     dynamic: true,
                 },
             );
+        }
+
+        // Builtins: fold, map, filter - use Unknown for flexible handling
+        for name in ["lists.fold", "lists.map", "lists.filter"] {
+            builtins.insert(name.to_string(), DataType::Unknown);
         }
 
         // Builtins that return str
@@ -737,11 +740,10 @@ impl TypeChecker {
                 is_static: _,
                 visibility: _,
             } => {
-                if let Some(expr) = value {
-                    if let Expression::Literal(Literal::Int(int_val)) = expr {
+                if let Some(expr) = value
+                    && let Expression::Literal(Literal::Int(int_val)) = expr {
                         Self::validate_int_literal_range(data_type, *int_val)?;
                     }
-                }
                 let inferred = if let Some(expr) = value {
                     self.check_expression(expr)?
                 } else {
@@ -800,8 +802,8 @@ impl TypeChecker {
                                     ))
                                 })?;
 
-                            if let DataType::StructNamed(ref struct_name) = owner_type {
-                                if let Some(class_sig) = self.classes.get(struct_name) {
+                            if let DataType::StructNamed(ref struct_name) = owner_type
+                                && let Some(class_sig) = self.classes.get(struct_name) {
                                     let field = class_sig
                                         .fields
                                         .iter()
@@ -855,7 +857,6 @@ impl TypeChecker {
                                     self.bind_struct_name(owner, Some(&struct_constructor));
                                     self.bind_reference_type(owner, Some(&struct_constructor));
                                 }
-                            }
                         }
                     }
                     AssignmentTarget::Index { .. } => {}
@@ -891,15 +892,14 @@ impl TypeChecker {
 
                 self.return_type_stack.push(return_type.clone());
                 self.check_statements(body)?;
-                if !statements_contain_explicit_return(body) {
-                    if let Some(expr) = implicit_return_expression_mut(body) {
+                if !statements_contain_explicit_return(body)
+                    && let Some(expr) = implicit_return_expression_mut(body) {
                         let tail_type = self.check_expression(expr)?;
                         if let Some(current) = self.return_type_stack.last_mut() {
                             let unified = Self::unify_types(current, &tail_type)?;
                             *current = unified;
                         }
                     }
-                }
                 let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
 
                 if *return_type == DataType::Unknown {
@@ -1214,8 +1214,8 @@ impl TypeChecker {
     fn check_expression(&mut self, expression: &mut Expression) -> Result<DataType> {
         match expression {
             Expression::Literal(lit) => {
-                if let Literal::Int(value) = lit {
-                    if let Some(scope) = self.scopes.last() {
+                if let Literal::Int(value) = lit
+                    && let Some(scope) = self.scopes.last() {
                         for (_name, (dt, _)) in scope.iter() {
                             if let DataType::I8
                             | DataType::I16
@@ -1228,7 +1228,6 @@ impl TypeChecker {
                             }
                         }
                     }
-                }
                 Ok(Self::literal_type(lit))
             }
             Expression::Identifier(ident) => {
@@ -1298,6 +1297,11 @@ impl TypeChecker {
                 if name == "ireru" && *data_type != DataType::Unknown {
                     *data_type = data_type.clone();
                     return Ok(data_type.clone());
+                }
+
+                // Handle lists.fold/map/filter specially - check args in custom order
+                if name == "lists.fold" || name == "lists.map" || name == "lists.filter" {
+                    return self.check_list_hof(name, args, data_type);
                 }
 
                 let arg_types: Vec<DataType> = args
@@ -1479,12 +1483,11 @@ impl TypeChecker {
                     return Ok(ret);
                 }
 
-                if let Some(rest) = name.strip_prefix("std.") {
-                    if let Some(ret) = self.builtin_returns.get(rest).cloned() {
+                if let Some(rest) = name.strip_prefix("std.")
+                    && let Some(ret) = self.builtin_returns.get(rest).cloned() {
                         *data_type = ret.clone();
                         return Ok(ret);
                     }
-                }
 
                 if let Some(sig) = self.functions.get(name).cloned() {
                     if sig.params.len() != args.len() {
@@ -1624,13 +1627,12 @@ impl TypeChecker {
                         .struct_name_for_expr(target)
                         .or_else(|| target_type.struct_name().map(ToOwned::to_owned))
                     {
-                        if let Some(class_sig) = self.classes.get(&struct_name) {
-                            if let Some(field) = class_sig.fields.iter().find(|f| f.name == *member)
+                        if let Some(class_sig) = self.classes.get(&struct_name)
+                            && let Some(field) = class_sig.fields.iter().find(|f| f.name == *member)
                             {
                                 *data_type = field.data_type.clone();
                                 return Ok(field.data_type.clone());
                             }
-                        }
                         if let Some(fn_sig) =
                             self.functions.get(&format!("{}.{}", struct_name, member))
                         {
@@ -1725,16 +1727,20 @@ impl TypeChecker {
                 let target_type = self.check_expression(expr)?;
                 *referenced_type = target_type.clone();
                 *data_type = if *is_mutable {
-                    DataType::RefMut
+                    DataType::RefMut {
+                        inner: Box::new(target_type.clone()),
+                    }
                 } else {
-                    DataType::Ref
+                    DataType::Ref {
+                        inner: Box::new(target_type.clone()),
+                    }
                 };
                 Ok(data_type.clone())
             }
             Expression::Dereference { expr, data_type } => {
                 let inner = self.check_expression(expr)?;
                 let resolved = match inner {
-                    DataType::Ref | DataType::RefMut => self
+                    DataType::Ref { .. } | DataType::RefMut { .. } => self
                         .referenced_type_for_expr(expr)
                         .unwrap_or(DataType::Unknown),
                     DataType::Unknown => DataType::Unknown,
@@ -1772,24 +1778,22 @@ impl TypeChecker {
                     for (name, value) in capture.iter() {
                         self.insert_var(name.clone(), Self::mire_value_type(value), true);
                     }
-                    if let Some((_, ptype)) = params.first_mut() {
-                        if *ptype == DataType::Unknown {
+                    if let Some((_, ptype)) = params.first_mut()
+                        && *ptype == DataType::Unknown {
                             *ptype = elem_type.clone();
                         }
-                    }
                     for (name, ptype) in params.iter() {
                         self.insert_var(name.clone(), ptype.clone(), true);
                     }
                     self.return_type_stack.push(return_type.clone());
                     self.check_statements(body)?;
-                    if !statements_contain_explicit_return(body) {
-                        if let Some(expr) = implicit_return_expression_mut(body) {
+                    if !statements_contain_explicit_return(body)
+                        && let Some(expr) = implicit_return_expression_mut(body) {
                             let tail_type = self.check_expression(expr)?;
                             if let Some(current) = self.return_type_stack.last_mut() {
                                 *current = Self::unify_types(current, &tail_type)?;
                             }
                         }
-                    }
                     let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
                     if *return_type == DataType::Unknown {
                         if inferred_return == DataType::Unknown {
@@ -2051,54 +2055,48 @@ impl TypeChecker {
 
     fn validate_int_literal_range(data_type: &DataType, value: i64) -> Result<()> {
         match data_type {
-            DataType::I8 => {
-                if value < -128 || value > 127 {
+            DataType::I8
+                if (!(-128..=127).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds i8 range (-128 to 127)",
                         value
                     )));
                 }
-            }
-            DataType::I16 => {
-                if value < -32768 || value > 32767 {
+            DataType::I16
+                if (!(-32768..=32767).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds i16 range (-32768 to 32767)",
                         value
                     )));
                 }
-            }
-            DataType::I32 => {
-                if value < -2147483648 || value > 2147483647 {
+            DataType::I32
+                if (!(-2147483648..=2147483647).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds i32 range (-2147483648 to 2147483647)",
                         value
                     )));
                 }
-            }
-            DataType::U8 => {
-                if value < 0 || value > 255 {
+            DataType::U8
+                if (!(0..=255).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds u8 range (0 to 255)",
                         value
                     )));
                 }
-            }
-            DataType::U16 => {
-                if value < 0 || value > 65535 {
+            DataType::U16
+                if (!(0..=65535).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds u16 range (0 to 65535)",
                         value
                     )));
                 }
-            }
-            DataType::U32 => {
-                if value < 0 || value > 4294967295 {
+            DataType::U32
+                if (!(0..=4294967295).contains(&value)) => {
                     return Err(type_error(format!(
                         "Integer literal {} exceeds u32 range (0 to 4294967295)",
                         value
                     )));
                 }
-            }
             _ => {}
         }
         Ok(())
@@ -2152,9 +2150,13 @@ impl TypeChecker {
             },
             MireValue::Ref { is_mutable, .. } => {
                 if *is_mutable {
-                    DataType::RefMut
+                    DataType::RefMut {
+                        inner: Box::new(DataType::Anything),
+                    }
                 } else {
-                    DataType::Ref
+                    DataType::Ref {
+                        inner: Box::new(DataType::Anything),
+                    }
                 }
             }
             MireValue::Box { .. } => DataType::Box,
@@ -2413,6 +2415,86 @@ impl TypeChecker {
                 context
             )))
         }
+    }
+
+    fn infer_list_element_type(list_type: DataType) -> Result<DataType> {
+        match list_type {
+            DataType::Vector { element_type, .. } => Ok(*element_type),
+            DataType::Array { element_type, .. } => Ok(*element_type),
+            DataType::Slice { element_type } => Ok(*element_type),
+            DataType::List => Ok(DataType::Anything),
+            other => Err(type_error(format!(
+                "High-order list function expects vec/arr/slice input, got {:?}",
+                other
+            ))),
+        }
+    }
+
+    fn check_closure_with_expected_params(
+        &mut self,
+        expr: &mut Expression,
+        expected_params: &[DataType],
+        context: &str,
+    ) -> Result<DataType> {
+        let Expression::Closure {
+            params,
+            body,
+            return_type,
+            capture,
+        } = expr
+        else {
+            return Err(type_error(format!(
+                "{} expects a closure argument",
+                context
+            )));
+        };
+
+        if params.len() != expected_params.len() {
+            return Err(type_error(format!(
+                "{} expects a closure with {} parameter(s), got {}",
+                context,
+                expected_params.len(),
+                params.len()
+            )));
+        }
+
+        self.push_scope();
+
+        for (name, value) in capture.iter() {
+            self.insert_var(name.clone(), Self::mire_value_type(value), true);
+        }
+
+        for ((name, param_type), expected_type) in params.iter_mut().zip(expected_params.iter()) {
+            let resolved = Self::unify_types(param_type, expected_type)?;
+            *param_type = resolved.clone();
+            self.insert_var(name.clone(), resolved, true);
+        }
+
+        self.return_type_stack.push(return_type.clone());
+        self.check_statements(body)?;
+        if !statements_contain_explicit_return(body)
+            && let Some(expr) = implicit_return_expression_mut(body) {
+                let tail_type = self.check_expression(expr)?;
+                if let Some(current) = self.return_type_stack.last_mut() {
+                    let unified = Self::unify_types(current, &tail_type)?;
+                    *current = unified;
+                }
+            }
+        let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
+
+        if *return_type == DataType::Unknown {
+            *return_type = inferred_return.clone();
+        } else if inferred_return != DataType::Unknown
+            && !self.is_assignable(return_type, &inferred_return)
+        {
+            return Err(type_error(format!(
+                "{} return type mismatch: declared {:?}, inferred {:?}",
+                context, return_type, inferred_return
+            )));
+        }
+
+        self.pop_scope();
+        Ok(return_type.clone())
     }
 
     fn requires_explicit_nested_element(dtype: &DataType) -> bool {
@@ -2975,11 +3057,10 @@ impl TypeChecker {
     }
 
     fn lookup_var(&self, name: &str) -> Option<(DataType, bool)> {
-        if name == "self" {
-            if let Some(ref self_type) = self.impl_self_type {
+        if name == "self"
+            && let Some(ref self_type) = self.impl_self_type {
                 return Some((self_type.clone(), true));
             }
-        }
         for scope in self.scopes.iter().rev() {
             if let Some(data_type) = scope.get(name) {
                 return Some(data_type.clone());
@@ -3114,8 +3195,8 @@ impl TypeChecker {
                     *data_type = resolved.clone();
                     return Ok(Some(resolved));
                 }
-                if let Some(sig) = self.functions.get(name).cloned() {
-                    if sig.params.len() == arg_types.len()
+                if let Some(sig) = self.functions.get(name).cloned()
+                    && sig.params.len() == arg_types.len()
                         && sig
                             .params
                             .iter()
@@ -3125,7 +3206,6 @@ impl TypeChecker {
                         *data_type = sig.return_type.clone();
                         return Ok(Some(sig.return_type));
                     }
-                }
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(Some(ret));
@@ -3139,12 +3219,11 @@ impl TypeChecker {
                     *data_type = DataType::Function;
                     return Ok(Some(DataType::I64));
                 }
-                if let Some(sig) = self.functions.get(name).cloned() {
-                    if sig.params.len() == 1 && self.is_assignable(&sig.params[0], input_type) {
+                if let Some(sig) = self.functions.get(name).cloned()
+                    && sig.params.len() == 1 && self.is_assignable(&sig.params[0], input_type) {
                         *data_type = sig.return_type.clone();
                         return Ok(Some(sig.return_type));
                     }
-                }
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(Some(ret));
@@ -3204,6 +3283,87 @@ impl TypeChecker {
         }
 
         Ok(Some(sig.return_type.clone()))
+    }
+
+    fn check_list_hof(
+        &mut self,
+        name: &str,
+        args: &mut [Expression],
+        data_type: &mut DataType,
+    ) -> Result<DataType> {
+        match name {
+            "lists.fold" => {
+                if args.len() != 3 {
+                    return Err(type_error("lists.fold expects 3 arguments".to_string()));
+                }
+                let acc_type = self.check_expression(&mut args[0])?;
+                let list_type = self.check_expression(&mut args[2])?;
+                let elem_type = Self::infer_list_element_type(list_type)?;
+                let closure_return = self.check_closure_with_expected_params(
+                    &mut args[1],
+                    &[acc_type.clone(), elem_type],
+                    "lists.fold",
+                )?;
+                if closure_return != DataType::Unknown
+                    && !self.is_assignable(&acc_type, &closure_return)
+                {
+                    return Err(type_error(format!(
+                        "lists.fold closure must return {:?}, got {:?}",
+                        acc_type, closure_return
+                    )));
+                }
+                *data_type = acc_type.clone();
+                Ok(acc_type)
+            }
+            "lists.map" => {
+                if args.len() != 2 {
+                    return Err(type_error("lists.map expects 2 arguments".to_string()));
+                }
+                let list_type = self.check_expression(&mut args[1])?;
+                let elem_type = Self::infer_list_element_type(list_type)?;
+                let mapped_type = self.check_closure_with_expected_params(
+                    &mut args[0],
+                    &[elem_type],
+                    "lists.map",
+                )?;
+                if mapped_type == DataType::Unknown {
+                    return Err(type_error(
+                        "lists.map closure must return a value".to_string(),
+                    ));
+                }
+                let result = DataType::Vector {
+                    element_type: Box::new(mapped_type),
+                    dynamic: true,
+                };
+                *data_type = result.clone();
+                Ok(result)
+            }
+            "lists.filter" => {
+                if args.len() != 2 {
+                    return Err(type_error("lists.filter expects 2 arguments".to_string()));
+                }
+                let list_type = self.check_expression(&mut args[1])?;
+                let elem_type = Self::infer_list_element_type(list_type)?;
+                let predicate_type = self.check_closure_with_expected_params(
+                    &mut args[0],
+                    std::slice::from_ref(&elem_type),
+                    "lists.filter",
+                )?;
+                if !Self::is_bool_like(&predicate_type) {
+                    return Err(type_error(format!(
+                        "lists.filter closure must return bool, got {:?}",
+                        predicate_type
+                    )));
+                }
+                let result = DataType::Vector {
+                    element_type: Box::new(elem_type),
+                    dynamic: true,
+                };
+                *data_type = result.clone();
+                Ok(result)
+            }
+            _ => unreachable!(),
+        }
     }
 }
 

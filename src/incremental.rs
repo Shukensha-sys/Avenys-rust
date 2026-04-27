@@ -432,22 +432,19 @@ impl IncrementalCache {
             #[cfg(unix)]
             {
                 if let Ok(Some(mapping)) = MemoryMappedFile::map(&file) {
-                    if let Ok((db, layout)) = decode_cache_db(mapping.as_slice()) {
-                        if db.format_version == CACHE_FORMAT_VERSION {
+                    if let Ok((db, layout)) = decode_cache_db(mapping.as_slice())
+                        && db.format_version == CACHE_FORMAT_VERSION {
                             cache.db = db;
                             cache.blob_store = BlobStore::from_mapped(mapping, layout);
                         }
-                    }
-                } else if let Ok(raw) = fs::read(&cache.cache_path) {
-                    if let Ok((db, layout)) = decode_cache_db(&raw) {
-                        if db.format_version == CACHE_FORMAT_VERSION {
+                } else if let Ok(raw) = fs::read(&cache.cache_path)
+                    && let Ok((db, layout)) = decode_cache_db(&raw)
+                        && db.format_version == CACHE_FORMAT_VERSION {
                             cache.db = db;
                             cache.blob_store = BlobStore::from_owned(
                                 raw[layout.start..layout.start + layout.len].to_vec(),
                             );
                         }
-                    }
-                }
             }
 
             #[cfg(not(unix))]
@@ -721,9 +718,7 @@ impl IncrementalCache {
         persist_ir: bool,
     ) -> Option<&BuildCacheEntry> {
         let key = build_cache_key(source_path, mode, emit_binary, persist_ir);
-        let Some(record) = self.db.builds.get_mut(&key) else {
-            return None;
-        };
+        let record = self.db.builds.get_mut(&key)?;
         record.last_access_epoch_ms = now_epoch_ms();
         Some(&record.entry)
     }
@@ -848,7 +843,7 @@ pub fn build_fingerprint(
     runtime_support.hash(&mut hasher);
 
     let mut file_entries: Vec<_> = files.iter().collect();
-    file_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    file_entries.sort_by_key(|(left, _)| *left);
     for (path, info) in file_entries {
         normalize_path_key(path).hash(&mut hasher);
         info.hash.hash(&mut hasher);

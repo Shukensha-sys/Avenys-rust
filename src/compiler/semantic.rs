@@ -612,15 +612,15 @@ impl SemanticModelBuilder {
     ) -> BindingKind {
         if is_parameter {
             return match data_type {
-                DataType::Ref => BindingKind::SharedRef,
-                DataType::RefMut => BindingKind::MutableRef,
+                DataType::Ref { .. } => BindingKind::SharedRef,
+                DataType::RefMut { .. } => BindingKind::MutableRef,
                 DataType::Box => BindingKind::Boxed,
                 _ => BindingKind::Parameter,
             };
         }
         match data_type {
-            DataType::Ref => BindingKind::SharedRef,
-            DataType::RefMut => BindingKind::MutableRef,
+            DataType::Ref { .. } => BindingKind::SharedRef,
+            DataType::RefMut { .. } => BindingKind::MutableRef,
             DataType::Box => BindingKind::Boxed,
             _ => match value {
                 Some(Expression::Reference { is_mutable, .. }) => {
@@ -725,9 +725,9 @@ impl SemanticModelBuilder {
             },
             MireValue::Ref { is_mutable, .. } => {
                 if *is_mutable {
-                    DataType::RefMut
+                    DataType::mutable_ref(DataType::Unknown)
                 } else {
-                    DataType::Ref
+                    DataType::shared_ref(DataType::Unknown)
                 }
             }
             MireValue::Box { .. } => DataType::Box,

@@ -333,7 +333,7 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 | Unsafe tracking | ✅ Works | unsafe_depth tracked |
 | Member access | ✅ Works | throws errors when not found |
 | Pipeline typing | ✅ Works | uses elem_type as fallback |
-| Reference types | ✅ Works | infers from target expression via referenced_type |
+| Reference types | ✅ Works | preserves the inner type and lowers `&x` / `*ref`, including typed params like `:&i64` |
 | String interpolation | ✅ Works | supports nested function calls {func(x)} |
 | Empty vec literal | ✅ Works | `[] :vec![i64]` now works with `lists.push` |
 | Empty dict literal | ✅ Works | `{} :map![str,i64]` now works with dict operations |
@@ -401,14 +401,18 @@ arr at 2  # 30
 
 ### Reference Lowering
 
-**Issue**: Reference expressions `&x` pass type checking but fail at LLVM lowering.
+**Issue**: Reference expressions `&x` used to pass type checking but fail at LLVM lowering.
 
 ```mire
 set x = 1 :i64
-set rx = &x  # Typeck OK, but Avenys cannot lower Ref type
+set rx = &x
+set y = *rx
 ```
 
-**Status**: ⚠️ KNOWN LIMITATION - References work in typeck but fail at codegen
+**Status**: ✅ RESOLVED (Abril 2026)
+- AST and parser now preserve the referenced inner type for `&T`
+- Type checking keeps typed refs through locals and params like `value :&i64`
+- Avenys lowers shared refs and dereference directly as pointers
 
 ### math.avg Function
 
@@ -418,13 +422,18 @@ set rx = &x  # Typeck OK, but Avenys cannot lower Ref type
 
 ### High-Order Functions
 
-**Issue**: `lists.fold`, `lists.map`, `lists.filter` not implemented in standard library.
+**Issue**: `lists.fold`, `lists.map`, `lists.filter` estaban incompletas y dependían de workarounds en closures.
 
 ```mire
-set result = lists.fold(0 (a b) => a + b [1 2 3 4 5])  # Fails
+set result = lists.fold(0, (a b) => a + b, [1 2 3 4 5])
 ```
 
-**Status**: ⚠️ MISSING FEATURE - Use explicit loops instead
+**Status**: ✅ RESOLVED (Abril 2026)
+- Parser: reconoce la sintaxis de closure con firma `(a b) => ...` y `(x: i64) => ...`
+- Type checker: infiere tipos de parámetros desde el contexto de `fold/map/filter`
+- Backend Avenys: ejecuta el cuerpo real de la closure para `fold`, `map` y `filter`
+- La sintaxis existente se mantiene; ya no hace falta anotar parámetros solo para que compile
+- Alcance actual: el soporte resuelto es para closures inline; los callbacks de primer nivel como valor/identificador siguen siendo una ampliación futura, no un bug de este fix
 
 ### Array Mutation Syntax
 
@@ -443,12 +452,15 @@ set arr at 0 = 10
 
 ### Struct impl with Mutable Fields
 
-**Issue**: Struct methods cannot modify mutable fields via `self.field = value`.
+**Issue**: Struct methods used to fail on mutable field updates via `self.field = value`.
 
 ```mire
 fn increment: (self) {
-    set self.value = self.value + 1  # Fails with "Cannot reassign"
+    set self.value = self.value + 1
 }
 ```
 
-**Status**: ⚠️ KNOWN LIMITATION - Field mutation in impl methods not supported
+**Status**: ✅ RESOLVED (Abril 2026)
+- Direct field mutation inside `impl` now compiles and runs
+- The parser now consumes `mut` correctly in struct fields such as `value :i64 mut`
+- Validated with `tests/complex/data_structures/06_counter_impl.mire` and `10_student_impl.mire`
