@@ -12,7 +12,7 @@ Limitaciones actuales del compilador Avenys.
 |-----------|----------|-------------|
 | 🔴 Crítico | 0 | Rompe funcionalidad core |
 | 🟠 Bug Real | 1 | Resultados incorrectos/falsos |
-| 🟡 Deuda | 4 | Comportamiento incorrecto |
+| 🟡 Deuda | 2 | Comportamiento incorrecto |
 | ℹ️ Diseño | 2 | Mantenimiento/diseño |
 | ✅ Verificado | 21 | Fixes ya aplicados |
 
@@ -25,6 +25,8 @@ Limitaciones actuales del compilador Avenys.
 - B1: latest_successful_analysis usa timestamp de creación
 - B2: No reproducible (lenguaje previene el problema)
 - D1: prune_lru ahora incluye builds
+- D3: to_upper/to_lower con soporte Latin-1
+- D4: Memory leak en MAP fixeado
 
 ---
 
@@ -832,10 +834,10 @@ pub fn save(&mut self) -> Result<()> {
 
 ### D3 - to_upper/to_lower Solo ASCII
 
-**Descripción:**
-`mire_string_to_upper` y `mire_string_to_lower` solo manejan caracteres ASCII:
-- Only handles 'a'-'z' and 'A'-'Z'
-- Does NOT handle: é, ñ, ü, á, ó, etc.
+**Status:** ✅ RESOLVED (Mayo 2026)
+- Implementadas funciones `mire_unicode_to_lower`/`mire_unicode_to_upper`
+- Manejan Latin-1: À-Ö (192-214), Ø-Þ (216-222) / à-ö (224-246), ø-þ (248-254)
+- No incluye acentos (documentado como limitación)
 
 ---
 
@@ -904,14 +906,20 @@ char *mire_string_to_upper_latin1(const char *value) {
 # Input con acentos: "ánimo" → resultado incorrecto
 ```
 
-**Status:** 🟡 PENDIENTE - Easy fix si se quiere soporte básico Latin-1
+**Status:** ✅ RESOLVED (Mayo 2026)
+- Removido `mire_strdup_raw` innecesario en branch MAP
+- `mire_dict_to_string` retorna memoria managed que se libera automáticamente
 
 ---
 
 ### D4 - Memory Leak en mire_dict_format_value
 
-**Descripción:**
-`mire_dict_format_value` para tipos MAP (línea 933) tiene leak:
+**Status:** ✅ RESOLVED (Mayo 2026)
+- Bug fix: removido strdup redundante
+- No hay más leak de memoria para tipos MAP
+
+**Descripción (histórico):**
+`mire_dict_format_value` para tipos MAP (línea 933) tenía leak:
 ```c
 if (kind == MIRE_KIND_MAP) {
     return mire_strdup_raw(mire_dict_to_string(...));  // Leak: interno no se libera

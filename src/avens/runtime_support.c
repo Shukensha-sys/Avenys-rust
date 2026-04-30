@@ -827,6 +827,20 @@ char *mire_string_append_owned(char *value, const char *suffix) {
     return value;
 }
 
+char mire_unicode_to_lower(unsigned char c) {
+    if (c >= 'A' && c <= 'Z') return c + 32;
+    if (c >= 192 && c <= 214) return c + 32;
+    if (c >= 216 && c <= 222) return c + 32;
+    return c;
+}
+
+char mire_unicode_to_upper(unsigned char c) {
+    if (c >= 'a' && c <= 'z') return c - 32;
+    if (c >= 224 && c <= 246) return c - 32;
+    if (c >= 248 && c <= 254) return c - 32;
+    return c;
+}
+
 char *mire_string_to_upper(const char *value) {
     if (value == NULL) {
         return mire_managed_from_slice("", 0);
@@ -837,7 +851,7 @@ char *mire_string_to_upper(const char *value) {
         return mire_managed_from_slice("", 0);
     }
     for (size_t i = 0; i < len; i++) {
-        result[i] = (value[i] >= 'a' && value[i] <= 'z') ? (value[i] - 32) : value[i];
+        result[i] = mire_unicode_to_upper((unsigned char)value[i]);
     }
     result[len] = '\0';
     return result;
@@ -853,7 +867,7 @@ char *mire_string_to_lower(const char *value) {
         return mire_managed_from_slice("", 0);
     }
     for (size_t i = 0; i < len; i++) {
-        result[i] = (value[i] >= 'A' && value[i] <= 'Z') ? (value[i] + 32) : value[i];
+        result[i] = mire_unicode_to_lower((unsigned char)value[i]);
     }
     result[len] = '\0';
     return result;
@@ -930,7 +944,7 @@ static char *mire_dict_format_value(const MireDict *dict, int64_t entry_index) {
         return out;
     }
     if (kind == MIRE_KIND_MAP) {
-        return mire_strdup_raw(mire_dict_to_string(mire_dict_read_ptr(dict, entry_index)));
+        return mire_dict_to_string(mire_dict_read_ptr(dict, entry_index));
     }
     if (kind == MIRE_KIND_PTR) {
         return mire_strdup_raw("<ptr>");
