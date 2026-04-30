@@ -19,5 +19,5 @@ Cargo.toml:
 
 # env-dep:CARGO_MANIFEST_DIR=/run/media/Evelyn/28396d6a-0d9a-45ff-8ee4-c7695803f3cd/Repos/mire
 # env-dep:CARGO_PKG_VERSION=2.0.0
-# env-dep:CLIPPY_ARGS=-W__CLIPPY_HACKERY__clippy::if_same_then_else__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::collapsible_else_if__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::collapsible_if__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::result_large_err__CLIPPY_HACKERY__
+# env-dep:CLIPPY_ARGS=
 # env-dep:CLIPPY_CONF_DIR

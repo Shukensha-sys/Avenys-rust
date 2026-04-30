@@ -1,6 +1,6 @@
 # Mire
 
-**Version 2.0.0**
+**Version 2.2.0**
 
 Mire is a compiled, statically typed programming language with an ownership-oriented memory model. Version 2.0.0 is a deliberate syntax break over v1.x focused on making `impl` behavior explicit and predictable.
 
@@ -19,7 +19,8 @@ If you want the practical version: today the compiler is usable for real experim
 - Compiled-only toolchain: the old interpreter path is gone from the CLI
 - Real frontend pipeline: lexer, parser, type checker, semantic model, ownership/borrow checker, LLVM lowering
 - Incremental compilation active: binary cache, lazy loading, LRU, cached analysis successes and failures
-- Test baseline: `58` lib tests + regression tests all passing
+- Test baseline: `67` tests (language regressions + lib tests) all passing
+- Clippy: **0 warnings** (cargo clippy clean as of v2.1.1)
 - Best-supported areas today: functions, control flow, enums, structs, impl methods, imports, runtime diagnostics, incremental builds
 
 ### What Avenys supports well right now
@@ -30,20 +31,25 @@ If you want the practical version: today the compiler is usable for real experim
 - Enums with qualified variants and payload matching in statements
 - Array reads and in-place indexed writes with `arr at i` / `set arr at i = value`, including indexed writes on struct fields
 - Shared references and dereference lowering, including typed params such as `value :&i64`
-- List high-order functions with inline closures: `lists.fold`, `lists.map`, `lists.filter`
+- Reference type unification in type checker: `&T` can unify with `T` for return inference, ref-vs-ref unification preserves reference identity, and shared refs do not satisfy `&mut T`
+- List high-order functions with inline closures: `lists.fold`, `lists.map`, `lists.filter`; `lists.fold` currently uses `(acc, closure, list)`
 - Associated/static methods via `Type::method(...)`
 - Instance methods with explicit `self`
 - Direct mutable field updates inside `impl`, for example `set self.value = self.value + 1`
 - Standard runtime modules already wired into type checking and lowering paths used by the shipped apps/tests
 - Incremental build reuse for unchanged programs and unchanged local-import dependency graphs
 
+### Version 2.2.0
+
 ### What is still partial
 
-- Match expressions are improving, but exhaustive enum-return expressions without an explicit fallback still need more work
+- Match expressions are improving but exhaustive enum-return expressions without an explicit fallback still need more work
 - Traits/skills only cover direct conformance today
 - Field-level validation during struct/type construction is still incomplete
 - Struct fields marked `mut` now parse correctly and direct `self.field = ...` updates in `impl` are working, but field-level mutability validation itself is still not fully enforced everywhere
 - List HOF are currently closure-based at the call site; they are not yet exposed as generic first-class callback slots for named functions/values
+- Float arithmetic operations (e.g., `x + 1.5`) still have type unification issues between literal floats and typed floats
+- Some std helpers are intentionally rejected by the Avenys backend until their runtime contract is correct end-to-end, notably `strings.split` and first-class-value lowering for helpers such as `range(...)`
 - `extern`, `unsafe`, `asm`, and `module` are parsed and walked, but not deeply validated end-to-end
 
 ### v2.0.0 New Features
@@ -69,9 +75,12 @@ If you want the practical version: today the compiler is usable for real experim
 - Identifier patterns in `match` are treated as comparison-side patterns and are not rejected as undefined bindings during type analysis
 - Enum payload bindings introduced by `match` patterns are scoped and available inside statement bodies and match expressions, including variants with multiple payload values
 - `match` accepts full comparison/logical expressions as the matched value, for example `match x < 5 :bool { ... }`
-- Loop variable type inference: `for i in range(10)` gives `i` type `i64`; iterating over a typed array or vector infers the element type
+- Loop variable type inference: `for i in range(10)` gives `i` type `i64`; iterating over a typed array or vector infers the element type. Multi-binding `for value, index in ...` is not enabled yet because the second binding still needs end-to-end semantics.
 - `if` and `while` conditions are checked to be bool-like; a condition of type `i64` is an error
 - Function call return type propagation: calling a known function resolves the call expression's type
+- Reference type unification: `unify_types` handles `&T`/`&mut T` symmetrically for `&T` ↔ `T` and preserves reference wrappers when both sides are references; `is_assignable` allows auto-deref to plain `T`, allows `&mut T` where `&T` is expected, and rejects shared refs where `&mut T` is required
+- Typed maps are nominally checked now: `map[K V]` bindings accept map/dict values, not list/vector fallbacks
+- Dict key shorthand is intentionally narrow: bare undeclared identifiers become string keys only inside dict literals, not in general expressions such as `if { ... }`
 - All standard library modules (`math`, `strings`, `lists`, `dicts`, `time`, `term`, `mem`, `cpu`, `gpu`, `fs`, `env`, `proc`) are registered with known member return types
 - Builtin functions (`dasu`, `ireru`, `len`, `range`, `str`, `int`, `float`, `bool`, etc.) have registered return types and are accepted without errors
 

@@ -165,9 +165,10 @@ impl<'a> BorrowChecker<'a> {
 
         if err.source().is_none()
             && let Some(filename) = err.filename()
-                && let Some(source) = self.sources_by_filename.get(filename) {
-                    return err.with_source(source.clone());
-                }
+            && let Some(source) = self.sources_by_filename.get(filename)
+        {
+            return err.with_source(source.clone());
+        }
 
         err
     }
@@ -223,10 +224,12 @@ impl<'a> BorrowChecker<'a> {
                     self.insert_binding(name.clone(), BindingState::default());
                 }
                 let result = self.check_statements(body);
-                if result.is_ok() && !statements_contain_explicit_return(body)
-                    && let Some(expr) = implicit_return_expression(body) {
-                        self.ensure_return_is_safe(expr)?;
-                    }
+                if result.is_ok()
+                    && !statements_contain_explicit_return(body)
+                    && let Some(expr) = implicit_return_expression(body)
+                {
+                    self.ensure_return_is_safe(expr)?;
+                }
                 self.function_stack.pop();
                 self.pop_scope();
                 result?;
@@ -515,9 +518,10 @@ impl<'a> BorrowChecker<'a> {
 
     fn ensure_binding_available(&self, name: &str) -> Result<()> {
         if let Some(state) = self.lookup_binding(name)
-            && state.is_moved {
-                return Err(ownership_error(MssError::UseAfterMove));
-            }
+            && state.is_moved
+        {
+            return Err(ownership_error(MssError::UseAfterMove));
+        }
         Ok(())
     }
 
@@ -752,13 +756,14 @@ impl<'a> BorrowChecker<'a> {
                     && !matches!(
                         binding.kind,
                         BindingKind::SharedRef | BindingKind::MutableRef
-                    ) {
-                        return Err(MireError::type_error(format!(
-                            "Function '{}' argument {} requires a shared reference",
-                            callee,
-                            index + 1
-                        )));
-                    }
+                    )
+                {
+                    return Err(MireError::type_error(format!(
+                        "Function '{}' argument {} requires a shared reference",
+                        callee,
+                        index + 1
+                    )));
+                }
             }
             DataType::RefMut { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
@@ -772,13 +777,14 @@ impl<'a> BorrowChecker<'a> {
                     self.ensure_borrow_allowed(&target, true)?;
                 } else if let Some(binding) =
                     Self::identifier_name(arg).and_then(|name| self.semantic_binding(&name))
-                    && !matches!(binding.kind, BindingKind::MutableRef) {
-                        return Err(MireError::type_error(format!(
-                            "Function '{}' argument {} requires a mutable reference",
-                            callee,
-                            index + 1
-                        )));
-                    }
+                    && !matches!(binding.kind, BindingKind::MutableRef)
+                {
+                    return Err(MireError::type_error(format!(
+                        "Function '{}' argument {} requires a mutable reference",
+                        callee,
+                        index + 1
+                    )));
+                }
             }
             _ => {
                 if let Some(name) = Self::identifier_name(arg) {
@@ -789,10 +795,10 @@ impl<'a> BorrowChecker<'a> {
 
                     if let Some(state) = self.lookup_binding(&name)
                         && self.unsafe_depth == 0
-                            && (state.mutable_borrow || state.immutable_borrows > 0)
-                        {
-                            return Err(ownership_error(MssError::MoveWhileBorrowed));
-                        }
+                        && (state.mutable_borrow || state.immutable_borrows > 0)
+                    {
+                        return Err(ownership_error(MssError::MoveWhileBorrowed));
+                    }
 
                     if should_consume {
                         self.ensure_can_move(&name)?;
@@ -1125,7 +1131,10 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "mutate".to_string(),
-                    params: vec![("value".to_string(), DataType::mutable_ref(DataType::Unknown))],
+                    params: vec![(
+                        "value".to_string(),
+                        DataType::mutable_ref(DataType::Unknown),
+                    )],
                     body: vec![],
                     return_type: DataType::None,
                     visibility: Visibility::Public,

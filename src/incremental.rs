@@ -5,7 +5,6 @@ use crate::parser::Program;
 use crate::parser::ast::{Expression, Statement};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -15,11 +14,65 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(unix)]
 use std::os::fd::AsRawFd;
 
+const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+const FNV_PRIME: u64 = 0x100000001b3;
+
+pub struct FxHasher {
+    state: u64,
+}
+
+impl FxHasher {
+    pub fn new() -> Self {
+        FxHasher {
+            state: FNV_OFFSET_BASIS,
+        }
+    }
+}
+
+impl Default for FxHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Hasher for FxHasher {
+    fn finish(&self) -> u64 {
+        self.state
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.state = self.state.wrapping_mul(FNV_PRIME) ^ (byte as u64);
+        }
+    }
+
+    fn write_u8(&mut self, i: u8) {
+        self.state = self.state.wrapping_mul(FNV_PRIME) ^ (i as u64);
+    }
+
+    fn write_u16(&mut self, i: u16) {
+        self.write(&i.to_le_bytes());
+    }
+
+    fn write_u32(&mut self, i: u32) {
+        self.write(&i.to_le_bytes());
+    }
+
+    fn write_u64(&mut self, i: u64) {
+        self.write(&i.to_le_bytes());
+    }
+
+    fn write_usize(&mut self, i: usize) {
+        self.write(&i.to_le_bytes());
+    }
+}
+
 const CACHE_DIR_NAME: &str = ".cache";
 const CACHE_FILE_NAME: &str = "incremental.bin";
 const CACHE_MAGIC: &[u8; 8] = b"MIREINC2";
-const CACHE_FORMAT_VERSION: u32 = 3;
+const CACHE_FORMAT_VERSION: u32 = 4;
 const DEFAULT_MAX_UNITS: usize = 256;
+const BLOB_COMPACT_THRESHOLD_RATIO: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheSettings {
@@ -233,6 +286,7 @@ struct AnalysisCacheEntry {
     blob_offset: u64,
     blob_len: u64,
     last_access_epoch_ms: u64,
+    created_epoch_ms: u64,
     unit_count: u32,
 }
 
@@ -433,18 +487,20 @@ impl IncrementalCache {
             {
                 if let Ok(Some(mapping)) = MemoryMappedFile::map(&file) {
                     if let Ok((db, layout)) = decode_cache_db(mapping.as_slice())
-                        && db.format_version == CACHE_FORMAT_VERSION {
-                            cache.db = db;
-                            cache.blob_store = BlobStore::from_mapped(mapping, layout);
-                        }
+                        && db.format_version == CACHE_FORMAT_VERSION
+                    {
+                        cache.db = db;
+                        cache.blob_store = BlobStore::from_mapped(mapping, layout);
+                    }
                 } else if let Ok(raw) = fs::read(&cache.cache_path)
                     && let Ok((db, layout)) = decode_cache_db(&raw)
-                        && db.format_version == CACHE_FORMAT_VERSION {
-                            cache.db = db;
-                            cache.blob_store = BlobStore::from_owned(
-                                raw[layout.start..layout.start + layout.len].to_vec(),
-                            );
-                        }
+                    && db.format_version == CACHE_FORMAT_VERSION
+                {
+                    cache.db = db;
+                    cache.blob_store = BlobStore::from_owned(
+                        raw[layout.start..layout.start + layout.len].to_vec(),
+                    );
+                }
             }
 
             #[cfg(not(unix))]
@@ -616,13 +672,15 @@ impl IncrementalCache {
             })
         })?;
         let (blob_offset, blob_len) = self.blob_store.append(&blob);
+        let now = now_epoch_ms();
         self.db.analyses.insert(
             analysis_cache_key(source_path, fingerprint),
             AnalysisCacheEntry {
                 fingerprint,
                 blob_offset,
                 blob_len,
-                last_access_epoch_ms: now_epoch_ms(),
+                last_access_epoch_ms: now,
+                created_epoch_ms: now,
                 unit_count: units.len() as u32,
             },
         );
@@ -652,13 +710,15 @@ impl IncrementalCache {
             })
         })?;
         let (blob_offset, blob_len) = self.blob_store.append(&blob);
+        let now = now_epoch_ms();
         self.db.analyses.insert(
             analysis_cache_key(source_path, fingerprint),
             AnalysisCacheEntry {
                 fingerprint,
                 blob_offset,
                 blob_len,
-                last_access_epoch_ms: now_epoch_ms(),
+                last_access_epoch_ms: now,
+                created_epoch_ms: now,
                 unit_count: units.len() as u32,
             },
         );
@@ -682,11 +742,11 @@ impl IncrementalCache {
     ) -> Option<CachedAnalysisSnapshot> {
         let prefix = format!("{}::analysis::", normalize_path_key(source_path));
         let mut latest_key: Option<String> = None;
-        let mut latest_access = 0_u64;
+        let mut latest_created = 0_u64;
 
         for (key, entry) in &self.db.analyses {
-            if key.starts_with(&prefix) && entry.last_access_epoch_ms >= latest_access {
-                latest_access = entry.last_access_epoch_ms;
+            if key.starts_with(&prefix) && entry.created_epoch_ms >= latest_created {
+                latest_created = entry.created_epoch_ms;
                 latest_key = Some(key.clone());
             }
         }
@@ -738,7 +798,7 @@ impl IncrementalCache {
             return;
         };
 
-        let current_units = self.db.files.len() + self.db.analyses.len();
+        let current_units = self.db.files.len() + self.db.analyses.len() + self.db.builds.len();
         if current_units <= max_units {
             return;
         }
@@ -762,6 +822,15 @@ impl IncrementalCache {
                 .unwrap_or(0);
             victims.push((last_access, CacheVictim::Analysis(key.clone())));
         }
+        for key in self.db.builds.keys() {
+            let last_access = self
+                .db
+                .builds
+                .get(key)
+                .map(|entry| entry.last_access_epoch_ms)
+                .unwrap_or(0);
+            victims.push((last_access, CacheVictim::Build(key.clone())));
+        }
         victims.sort_by_key(|(last_access, _)| *last_access);
 
         let to_remove = current_units.saturating_sub(max_units);
@@ -773,6 +842,10 @@ impl IncrementalCache {
                 }
                 CacheVictim::Analysis(key) => {
                     self.db.analyses.remove(&key);
+                    self.metrics.evictions += 1;
+                }
+                CacheVictim::Build(key) => {
+                    self.db.builds.remove(&key);
                     self.metrics.evictions += 1;
                 }
             }
@@ -805,6 +878,7 @@ impl IncrementalCache {
 enum CacheVictim {
     File(String),
     Analysis(String),
+    Build(String),
 }
 
 pub fn cache_file_path(source_path: &Path) -> PathBuf {
@@ -823,7 +897,7 @@ pub fn cache_file_path(source_path: &Path) -> PathBuf {
 }
 
 pub fn source_hash(source: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::new();
     source.hash(&mut hasher);
     hasher.finish()
 }
@@ -835,7 +909,7 @@ pub fn build_fingerprint(
     emit_binary: bool,
     runtime_support: &str,
 ) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::new();
     normalize_path_key(source_path).hash(&mut hasher);
     mode.hash(&mut hasher);
     emit_binary.hash(&mut hasher);
@@ -974,6 +1048,7 @@ fn encode_cache_db(db: &CacheDb, blob_store: &[u8]) -> Result<Vec<u8>> {
         write_string(&mut out, key)?;
         write_u64(&mut out, entry.fingerprint);
         write_u64(&mut out, entry.last_access_epoch_ms);
+        write_u64(&mut out, entry.created_epoch_ms);
         write_u64(&mut out, entry.blob_offset);
         write_u64(&mut out, entry.blob_len);
         write_u32(&mut out, entry.unit_count);
@@ -1036,19 +1111,27 @@ fn decode_cache_db(raw: &[u8]) -> Result<(CacheDb, BlobStoreLayout)> {
         let key = cursor.read_string()?;
         let fingerprint = cursor.read_u64()?;
         let last_access_epoch_ms = cursor.read_u64()?;
+        let created_epoch_ms = cursor.read_u64()?;
         let blob_offset = cursor.read_u64()?;
         let blob_len = cursor.read_u64()?;
         let unit_count = cursor.read_u32()?;
-        analyses.insert(
-            key,
+        let entry = AnalysisCacheEntry {
+            fingerprint,
+            blob_offset,
+            blob_len,
+            last_access_epoch_ms,
+            created_epoch_ms,
+            unit_count,
+        };
+        let entry = if entry.created_epoch_ms == 0 {
             AnalysisCacheEntry {
-                fingerprint,
-                blob_offset,
-                blob_len,
-                last_access_epoch_ms,
-                unit_count,
-            },
-        );
+                created_epoch_ms: entry.last_access_epoch_ms,
+                ..entry
+            }
+        } else {
+            entry
+        };
+        analyses.insert(key, entry);
     }
 
     let build_count = usize::try_from(cursor.read_u64()?)
@@ -2052,7 +2135,7 @@ fn collect_type_dependencies(data_type: &crate::parser::ast::DataType, deps: &mu
 
 fn stable_statement_hash(statement: &Statement) -> u64 {
     let serialized = serde_json::to_vec(statement).unwrap_or_default();
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = FxHasher::new();
     serialized.hash(&mut hasher);
     hasher.finish()
 }

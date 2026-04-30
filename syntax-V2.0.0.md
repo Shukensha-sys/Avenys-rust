@@ -255,6 +255,22 @@ set first = lists.get(counts 0)
 set m = {a: 1, b: 2} :map![str,i64]
 ```
 
+Typed map bindings expect actual map/dict values. List/vector values are not accepted as map fallbacks during type checking.
+Bare undeclared identifiers in dict keys are coerced to string keys only inside dict literals, so `{a: 1}` means `{"a": 1}`.
+
+### List HOF
+
+```mire
+set sum = lists.fold(0, (acc elem) => acc + elem, [1 2 3])
+set doubled = lists.map((x) => x * 2, [1 2 3])
+set filtered = lists.filter((x) => x > 1, [1 2 3])
+```
+
+Current calling convention:
+- `lists.fold(acc, closure, list)`
+- `lists.map(closure, list)`
+- `lists.filter(closure, list)`
+
 ---
 
 ## 8. Control Flow
@@ -292,6 +308,8 @@ for i in range(10) {
     use dasu(i)
 }
 ```
+
+Current compiler support is single-binding only. `for value, index in ...` is intentionally rejected until the second binding has real parser/typechecker/codegen semantics.
 
 ### Do-While
 
@@ -426,6 +444,11 @@ The ownership checker enforces:
 - No mutation while shared borrow exists
 - No multiple mutable references
 - No return of local references
+
+Type checking also treats references strictly:
+- `&T` can flow into plain `T` through auto-deref
+- `&mut T` can satisfy `&T`
+- `&T` does not satisfy `&mut T`
 
 `unsafe` blocks bypass checks:
 

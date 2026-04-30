@@ -1,6 +1,29 @@
 # Todo - Estado del Compilador Avenys
 
-Última actualización: Abril 2026
+Última actualización: Mayo 2026
+
+---
+
+## ✅ Features Implementadas (v2.1.x)
+
+### Clippy Clean (0 warnings)
+```
+cargo clippy  # 0 warnings (v2.1.1)
+```
+
+### Reference Type Unification
+```mire
+fn read_ref: (value :&i64) :i64 {
+    return *value
+}
+
+pub fn main: () {
+    set x = 41 :i64
+    set rx = &x
+    set y = read_ref(rx)
+    use dasu(y + 1)  # 42
+}
+```
 
 ---
 
@@ -61,18 +84,20 @@ Infiere tipo del target expression.
 ### Reglas de Implementación
 - Antes de modificar src/: crear backup con git commit
 - Aplicar SOLID principles
-- Sin warnings en compilación
+- Sin warnings en compilación (objetivo: cargo clippy 0 warnings)
 - Documentar cambios en: `avenyslogs.md`, `docs/issues.md`, `docs/avenys-roadmap.md`
 
 ### Priority Order
-1. ✅ Match Multilínea
-2. ✅ Logical Operators (C-style)
-3. ✅ Match with Comparison
-4. ✅ Short-circuit evaluation
-5. ✅ Bitwise operators
-6. ✅ Struct field reassignment
-7. ✅ Critical borrow/semantic (ya estaban)
-8. ✅ Type checking (investigados)
+1. ✅ Clippy Clean (v2.1.1) - 67 warnings → 0 warnings
+2. ✅ Reference Type Unification (v2.1.1) - `&T`↔`T` en unify_types e is_assignable
+3. ✅ Match Multilínea
+4. ✅ Logical Operators (C-style)
+5. ✅ Match with Comparison
+6. ✅ Short-circuit evaluation
+7. ✅ Bitwise operators
+8. ✅ Struct field reassignment
+9. ✅ Critical borrow/semantic (ya estaban)
+10. ✅ Type checking (investigados)
 
 ---
 

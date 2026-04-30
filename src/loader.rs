@@ -210,13 +210,14 @@ impl ImportResolver {
                 is_local,
                 ..
             } = statement
-                && *is_local {
-                    local_imports.push(CachedImport {
-                        raw_path: path.clone(),
-                        resolved_path: self.resolve_local_import(path)?,
-                        items: items.clone(),
-                    });
-                }
+                && *is_local
+            {
+                local_imports.push(CachedImport {
+                    raw_path: path.clone(),
+                    resolved_path: self.resolve_local_import(path)?,
+                    items: items.clone(),
+                });
+            }
         }
         let cached = CachedParsedFile {
             hash,

@@ -72,7 +72,7 @@ for f in tests/level/beginner/*.mire; do ./target/release/mire run "$f"; done
 
 See `docs/issues.md` for documented issues and limitations.
 - **math.avg**: Function not available, use `math.sum(x) / len(x)`
-- **List HOF scope**: `lists.fold/map/filter` are working with inline closures; generic callback values are still not documented as stable surface
+- **List HOF scope**: `lists.fold/map/filter` are working with inline closures; generic callback values are still not documented as stable surface. Current checked order is `lists.fold(acc, closure, list)`.
 
 ## Incremental Compilation
 

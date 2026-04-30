@@ -1,8 +1,8 @@
 [package]
 name = "Avenys"
-version = "2.0.0"
+version = "2.2.0"
 edition = "2024"
-description = "(AMC) Avenys is the mire compiler"
+description = "Avenys is the mire compiler"
 
 [dependencies]
 thiserror = "2.0"

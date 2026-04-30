@@ -973,6 +973,43 @@ fn runtime_division_by_zero_exits_with_error() {
 }
 
 #[test]
+fn signed_integer_division_and_remainder_match_runtime_expectations() {
+    let root = make_temp_project_root("mire_signed_division");
+    let source_path = root.join("signed_division.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"signed-division\"\nversion = \"0.1.0\"\nentry = \"signed_division.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set a = -10 / 3\n    set b = -10 % 3\n    use dasu(\"{a} {b}\")\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+    assert!(output.status.success(), "{output:?}");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("-3 -1"), "{stdout}");
+}
+
+#[test]
 fn runtime_out_of_bounds_exits_with_error() {
     let root = make_temp_project_root("mire_runtime_out_of_bounds");
     let source_path = root.join("runtime_out_of_bounds.mire");
@@ -1007,6 +1044,55 @@ fn runtime_out_of_bounds_exits_with_error() {
     assert!(!output.status.success(), "binary should fail at runtime");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("index out of bounds"), "{stderr}");
+}
+
+#[test]
+fn backend_rejects_unimplemented_contains_instead_of_returning_silent_false() {
+    let err = expect_compile_error_from_source(
+        "mire_backend_contains_stub",
+        "contains_stub.mire",
+        "import std\n\npub fn main: () {\n    set nums = [1 2 3]\n    use dasu(contains(nums 2))\n}\n",
+    );
+
+    assert!(matches!(err.kind, ErrorKind::Backend { .. }));
+    assert!(err.to_string().contains("contains"), "{err}");
+}
+
+#[test]
+fn strings_split_returns_list_and_works_with_join() {
+    let root = make_temp_project_root("mire_strings_split");
+    let source_path = root.join("strings_split.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"strings-split\"\nversion = \"0.1.0\"\nentry = \"strings_split.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set parts = strings.split(\"a,b,c\" \",\")\n    set joined = strings.join(parts \"-\")\n    use dasu(joined)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("strings.split should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a-b-c"), "Expected 'a-b-c', got: {stdout}");
 }
 
 #[test]

@@ -243,9 +243,10 @@ impl TypeChecker {
 
         if err.source().is_none()
             && let Some(filename) = err.filename()
-                && let Some(source) = self.sources_by_filename.get(filename) {
-                    return err.with_source(source.clone());
-                }
+            && let Some(source) = self.sources_by_filename.get(filename)
+        {
+            return err.with_source(source.clone());
+        }
 
         err
     }
@@ -347,7 +348,6 @@ impl TypeChecker {
         // Builtins that return str
         for name in [
             "strings.replace",
-            "strings.split",
             "strings.join",
             "strings.to_upper",
             "strings.to_lower",
@@ -362,6 +362,9 @@ impl TypeChecker {
         ] {
             builtins.insert(name.to_string(), DataType::Str);
         }
+
+        // Builtins that return List<str>
+        builtins.insert("strings.split".to_string(), DataType::List);
 
         // ── Builtins that return str ──────────────────────────────────────────
         for name in [
@@ -741,9 +744,10 @@ impl TypeChecker {
                 visibility: _,
             } => {
                 if let Some(expr) = value
-                    && let Expression::Literal(Literal::Int(int_val)) = expr {
-                        Self::validate_int_literal_range(data_type, *int_val)?;
-                    }
+                    && let Expression::Literal(Literal::Int(int_val)) = expr
+                {
+                    Self::validate_int_literal_range(data_type, *int_val)?;
+                }
                 let inferred = if let Some(expr) = value {
                     self.check_expression(expr)?
                 } else {
@@ -768,8 +772,7 @@ impl TypeChecker {
                 *data_type = final_type.clone();
                 let mutable = *is_mutable;
                 self.insert_var(name.clone(), final_type, mutable);
-                self.bind_struct_name(name, value.as_ref());
-                self.bind_reference_type(name, value.as_ref());
+                self.refresh_binding_metadata(name, data_type, value.as_ref());
             }
             Statement::Assignment { target, value, .. } => {
                 let value_type = self.check_expression(value)?;
@@ -803,60 +806,62 @@ impl TypeChecker {
                                 })?;
 
                             if let DataType::StructNamed(ref struct_name) = owner_type
-                                && let Some(class_sig) = self.classes.get(struct_name) {
-                                    let field = class_sig
-                                        .fields
-                                        .iter()
-                                        .find(|f| f.name == field_name)
-                                        .ok_or_else(|| {
-                                            type_error(format!(
-                                                "Struct '{}' has no field '{}'",
-                                                struct_name, field_name
-                                            ))
-                                        })?;
+                                && let Some(class_sig) = self.classes.get(struct_name)
+                            {
+                                let field = class_sig
+                                    .fields
+                                    .iter()
+                                    .find(|f| f.name == field_name)
+                                    .ok_or_else(|| {
+                                        type_error(format!(
+                                            "Struct '{}' has no field '{}'",
+                                            struct_name, field_name
+                                        ))
+                                    })?;
 
-                                    if !self.is_assignable(&field.data_type, &value_type) {
-                                        return Err(type_error(format!(
-                                            "Type mismatch for field '{}': expected {:?}, got {:?}",
-                                            field_name, field.data_type, value_type
-                                        )));
-                                    }
-
-                                    let mut new_fields: Vec<Expression> = Vec::new();
-                                    for f in &class_sig.fields {
-                                        if f.name == field_name {
-                                            new_fields.push(value.clone());
-                                        } else {
-                                            let field_access = Expression::MemberAccess {
-                                                target: Box::new(Expression::Identifier(
-                                                    Identifier {
-                                                        name: owner.to_string(),
-                                                        data_type: owner_type.clone(),
-                                                        line: 0,
-                                                        column: 0,
-                                                    },
-                                                )),
-                                                member: f.name.clone(),
-                                                data_type: f.data_type.clone(),
-                                            };
-                                            new_fields.push(field_access);
-                                        }
-                                    }
-
-                                    let struct_constructor = Expression::Call {
-                                        name: struct_name.clone(),
-                                        args: new_fields,
-                                        data_type: owner_type.clone(),
-                                    };
-
-                                    self.insert_var(
-                                        owner.to_string(),
-                                        owner_type.clone(),
-                                        owner_mutable,
-                                    );
-                                    self.bind_struct_name(owner, Some(&struct_constructor));
-                                    self.bind_reference_type(owner, Some(&struct_constructor));
+                                if !self.is_assignable(&field.data_type, &value_type) {
+                                    return Err(type_error(format!(
+                                        "Type mismatch for field '{}': expected {:?}, got {:?}",
+                                        field_name, field.data_type, value_type
+                                    )));
                                 }
+
+                                let mut new_fields: Vec<Expression> = Vec::new();
+                                for f in &class_sig.fields {
+                                    if f.name == field_name {
+                                        new_fields.push(value.clone());
+                                    } else {
+                                        let field_access = Expression::MemberAccess {
+                                            target: Box::new(Expression::Identifier(Identifier {
+                                                name: owner.to_string(),
+                                                data_type: owner_type.clone(),
+                                                line: 0,
+                                                column: 0,
+                                            })),
+                                            member: f.name.clone(),
+                                            data_type: f.data_type.clone(),
+                                        };
+                                        new_fields.push(field_access);
+                                    }
+                                }
+
+                                let struct_constructor = Expression::Call {
+                                    name: struct_name.clone(),
+                                    args: new_fields,
+                                    data_type: owner_type.clone(),
+                                };
+
+                                self.insert_var(
+                                    owner.to_string(),
+                                    owner_type.clone(),
+                                    owner_mutable,
+                                );
+                                self.refresh_binding_metadata(
+                                    owner,
+                                    &owner_type,
+                                    Some(&struct_constructor),
+                                );
+                            }
                         }
                     }
                     AssignmentTarget::Index { .. } => {}
@@ -865,8 +870,7 @@ impl TypeChecker {
 
                         target_type = Self::unify_types(&target_type, &value_type)?;
                         self.insert_var(name.clone(), target_type, is_target_mutable);
-                        self.bind_struct_name(name, Some(value));
-                        self.bind_reference_type(name, Some(value));
+                        self.refresh_binding_metadata(name, &value_type, Some(value));
                     }
                 }
             }
@@ -888,18 +892,20 @@ impl TypeChecker {
                 self.push_scope();
                 for (param_name, param_type) in params.iter() {
                     self.insert_var(param_name.clone(), param_type.clone(), true);
+                    self.refresh_binding_metadata(param_name, param_type, None);
                 }
 
                 self.return_type_stack.push(return_type.clone());
                 self.check_statements(body)?;
                 if !statements_contain_explicit_return(body)
-                    && let Some(expr) = implicit_return_expression_mut(body) {
-                        let tail_type = self.check_expression(expr)?;
-                        if let Some(current) = self.return_type_stack.last_mut() {
-                            let unified = Self::unify_types(current, &tail_type)?;
-                            *current = unified;
-                        }
+                    && let Some(expr) = implicit_return_expression_mut(body)
+                {
+                    let tail_type = self.check_expression(expr)?;
+                    if let Some(current) = self.return_type_stack.last_mut() {
+                        let unified = Self::unify_types(current, &tail_type)?;
+                        *current = unified;
                     }
+                }
                 let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
 
                 if *return_type == DataType::Unknown {
@@ -1051,9 +1057,8 @@ impl TypeChecker {
             }
             Statement::Move { target, value } => {
                 let moved_type = self.check_expression(value)?;
-                self.insert_var(target.clone(), moved_type, true);
-                self.bind_struct_name(target, Some(value));
-                self.bind_reference_type(target, Some(value));
+                self.insert_var(target.clone(), moved_type.clone(), true);
+                self.refresh_binding_metadata(target, &moved_type, Some(value));
             }
             Statement::Query {
                 ops,
@@ -1213,23 +1218,7 @@ impl TypeChecker {
 
     fn check_expression(&mut self, expression: &mut Expression) -> Result<DataType> {
         match expression {
-            Expression::Literal(lit) => {
-                if let Literal::Int(value) = lit
-                    && let Some(scope) = self.scopes.last() {
-                        for (_name, (dt, _)) in scope.iter() {
-                            if let DataType::I8
-                            | DataType::I16
-                            | DataType::I32
-                            | DataType::U8
-                            | DataType::U16
-                            | DataType::U32 = dt
-                            {
-                                Self::validate_int_literal_range(dt, *value)?;
-                            }
-                        }
-                    }
-                Ok(Self::literal_type(lit))
-            }
+            Expression::Literal(lit) => Ok(Self::literal_type(lit)),
             Expression::Identifier(ident) => {
                 let (resolved, _) = self.lookup_var(&ident.name).ok_or_else(|| {
                     type_error_at(
@@ -1484,22 +1473,10 @@ impl TypeChecker {
                 }
 
                 if let Some(rest) = name.strip_prefix("std.")
-                    && let Some(ret) = self.builtin_returns.get(rest).cloned() {
-                        *data_type = ret.clone();
-                        return Ok(ret);
-                    }
-
-                if let Some(sig) = self.functions.get(name).cloned() {
-                    if sig.params.len() != args.len() {
-                        return Err(type_error(format!(
-                            "Function '{}' expects {} arguments, got {}",
-                            name,
-                            sig.params.len(),
-                            args.len()
-                        )));
-                    }
-                    *data_type = sig.return_type.clone();
-                    return Ok(sig.return_type);
+                    && let Some(ret) = self.builtin_returns.get(rest).cloned()
+                {
+                    *data_type = ret.clone();
+                    return Ok(ret);
                 }
 
                 // Check class constructors BEFORE enum variants.
@@ -1629,10 +1606,10 @@ impl TypeChecker {
                     {
                         if let Some(class_sig) = self.classes.get(&struct_name)
                             && let Some(field) = class_sig.fields.iter().find(|f| f.name == *member)
-                            {
-                                *data_type = field.data_type.clone();
-                                return Ok(field.data_type.clone());
-                            }
+                        {
+                            *data_type = field.data_type.clone();
+                            return Ok(field.data_type.clone());
+                        }
                         if let Some(fn_sig) =
                             self.functions.get(&format!("{}.{}", struct_name, member))
                         {
@@ -1779,21 +1756,23 @@ impl TypeChecker {
                         self.insert_var(name.clone(), Self::mire_value_type(value), true);
                     }
                     if let Some((_, ptype)) = params.first_mut()
-                        && *ptype == DataType::Unknown {
-                            *ptype = elem_type.clone();
-                        }
+                        && *ptype == DataType::Unknown
+                    {
+                        *ptype = elem_type.clone();
+                    }
                     for (name, ptype) in params.iter() {
                         self.insert_var(name.clone(), ptype.clone(), true);
                     }
                     self.return_type_stack.push(return_type.clone());
                     self.check_statements(body)?;
                     if !statements_contain_explicit_return(body)
-                        && let Some(expr) = implicit_return_expression_mut(body) {
-                            let tail_type = self.check_expression(expr)?;
-                            if let Some(current) = self.return_type_stack.last_mut() {
-                                *current = Self::unify_types(current, &tail_type)?;
-                            }
+                        && let Some(expr) = implicit_return_expression_mut(body)
+                    {
+                        let tail_type = self.check_expression(expr)?;
+                        if let Some(current) = self.return_type_stack.last_mut() {
+                            *current = Self::unify_types(current, &tail_type)?;
                         }
+                    }
                     let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
                     if *return_type == DataType::Unknown {
                         if inferred_return == DataType::Unknown {
@@ -2055,48 +2034,42 @@ impl TypeChecker {
 
     fn validate_int_literal_range(data_type: &DataType, value: i64) -> Result<()> {
         match data_type {
-            DataType::I8
-                if (!(-128..=127).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds i8 range (-128 to 127)",
-                        value
-                    )));
-                }
-            DataType::I16
-                if (!(-32768..=32767).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds i16 range (-32768 to 32767)",
-                        value
-                    )));
-                }
-            DataType::I32
-                if (!(-2147483648..=2147483647).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds i32 range (-2147483648 to 2147483647)",
-                        value
-                    )));
-                }
-            DataType::U8
-                if (!(0..=255).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds u8 range (0 to 255)",
-                        value
-                    )));
-                }
-            DataType::U16
-                if (!(0..=65535).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds u16 range (0 to 65535)",
-                        value
-                    )));
-                }
-            DataType::U32
-                if (!(0..=4294967295).contains(&value)) => {
-                    return Err(type_error(format!(
-                        "Integer literal {} exceeds u32 range (0 to 4294967295)",
-                        value
-                    )));
-                }
+            DataType::I8 if (!(-128..=127).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds i8 range (-128 to 127)",
+                    value
+                )));
+            }
+            DataType::I16 if (!(-32768..=32767).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds i16 range (-32768 to 32767)",
+                    value
+                )));
+            }
+            DataType::I32 if (!(-2147483648..=2147483647).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds i32 range (-2147483648 to 2147483647)",
+                    value
+                )));
+            }
+            DataType::U8 if (!(0..=255).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds u8 range (0 to 255)",
+                    value
+                )));
+            }
+            DataType::U16 if (!(0..=65535).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds u16 range (0 to 65535)",
+                    value
+                )));
+            }
+            DataType::U32 if (!(0..=4294967295).contains(&value)) => {
+                return Err(type_error(format!(
+                    "Integer literal {} exceeds u32 range (0 to 4294967295)",
+                    value
+                )));
+            }
             _ => {}
         }
         Ok(())
@@ -2264,6 +2237,36 @@ impl TypeChecker {
             _ => {}
         }
 
+        match (left, right) {
+            (
+                DataType::Ref { inner: left_inner } | DataType::RefMut { inner: left_inner },
+                DataType::Ref { inner: right_inner } | DataType::RefMut { inner: right_inner },
+            ) => {
+                let inner = Self::unify_types(left_inner, right_inner)?;
+                let same_kind = std::mem::discriminant(left) == std::mem::discriminant(right);
+                return Ok(if same_kind {
+                    if matches!(left, DataType::Ref { .. }) {
+                        DataType::Ref {
+                            inner: Box::new(inner),
+                        }
+                    } else {
+                        DataType::RefMut {
+                            inner: Box::new(inner),
+                        }
+                    }
+                } else {
+                    DataType::Ref {
+                        inner: Box::new(inner),
+                    }
+                });
+            }
+            (DataType::Ref { inner } | DataType::RefMut { inner }, other)
+            | (other, DataType::Ref { inner } | DataType::RefMut { inner }) => {
+                return Self::unify_types(inner, other);
+            }
+            _ => {}
+        }
+
         Err(type_error(format!(
             "Cannot unify incompatible types {:?} and {:?}",
             left, right
@@ -2324,6 +2327,37 @@ impl TypeChecker {
             };
         }
 
+        match (expected, actual) {
+            (
+                DataType::Ref {
+                    inner: expected_inner,
+                },
+                DataType::Ref {
+                    inner: actual_inner,
+                }
+                | DataType::RefMut {
+                    inner: actual_inner,
+                },
+            ) => {
+                return self.is_assignable(expected_inner, actual_inner);
+            }
+            (
+                DataType::RefMut {
+                    inner: expected_inner,
+                },
+                DataType::RefMut {
+                    inner: actual_inner,
+                },
+            ) => {
+                return self.is_assignable(expected_inner, actual_inner);
+            }
+            (DataType::RefMut { .. }, DataType::Ref { .. }) => return false,
+            (DataType::Ref { inner, .. } | DataType::RefMut { inner, .. }, _) => {
+                return self.is_assignable(inner, actual);
+            }
+            _ => {}
+        }
+
         if expected == &DataType::Anything || actual == &DataType::Unknown {
             return true;
         }
@@ -2336,11 +2370,8 @@ impl TypeChecker {
             return true;
         }
 
-        if let DataType::Map { .. } = expected {
-            match actual {
-                DataType::List | DataType::Vector { .. } => return true,
-                _ => {}
-            }
+        if matches!(expected, DataType::Map { .. }) && actual == &DataType::Dict {
+            return true;
         }
 
         match expected {
@@ -2473,13 +2504,14 @@ impl TypeChecker {
         self.return_type_stack.push(return_type.clone());
         self.check_statements(body)?;
         if !statements_contain_explicit_return(body)
-            && let Some(expr) = implicit_return_expression_mut(body) {
-                let tail_type = self.check_expression(expr)?;
-                if let Some(current) = self.return_type_stack.last_mut() {
-                    let unified = Self::unify_types(current, &tail_type)?;
-                    *current = unified;
-                }
+            && let Some(expr) = implicit_return_expression_mut(body)
+        {
+            let tail_type = self.check_expression(expr)?;
+            if let Some(current) = self.return_type_stack.last_mut() {
+                let unified = Self::unify_types(current, &tail_type)?;
+                *current = unified;
             }
+        }
         let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
 
         if *return_type == DataType::Unknown {
@@ -2944,8 +2976,21 @@ impl TypeChecker {
         }
     }
 
-    fn bind_struct_name(&mut self, name: &str, value: Option<&Expression>) {
-        let struct_name = value.and_then(|expr| self.struct_name_for_expr(expr));
+    fn refresh_binding_metadata(
+        &mut self,
+        name: &str,
+        data_type: &DataType,
+        value: Option<&Expression>,
+    ) {
+        self.bind_struct_name(name, data_type, value);
+        self.bind_reference_type(name, value);
+    }
+
+    fn bind_struct_name(&mut self, name: &str, data_type: &DataType, value: Option<&Expression>) {
+        let struct_name = data_type
+            .struct_name()
+            .map(ToOwned::to_owned)
+            .or_else(|| value.and_then(|expr| self.struct_name_for_expr(expr)));
         if let Some(scope) = self.struct_scopes.last_mut() {
             if let Some(struct_name) = struct_name {
                 scope.insert(name.to_string(), struct_name);
@@ -3058,9 +3103,10 @@ impl TypeChecker {
 
     fn lookup_var(&self, name: &str) -> Option<(DataType, bool)> {
         if name == "self"
-            && let Some(ref self_type) = self.impl_self_type {
-                return Some((self_type.clone(), true));
-            }
+            && let Some(ref self_type) = self.impl_self_type
+        {
+            return Some((self_type.clone(), true));
+        }
         for scope in self.scopes.iter().rev() {
             if let Some(data_type) = scope.get(name) {
                 return Some(data_type.clone());
@@ -3078,7 +3124,8 @@ impl TypeChecker {
                 return Some(struct_name.clone());
             }
         }
-        None
+        self.lookup_var(name)
+            .and_then(|(data_type, _)| data_type.struct_name().map(ToOwned::to_owned))
     }
 
     fn lookup_ref_type(&self, name: &str) -> Option<DataType> {
@@ -3197,15 +3244,15 @@ impl TypeChecker {
                 }
                 if let Some(sig) = self.functions.get(name).cloned()
                     && sig.params.len() == arg_types.len()
-                        && sig
-                            .params
-                            .iter()
-                            .zip(arg_types.iter())
-                            .all(|(expected, actual)| self.is_assignable(expected, actual))
-                    {
-                        *data_type = sig.return_type.clone();
-                        return Ok(Some(sig.return_type));
-                    }
+                    && sig
+                        .params
+                        .iter()
+                        .zip(arg_types.iter())
+                        .all(|(expected, actual)| self.is_assignable(expected, actual))
+                {
+                    *data_type = sig.return_type.clone();
+                    return Ok(Some(sig.return_type));
+                }
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(Some(ret));
@@ -3220,10 +3267,12 @@ impl TypeChecker {
                     return Ok(Some(DataType::I64));
                 }
                 if let Some(sig) = self.functions.get(name).cloned()
-                    && sig.params.len() == 1 && self.is_assignable(&sig.params[0], input_type) {
-                        *data_type = sig.return_type.clone();
-                        return Ok(Some(sig.return_type));
-                    }
+                    && sig.params.len() == 1
+                    && self.is_assignable(&sig.params[0], input_type)
+                {
+                    *data_type = sig.return_type.clone();
+                    return Ok(Some(sig.return_type));
+                }
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(Some(ret));
@@ -3296,6 +3345,7 @@ impl TypeChecker {
                 if args.len() != 3 {
                     return Err(type_error("lists.fold expects 3 arguments".to_string()));
                 }
+                // Mire currently defines the order as `(acc, closure, list)`.
                 let acc_type = self.check_expression(&mut args[0])?;
                 let list_type = self.check_expression(&mut args[2])?;
                 let elem_type = Self::infer_list_element_type(list_type)?;
@@ -3968,5 +4018,174 @@ mod tests {
                 dynamic: true,
             }
         );
+    }
+
+    #[test]
+    fn integer_literal_range_validation_does_not_scan_unrelated_scope_bindings() {
+        let source = "pub fn main: () {\n    set tiny = 1 :i8\n    set big = 300 :i64\n}\n";
+        let mut program = parse(source).expect("source should parse");
+
+        check_program_types(&mut program, source)
+            .expect("unrelated i8 binding must not reject i64 literal");
+    }
+
+    #[test]
+    fn map_assignment_rejects_vector_values() {
+        let mut program = Program {
+            statements: vec![
+                Statement::Let {
+                    name: "values".to_string(),
+                    data_type: DataType::Vector {
+                        element_type: Box::new(DataType::I64),
+                        dynamic: true,
+                    },
+                    value: Some(Expression::List {
+                        elements: vec![
+                            Expression::Literal(Literal::Int(1)),
+                            Expression::Literal(Literal::Int(2)),
+                            Expression::Literal(Literal::Int(3)),
+                        ],
+                        element_type: DataType::I64,
+                        data_type: DataType::Vector {
+                            element_type: Box::new(DataType::I64),
+                            dynamic: true,
+                        },
+                    }),
+                    is_constant: false,
+                    is_mutable: false,
+                    is_static: false,
+                    visibility: Visibility::Public,
+                },
+                Statement::Let {
+                    name: "m".to_string(),
+                    data_type: DataType::Map {
+                        key_type: Box::new(DataType::Str),
+                        value_type: Box::new(DataType::I64),
+                    },
+                    value: Some(Expression::Identifier(Identifier {
+                        name: "values".to_string(),
+                        data_type: DataType::Unknown,
+                        line: 0,
+                        column: 0,
+                    })),
+                    is_constant: false,
+                    is_mutable: false,
+                    is_static: false,
+                    visibility: Visibility::Public,
+                },
+            ],
+        };
+
+        let err = check_program_types(&mut program, "").expect_err("must reject vec -> map");
+        assert!(err.to_string().contains("Type mismatch in let 'm'"));
+    }
+
+    #[test]
+    fn typed_struct_parameters_can_dispatch_instance_methods() {
+        let source = "struct Counter {\n    value :i64\n}\n\nimpl Counter {\n    fn get: (self) :i64 {\n        return self.value\n    }\n}\n\nfn read_counter: (counter :Counter) :i64 {\n    return counter.get()\n}\n";
+        let mut program = parse(source).expect("source should parse");
+
+        check_program_types(&mut program, source)
+            .expect("typed struct parameter should preserve concrete method dispatch");
+    }
+
+    #[test]
+    fn unify_types_is_order_independent_for_reference_and_value_pairs() {
+        assert_eq!(
+            super::TypeChecker::unify_types(
+                &DataType::Ref {
+                    inner: Box::new(DataType::I64),
+                },
+                &DataType::I64,
+            )
+            .expect("ref + value should unify"),
+            DataType::I64
+        );
+        assert_eq!(
+            super::TypeChecker::unify_types(
+                &DataType::I64,
+                &DataType::Ref {
+                    inner: Box::new(DataType::I64),
+                },
+            )
+            .expect("value + ref should unify"),
+            DataType::I64
+        );
+    }
+
+    #[test]
+    fn mutable_reference_expectation_rejects_shared_reference_argument() {
+        let mut program = Program {
+            statements: vec![
+                Statement::Function {
+                    name: "bump".to_string(),
+                    params: vec![(
+                        "value".to_string(),
+                        DataType::RefMut {
+                            inner: Box::new(DataType::I64),
+                        },
+                    )],
+                    body: vec![],
+                    return_type: DataType::None,
+                    visibility: Visibility::Public,
+                    is_method: false,
+                },
+                Statement::Function {
+                    name: "main".to_string(),
+                    params: vec![],
+                    body: vec![
+                        Statement::Let {
+                            name: "x".to_string(),
+                            data_type: DataType::I64,
+                            value: Some(Expression::Literal(Literal::Int(1))),
+                            is_constant: false,
+                            is_mutable: true,
+                            is_static: false,
+                            visibility: Visibility::Public,
+                        },
+                        Statement::Let {
+                            name: "shared".to_string(),
+                            data_type: DataType::Unknown,
+                            value: Some(Expression::Reference {
+                                expr: Box::new(Expression::Identifier(Identifier {
+                                    name: "x".to_string(),
+                                    data_type: DataType::Unknown,
+                                    line: 0,
+                                    column: 0,
+                                })),
+                                is_mutable: false,
+                                data_type: DataType::Unknown,
+                                referenced_type: DataType::Unknown,
+                            }),
+                            is_constant: false,
+                            is_mutable: false,
+                            is_static: false,
+                            visibility: Visibility::Public,
+                        },
+                        Statement::Expression(Expression::Call {
+                            name: "bump".to_string(),
+                            args: vec![Expression::Identifier(Identifier {
+                                name: "shared".to_string(),
+                                data_type: DataType::Unknown,
+                                line: 0,
+                                column: 0,
+                            })],
+                            data_type: DataType::Unknown,
+                        }),
+                    ],
+                    return_type: DataType::None,
+                    visibility: Visibility::Public,
+                    is_method: false,
+                },
+            ],
+        };
+
+        let err = check_program_types(&mut program, "")
+            .expect_err("shared ref should not satisfy &mut parameter");
+        assert!(
+            err.to_string()
+                .contains("Function 'bump' argument 1 expects")
+        );
+        assert!(err.to_string().contains("RefMut"));
     }
 }

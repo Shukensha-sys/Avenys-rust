@@ -1,5 +1,12 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
+### Version: v2.2.0
+
+### Compilation Stats
+- **Clippy:** 0 warnings ✅
+- **Tests:** 67/67 pasando ✅
+- **Speedup vs Python:** 121x faster (flow_stress benchmark)
+
 ### Benchmarks - Resultados:
 
 | Benchmark | Compile | Run | Python | Speedup |
@@ -60,21 +67,33 @@ if a || expensive_check() { }
 
 ### Lo que NO funciona o sigue incompleto:
 
-- Struct field reassignment: `c.value = 1` (crear nuevo struct)
-- Bitwise operators: `&`, `|`, `<<`, `>>` (implementados en v2.1.0)
+- Float arithmetic `x + 1.5` - type unification issues between literal floats and typed floats
 - `vec[vec[T]]` - no conserva tipo interno en todas las rutas
+
+### ✅ Resuelto en v2.2.0:
+- Float literals: `3.14`, `3.14 :f64` ✅
+- str(f64): `str(3.14 :f64)` → "3.14" ✅
+- Struct field reassignment: `c.value = 1` ✅ (requiere `set`)
+- Bitwise operators: `&`, `|`, `<<`, `>>` ✅
+- Reference lowering con parámetros tipados: `fn read_ref: (value :&i64) :i64` ✅
 
 ### Issues Críticos Pendientes:
 
-**Borrow Checker & Semantic Model:**
-- CR1: Scope lexical no filtrado en `borrowck.rs:784` - puede validar contra símbolo errado
-- CR2: Métodos en Impl/Class ignorados en `semantic.rs:245` - validaciones de ownership incompletas
-- CR3: `unsafe` no procesado en `semantic.rs:250` - `unsafe_depth` nunca se modifica
+**✅ CR1-CR3: Borrow Checker & Semantic Model - RESUELTOS (Mayo 2026)**
+- CR1: Scope lexical filtrado correctamente en `borrowck.rs` ✅
+- CR2: Métodos en Impl/Class ahora registrados en `semantic.rs` ✅
+- CR3: `unsafe` procesado con `unsafe_depth` correctamente ✅
 
-**Type Checking:**
-- T1: Member access fallback troppo permisivo (`typeck.rs:1518`) - tapa errores
-- T2: Pipeline typing usa defaults incorrectos (`typeck.rs:1666`, `1685`)
-- T3: Referencias retornan `Anything` al desreferenciar (`typeck.rs:1628`)
+**✅ T1-T3: Type Checking - RESUELTOS (Mayo 2026)**
+- T1: Member access con error claro cuando no se encuentran fields/methods ✅
+- T2: Pipeline typing mejorado con elem_type como fallback ✅
+- T3: Referencias ahora almacenan tipo detallado (`referenced_type: DataType`) ✅
+
+**🆕 T4: Reference Type Unification - RESUELTO (Mayo 2026)**
+- `unify_types`: permite `&T` ↔ `T` con auto-unwrap
+- `is_assignable`: permite `&T` → `T` con auto-deref
+- Soporta `&T` ↔ `&T` y `&mut T` ↔ `&T`/`&mut T`
+- Fix: `shared_reference_lowering_compiles_and_runs` ahora pasa
 
 ### Lo que ya funciona en la práctica:
 

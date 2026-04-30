@@ -5,5 +5,5 @@
 src/main.rs:
 Cargo.toml:
 
-# env-dep:CLIPPY_ARGS=-W__CLIPPY_HACKERY__clippy::if_same_then_else__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::collapsible_else_if__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::collapsible_if__CLIPPY_HACKERY__-W__CLIPPY_HACKERY__clippy::result_large_err__CLIPPY_HACKERY__
+# env-dep:CLIPPY_ARGS=
 # env-dep:CLIPPY_CONF_DIR

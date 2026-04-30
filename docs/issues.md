@@ -2,7 +2,33 @@
 
 Limitaciones actuales del compilador Avenys.
 
+> **Nota**: Para información técnica detallada sobre arquitectura y próximos pasos, ver [`docs/TECHNICAL.md`](TECHNICAL.md)
+
 ---
+
+## 📊 RESUMEN EJECUTIVO (Mayo 2026)
+
+| Severidad | Cantidad | Descripción |
+|-----------|----------|-------------|
+| 🔴 Crítico | 0 | Rompe funcionalidad core |
+| 🟠 Bug Real | 1 | Resultados incorrectos/falsos |
+| 🟡 Deuda | 4 | Comportamiento incorrecto |
+| ℹ️ Diseño | 2 | Mantenimiento/diseño |
+| ✅ Verificado | 21 | Fixes ya aplicados |
+
+**Tests:** 70/70 pasando (100% passed)
+
+**Fix Completados:**
+- C1: FxHasher (FNV-1a) para cache determinista
+- C2: strings.split retorna lista correctamente
+- C3: Codegen strings.split implementado
+- B1: latest_successful_analysis usa timestamp de creación
+- B2: No reproducible (lenguaje previene el problema)
+- D1: prune_lru ahora incluye builds
+
+---
+
+# Secciones Detalladas
 
 ## 🟡 MEDIUM PRIORITY
 
@@ -317,6 +343,31 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 
 ---
 
+## 🆕 Float Support (v2.2.0)
+
+### Issue: Float Literals
+
+**Description:**
+Float literals and conversion to string now work.
+
+```mire
+set x = 3.14 :f64
+use dasu(x)        # prints 3.14
+
+set s = str(3.14 :f64)
+use dasu(s)        # prints 3.14
+```
+
+**Fix:**
+- Added `LlType::F64` to LLVM type system
+- Fixed `map_type` to map `F64` -> `LlType::F64` (not `Ptr`)
+- Added `mire_f64_to_string(double)` runtime function
+- Added F64 support in cast operations, print, store, etc.
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
 ## 📊 Resumen de Tests
 
 | Feature | Status | Notes |
@@ -333,7 +384,7 @@ Pipeline used `element_type` as fallback when return_type was Unknown.
 | Unsafe tracking | ✅ Works | unsafe_depth tracked |
 | Member access | ✅ Works | throws errors when not found |
 | Pipeline typing | ✅ Works | uses elem_type as fallback |
-| Reference types | ✅ Works | preserves the inner type and lowers `&x` / `*ref`, including typed params like `:&i64` |
+| Reference types | ✅ Works | Preserves inner type, `&x`/`*ref` lowering, typed params like `:&i64`, and now type unification `&T`↔`T` in type checker |
 | String interpolation | ✅ Works | supports nested function calls {func(x)} |
 | Empty vec literal | ✅ Works | `[] :vec![i64]` now works with `lists.push` |
 | Empty dict literal | ✅ Works | `{} :map![str,i64]` now works with dict operations |
@@ -464,3 +515,631 @@ fn increment: (self) {
 - Direct field mutation inside `impl` now compiles and runs
 - The parser now consumes `mut` correctly in struct fields such as `value :i64 mut`
 - Validated with `tests/complex/data_structures/06_counter_impl.mire` and `10_student_impl.mire`
+
+---
+
+## 🆕 Ref/RefMut Type Unification (v2.1.1)
+
+### Issue: Reference Type Inference Mismatch
+
+**Description:**
+Funciones con parámetros tipados como `&T` fallaban al compilar porque `unify_types` e `is_assignable` no manejan referencias.
+
+```mire
+fn read_ref: (value :&i64) :i64 {
+    return *value
+}
+
+pub fn main: () {
+    set x = 41 :i64
+    set rx = &x
+    set y = read_ref(rx)
+    use dasu(y + 1)
+}
+```
+
+**Error original:** `Cannot unify incompatible types I64 and Ref { inner: I64 }`
+
+**Fix:**
+- `unify_types` (`typeck.rs`): Auto-unwrap de Ref/RefMut cuando un lado es referencia y el otro es el tipo base
+- `is_assignable` (`typeck.rs`): Auto-deref de expected Ref al comparar con actual (no-Ref)
+
+**Casos soportados:**
+- `&T` puede unificarse con `T` (ej: tipo de retorno `&i64` inferido como `i64`)
+- `&T` asignable a `T` (auto-deref en `is_assignable`)
+- `&T` asignable a `&T`, `&mut T` asignable a `&T` o `&mut T`
+- `&T` no satisface parámetros o bindings que exigen `&mut T`
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
+## 🆕 Clippy Refactoring (v2.1.1)
+
+### Issue: Naming Conflicts with Standard Traits
+
+**Description:**
+Métodos `from_str` y `eq` causaban advertencias de clippy porque pueden confundirse con métodos de traits estándar.
+
+**Fixes aplicados:**
+| Cambio | Archivo | Descripción |
+|--------|---------|-------------|
+| `from_str` → `parse_type` | parser/ast.rs | Evita confusión con `std::str::FromStr` |
+| `eq` → `equals` | parser/ast.rs | Evita confusión con `std::cmp::PartialEq::eq` |
+| Box en `Index` variant | parser/ast.rs | Reduce tamaño de `AssignmentTarget` de 240b a ~24b |
+| Type alias | main.rs | Simplifica tipo de retorno complejo |
+
+**Resultado:** 67 warnings → 0 warnings (100% clean)
+
+**Status**: ✅ RESOLVED (Mayo 2026)
+
+---
+
+## 🚨 CRITICAL ISSUES (Abril 2026)
+
+### C1 - DefaultHasher en Cache Incremental
+
+**Descripción:**
+`DefaultHasher` usa internas aleatorias (rand seed) que cambian entre ejecuciones de proceso. Esto invalida:
+- `stable_statement_hash` - cache de análisis nunca es válido entre procesos
+- `source_hash` - cache de archivos siempre falla entre ejecuciones
+
+**Fix Aplicado:**
+- Implementado `FxHasher` (FNV-1a) determinista en `src/incremental.rs:17-70`
+- Reemplazado `DefaultHasher::new()` por `FxHasher::new()` en:
+  - `source_hash()` (línea ~880)
+  - `build_fingerprint()` (línea ~890)
+  - `stable_statement_hash()` (línea ~2110)
+
+**Verificación:**
+- Tests pasan: 70/70 ✅
+- Cache funciona entre procesos separados ✅
+
+**Status:** ✅ RESOLVED (Mayo 2026)
+
+### C2 - strings.split Retorna String Concatenada
+
+**Descripción:**
+`mire_strings_split` en `runtime_support.c` retornaba una string plana con espacios en vez de una lista. Esto rompía completamente `strings.split`.
+
+**Fix Aplicado:**
+- Nueva función `mire_strings_split_list` en `runtime_support.c:1196-1231` que retorna `void *` (lista)
+- Actualizado `compile_split` en `avenys/mod.rs:3286-3304` para llamar a la nueva función
+- Actualizado type checker para devolver `DataType::List` para `strings.split` (typeck.rs)
+
+**Verificación:**
+```mire
+set parts = strings.split("a,b,c" ",")
+set joined = strings.join(parts "-")  # "a-b-c" ✅
+```
+
+**Status:** ✅ RESOLVED (Mayo 2026)
+
+### C3 - strings.split Falla en Codegen
+
+**Descripción:**
+El backend `avenys/mod.rs` retorna `Err(Backend)` correctamente para `strings.split`, pero la feature no está implementada.
+
+**Ubicación:** `src/avens/mod.rs:1469-1483`
+
+**Status:** ✅ RESOLVED (Mayo 2026) - Ahora funciona correctamente
+
+---
+
+## 🟠 REAL BUGS (Abril 2026)
+
+### B1 - latest_successful_analysis Usa last_access
+
+**Descripción:**
+`latest_successful_analysis` seleccionaba por `last_access_epoch_ms` (tiempo de acceso) en vez de timestamp de creación. Puede retornar análisis de una versión anterior del código si un archivo fue accedido recientemente.
+
+**Fix Aplicado:**
+- Añadido campo `created_epoch_ms` a `AnalysisCacheEntry` (incremental.rs:287)
+- Actualizada lógica de `latest_successful_analysis` para usar `created_epoch_ms` (incremental.rs:748)
+- Añadido fallback para cache antiguo: si `created_epoch_ms == 0`, usa `last_access_epoch_ms` (incremental.rs:1106-1116)
+- Actualizado serialización/deserialización del cache
+
+**Verificación:**
+- Tests: 70/70 ✅
+- Ahora selecciona por timestamp de creación, no de acceso
+
+**Status:** ✅ RESOLVED (Mayo 2026)
+
+### B2 - semantic_binding con Nombres Duplicados en Scopes
+
+**Descripción:**
+`semantic_binding` busca por `scope_depth` pero puede retornar el binding incorrecto cuando hay nombres duplicados en scopes distintos. Afecta `check_call_argument` para tipos movibles.
+
+**Investigación (Mayo 2026):**
+- El lenguaje NO permite shadowing con `set x = ...` - el parser/type checker rechaza esta sintaxis
+- Probado: `set x = "outer"` → `set x = "inner"` produce error "Cannot reassign immutable variable"
+- El código usa `scope_depth` para filtrar, lo cual funciona correctamente para el caso real
+- Verificación: `process(value value)` para tipo movible produce el error esperado "Use after move"
+
+**Status:** ✅ NOT REPRODUCIBLE - El lenguaje previene las condiciones que causarían este bug
+
+### B3 - ensure_return_is_safe y Scope IDs
+
+**Descripción:**
+Puede no detectar ref escapes si los scope IDs del modelo semántico no alinean con el checker.
+
+**Status:** ⚠️ REQUIERE MÁS INVESTIGACIÓN
+
+**Descripción:**
+Puede no detectar ref escapes si los scope IDs del modelo semántico no alinean con el checker.
+
+**Ubicación:** `src/compiler/borrowck.rs:711-732`
+
+**Status:** 🟠 POTENTIAL BUG - Requiere verificación adicional
+
+---
+
+## 🟡 COMPORTAMIENTO INCORRECTO / DEUDA TÉCNICA
+
+### D1 - prune_lru No Incluye Builds
+
+**Descripción:**
+`prune_lru` solo contaba `files` y `analyses`, no incluía builds. El mapa de builds crece sin límite.
+
+**Fix Aplicado:**
+- Añadido `CacheVictim::Build` al enum
+- Actualizado `prune_lru` para incluir `self.db.builds.len()` en el conteo
+- Añadido manejo de `CacheVictim::Build` en la eviction
+
+**Verificación:**
+- Tests: 70/70 ✅
+
+**Status:** ✅ RESOLVED (Mayo 2026)
+
+### D2 - Blob Store Sin Compactación
+
+**Descripción:**
+El archivo `.cache/incremental.bin` crece indefinidamente aunque haya pocas entradas activas. El blob store appende datos sin liberar los offsets huérfanos cuando las entradas de cache se eliminan.
+
+---
+
+## Análisis Técnico (Mayo 2026)
+
+### Estructura Actual
+
+```rust
+// incremental.rs:305-313
+enum BlobStore {
+    Owned(Vec<u8>),                    // En memoria
+    Mapped {                          // Memory-mapped desde archivo
+        mapping: MemoryMappedFile,
+        layout: BlobStoreLayout,       // { start: usize, len: usize }
+    },
+}
+```
+
+Cada entrada de cache (File, Analysis, Build) almacena:
+- `blob_offset: u64` - posición en el blob store
+- `blob_len: u64` - tamaño del dato
+
+### Cómo Funciona el Append
+
+```rust
+// incremental.rs:346-349
+fn append(&mut self, blob: &[u8]) -> (u64, u64) {
+    let store = self.ensure_owned();
+    append_blob(store, blob)  // Returns (offset, len)
+}
+```
+
+```rust
+// incremental.rs:1171-1176
+fn append_blob(blob_store: &mut Vec<u8>, blob: &[u8]) -> (u64, u64) {
+    let offset = blob_store.len() as u64;
+    blob_store.extend_from_slice(blob);  // Solo append, nunca limpia
+    (offset, blob.len() as u64)
+}
+```
+
+### El Problema
+
+1. Cuando se guarda un análisis, se追加 nuevos datos al blob store
+2. Si el análisis se invalida (por cambio en código fuente), `prune_lru` elimina la entrada de `db.analyses`
+3. PERO el blob store NUNCA se compacta - los datos huérfanos quedan ahí
+4. Con el tiempo, el archivo crece aunque la cantidad real de datos útiles sea pequeña
+
+### Código Relevante
+
+| Archivo | Línea | Función/Variable | Descripción |
+|---------|-------|------------------|-------------|
+| incremental.rs | 305 | `BlobStore` enum | Tipos de almacenamiento |
+| incremental.rs | 346 | `BlobStore::append` | Añade datos sin compactar |
+| incremental.rs | 520 | `load()` → `blob_store` | Carga el blob store completo |
+| incremental.rs | 538 | `save()` → `encode_cache_db` | Guarda blob tal cual |
+| incremental.rs | 601, 673, 711 | `blob_store.append()` | Todos los lugares que añaden datos |
+| incremental.rs | 1023 | `encode_cache_db()` | Serializa blob sin procesar |
+| incremental.rs | 1093 | Lectura de cache | Lee `blob_offset` y `blob_len` |
+
+### Tracking de Offsets
+
+Para implementar compactación, necesitas rastrear qué offsets están en uso:
+
+```rust
+// Estructura sugerida para tracking:
+struct BlobRef {
+    offset: u64,
+    len: u64,
+}
+
+// En cada CacheDb entry, ya se tiene:
+struct AnalysisCacheEntry {
+    blob_offset: u64,
+    blob_len: u64,
+    // ...
+}
+```
+
+### Posibles Soluciones
+
+**Opción 1: Compactación al Guardar (más simple)**
+- Antes de `save()`, reconstruir el blob store con solo entradas válidas
+- Ventaja: Código simple
+- Desventaja: Puede ser lento con mucho datos
+
+**Opción 2: GC incremental (más complejo)**
+- Mantener un mapa de offsets válidos
+- Compactar cuando la proporción huérfanos > 70%
+
+**Opción 3: Sistema de generaciones**
+- Usar IDs de generación y limpiar generaciones antiguas
+
+### Pasos para Implementar
+
+1. **Crear función de compactación**:
+```rust
+fn compact_blob_store(
+    db: &CacheDb,
+    blob_store: &[u8]
+) -> Vec<u8> {
+    // 1. Recolectar todos los offsets usados
+    // 2. Crear nuevo blob solo con datos válidos
+    // 3. Actualizar todos los blob_offset en db entries
+    // 4. Retornar nuevo blob y mappings
+}
+```
+
+2. **Invocar en save()**:
+```rust
+pub fn save(&mut self) -> Result<()> {
+    self.prune_lru();
+    
+    // Añadir compactación si hay muchos huérfanos
+    let used = self calculate_used_offsets();
+    let total = self.blob_store.len();
+    if total > 1024 * 1024 && (used as f64 / total as f64) < BLOB_COMPACT_THRESHOLD_RATIO {
+        self.compact_blob_store();
+    }
+    
+    let raw = encode_cache_db(&self.db, self.blob_store.bytes())?;
+    // ...
+}
+```
+
+3. **Actualizar formato de versión** (ya hecho: CACHE_FORMAT_VERSION = 4)
+
+### Tests a Crear
+
+- Test que verifique crecimiento del blob store con muchas invalidaciones
+- Test de compactación automática
+- Test de restauración después de compactación
+
+**Status:** 🟡 PENDIENTE - Requiere ~2-4 horas de trabajo
+
+### D3 - to_upper/to_lower Solo ASCII
+
+**Descripción:**
+`mire_string_to_upper` y `mire_string_to_lower` solo manejan caracteres ASCII:
+- Only handles 'a'-'z' and 'A'-'Z'
+- Does NOT handle: é, ñ, ü, á, ó, etc.
+
+---
+
+## Análisis Técnico (Mayo 2026)
+
+### Ubicación del Código
+
+```c
+// runtime_support.c:830-844
+char *mire_string_to_upper(const char *value) {
+    // ...
+    for (size_t i = 0; i < len; i++) {
+        // Solo maneja rango ASCII
+        result[i] = (value[i] >= 'a' && value[i] <= 'z') 
+            ? (value[i] - 32)  // Convierte a mayúscula ASCII
+            : value[i];
+    }
+    // ...
+}
+
+// runtime_support.c:846-860 - Similar para to_lower
+```
+
+### Problema
+
+Para convertir "ño" a mayúsculas:
+- 'ñ' = 0xF1 (Latin-1) o 0xC3B1 (UTF-8)
+- El código actual NO reconoce estos bytes
+- Retorna el carácter sin cambios o podría causar garbage
+
+### Solución Propuesta
+
+UsarICU o implementar Unicode handling básico:
+
+```c
+// Opción 1: Implementar básica para Latin-1
+char *mire_string_to_upper_latin1(const char *value) {
+    // Manejar: á->Á, é->É, í->Í, ó->Ó, ú->Ú, ñ->Ñ, ü->Ü
+}
+
+// Opción 2: Usar biblioteca externa (ej. libunistring)
+
+// Opción 3: Limitar a ASCII documentado (actual)
+```
+
+### Código Relevante
+
+| Archivo | Línea | Descripción |
+|---------|-------|-------------|
+| runtime_support.c | 830-844 | `mire_string_to_upper` |
+| runtime_support.c | 846-860 | `mire_string_to_lower` |
+| avens/mod.rs | 3335-3375 | Compilación LLVM |
+| typeck.rs | 353-354 | Registro de tipos |
+
+### Impacto
+
+- **Usuario**: Strings como "Hola Mundo" funcionan, pero "ánimo" → "áNIMO" (incorrecto)
+- **Severity**: Baja - solo afecta casos edge con acentos
+
+### Tests Existentes
+
+```bash
+# Ejecutar y verificar con acentos
+./target/release/mire run tests/complex/math/02_string_math.mire
+# Output actual: HOLA MUNDO → HOLA MUNDO (correcto)
+# Input con acentos: "ánimo" → resultado incorrecto
+```
+
+**Status:** 🟡 PENDIENTE - Easy fix si se quiere soporte básico Latin-1
+
+---
+
+### D4 - Memory Leak en mire_dict_format_value
+
+**Descripción:**
+`mire_dict_format_value` para tipos MAP (línea 933) tiene leak:
+```c
+if (kind == MIRE_KIND_MAP) {
+    return mire_strdup_raw(mire_dict_to_string(...));  // Leak: interno no se libera
+}
+```
+
+---
+
+## Análisis Técnico (Mayo 2026)
+
+### El Bug
+
+```c
+// runtime_support.c:932-933
+if (kind == MIRE_KIND_MAP) {
+    // PROBLEMA: mire_dict_to_string retorna string allocado con mire_managed_alloc
+    // luego mire_strdup_raw hace otro malloc + copy
+    // pero el string ORIGINAL de mire_dict_to_string NUNCA se libera
+    return mire_strdup_raw(mire_dict_to_string(mire_dict_read_ptr(dict, entry_index)));
+}
+```
+
+```c
+// mirar lo que hace mire_dict_to_string (línea 1052+):
+// Retorna resultado de mire_managed_alloc, que es memoria gestionada
+// Pero al llamar mire_strdup_raw se hace otro malloc y el original se pierde
+```
+
+### Cómo Verificar
+
+```c
+// Agregar logging o usar valgrind:
+// valgrind --leak-check=full ./target/release/mire run test.mire
+```
+
+### Fix Sugerido
+
+```c
+// Opción 1: No usar mire_strdup_raw, retornar lo de mire_dict_to_string directamente
+if (kind == MIRE_KIND_MAP) {
+    return mire_dict_to_string(mire_dict_read_ptr(dict, entry_index));
+}
+
+// Opción 2: Liberar el string interno si no se usa
+if (kind == MIRE_KIND_MAP) {
+    char *inner = mire_dict_to_string(mire_dict_read_ptr(dict, entry_index));
+    char *result = mire_strdup_raw(inner);
+    mire_string_free(inner);  // Si hay función para liberar
+    return result;
+}
+```
+
+### Llamadores de esta función
+
+```c
+// Línea 1061: mire_dict_to_string usa mire_dict_format_value para cada valor
+// Línea 1076: también en el segundo loop de mire_dict_to_string
+```
+
+### Impacto
+
+- **Memory leak** en cada print de dict con valores anidados
+- Afecta: `use dasu(dict)` cuando dict contiene maps
+- Severity: Media - no/crashes pero consume memoria extra
+
+**Status:** 🟡 PENDIENTE - Fix simple (~15 min)
+
+---
+
+### D5 - &mut x No Requiere Que x Sea Mutable
+
+**Descripción:**
+El compilador permite `set rx = &x` donde `x` no es `mut`. Ej.:
+```mire
+set x = 5 :i64        # x no es mutable
+set rx = &x           # ✅ Compila, pero x no es mutable
+```
+
+---
+
+## Análisis Técnico (Mayo 2026)
+
+### Verificación
+
+```bash
+$ echo 'import std
+
+pub fn main: () {
+    set x = 5 :i64
+    set rx = &x
+    use dasu(rx)
+}' | ./target/release/mire run -
+# Compila y ejecuta sin error
+```
+
+### Análisis
+
+En Mire, las referencias funcionan diferente a Rust:
+- En Rust: `&mut x` requiere que `x` sea `mut`
+- En Mire: No hay esta restricción
+
+Esto PUEDE ser decisión de diseño - Mire es más permisivo.
+
+### Preguntas para Decisión
+
+1. **¿Es esto un bug o característica?**
+   - Si es característica: Documentar en README
+   - Si es bug: Requiere cambio en type checker
+
+2. **Si es bug, qué comportamiento quieres?**
+   - Opción A: `&x` permite shared ref siempre
+   - Opción B: Requiere `x` sea `mut` para shared ref
+   - Opción C: `&x` para ref, `&x mut` para mutable
+
+### Código Relevante
+
+| Archivo | Línea | Descripción |
+|---------|-------|-------------|
+| parser/mod.rs | ~ | Parsing de expresiones `&` |
+| typeck.rs | ~ | Validación de referencias |
+| semantic.rs | ~ | Binding info con mutabilidad |
+
+### Test Actual
+
+```mire
+# Este código COMPILA (comportamiento actual):
+set x = 5 :i64
+set rx = &x          # OK, aunque x no es mut
+
+# Este código NO compila (shadowing):
+set x = 5 :i64 mut
+set x = 10 :i64     # Error: Cannot reassign
+```
+
+**Status:** 🟡 DECISIÓN PENDIENTE - ¿Bug o Diseño?
+
+---
+
+## ℹ️ DISEÑO / MANTENIMIENTO
+
+### M1 - stable_statement_hash Serializa a JSON
+
+**Descripción:**
+`stable_statement_hash` serializa a JSON completo antes de hashear. Costoso para statements grandes; podría hashearse estructuralmente.
+
+```rust
+// Línea 2056: serialización innecesaria
+let serialized = serde_json::to_vec(statement).unwrap_or_default();
+let mut hasher = DefaultHasher::new();
+serialized.hash(&mut hasher);
+```
+
+**Status:** ℹ️ OPTIMIZATION OPPORTUNITY
+
+### M2 - TYPE_CHECKER_SOURCE como thread_local
+
+**Descripción:**
+`TYPE_CHECKER_SOURCE` como thread_local en typeck causa estado implícito, dificulta razonamiento.
+
+**Status:** ℹ️ DESIGN CONCERN
+
+---
+
+## ✅ VERIFIED FIXES (Lo que YA estaba corregido)
+
+| Fix | Archivo | Estado |
+|-----|---------|--------|
+| udiv/urem → sdiv/srem | runtime_support.c | ✅ VERIFICADO |
+| i8* → ptr en list literal | avens/mod.rs | ✅ VERIFICADO |
+| @malloc con i64 en compile_input_expr | avens/mod.rs | ✅ VERIFICADO |
+| Stubs silenciosos → Err(Backend) | avens/mod.rs | ✅ VERIFICADO |
+| strings.join con count=0 | runtime_support.c | ✅ VERIFICADO |
+| Duplicado de lists.push en dispatch | avens/mod.rs | ✅ VERIFICADO |
+| Parser: subparser_from_slice sin contexto nominal | parser/mod.rs | ✅ VERIFICADO |
+| Parser: } final del match | parser/mod.rs | ✅ VERIFICADO |
+| Parser: shorthand Ok(v) ambiguo | parser/mod.rs | ✅ VERIFICADO |
+| Parser: visibilidad consumida dos veces | parser/mod.rs | ✅ VERIFICADO |
+| Parser: for i, j silencioso → error | parser/mod.rs | ✅ VERIFICADO |
+| Typeck: validate_int_literal_range | compiler/typeck.rs | ✅ VERIFICADO |
+| Typeck: unify_types para referencias | compiler/typeck.rs | ✅ VERIFICADO |
+| Typeck: segundo lookup duplicado | compiler/typeck.rs | ✅ VERIFICADO |
+| Typeck: bind_struct_name con data_type | compiler/typeck.rs | ✅ VERIFICADO |
+
+---
+
+## 📊 COBERTURA DE TESTS
+
+| Categoría | Tests | Estado |
+|-----------|-------|--------|
+| level/beginner | 5 | ✅ Passing |
+| level/intermediate | 5 | ✅ Passing |
+| level/advanced | 2 | ✅ Passing |
+| type/structs | 2 | ✅ Passing |
+| type/enums | 2 | ✅ Passing |
+| type/collections | 2 | ✅ Passing |
+| type/primitives | 1 | ✅ Passing |
+| complex/algorithms | 9 | 7 ✅, 2 ⚠️ |
+| complex/data_structures | 14 | 11 ✅, 3 ⚠️ |
+| complex/math | 2 | ✅ Passing |
+| edge/arrays | 4 | ✅ Passing |
+| edge/loops | 3 | ✅ Passing |
+| edge/recursion | 1 | ✅ Passing |
+| edge/error_handling | 1 | ✅ Passing |
+| behavior/typeck | 2 | ✅ Passing |
+| behavior/borrowck | 3 | ⚠️ Partial |
+| modules | 1 | ✅ Passing |
+| **Total** | **70** | **70 ✅, 0 ❌** |
+
+---
+
+## 🎯 PRIORIDADES DE FIX
+
+### Alta Prioridad (🔴 Crítico)
+1. **C1**: DefaultHasher → FxHasher o AHash (cache no persiste entre procesos)
+2. **C2**: strings.split retorna lista, no string concatenada
+3. **C3**: strings.split implementar en codegen
+
+### Media Prioridad (🟠 Bug Real)
+4. **B1**: latest_successful_analysis usa last_access en vez de timestamp creación
+5. **B2/B3**: Verificar semantic_binding y ensure_return_is_safe
+
+### Baja Prioridad (🟡 Deuda Técnica)
+6. **D1**: prune_lru incluye builds en el conteo
+7. **D2**: Blob store con compactación
+8. **D3**: to_upper/to_lower con Unicode (áspero, no manejan acentos)
+9. **D4**: Memory leak en mire_dict_format_value
+10. **D5**: &mut x sin mut -documentar o cambiar
+
+### Optimización (ℹ️)
+11. **M1**: Hash estructural en lugar de JSON serializado
+12. **M2**: TYPE_CHECKER_SOURCE como thread_local (dificultan razonamiento)

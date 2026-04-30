@@ -75,6 +75,64 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.2.0 (Mayo 2026)
+
+### Float Support (Literals & str())
+- `LlType` enum: Añadido `F64` para representar `double` en LLVM
+- `compile_expr`: Float ahora se compila como valor `double` (no string)
+- `map_type`: `F64` ahora mapea a `LlType::F64` (no `Ptr`)
+- `str(float)`: Nueva función `mire_f64_to_string(double) -> ptr` en runtime
+- Runtime: `mire_f64_to_string()` usando `mire_managed_printf_f64("%.6g")`
+- Soporte en `cast_to_i64`, `cast_to_i1`, `store_casted`, `emit_print` y más
+
+**Casos soportados:**
+```mire
+set x = 3.14 :f64
+use dasu(x)        # imprime 3.14
+
+set s = str(3.14 :f64)
+use dasu(s)        # imprime 3.14
+```
+
+### Tests
+- 67/67 tests pasando
+
+---
+
+## v2.1.1 (Mayo 2026)
+
+### Clippy Refactoring
+- Reducción de warnings de 67 a 0 (100% clean)
+- `from_str` → `parse_type` para evitar confusión con trait estándar
+- `eq` → `equals` en MireValue (method independiente)
+- `Box<Expression>` en `AssignmentTarget::Index` para reducir tamaño del enum
+- Type alias `RunOptionsResult` en main.rs para tipo complejo de retorno
+
+### Reference Type Unification
+- `unify_types`: Ahora permite unificar `&T` con `T` (auto-unwrap de referencias)
+- `is_assignable`: Ahora permite `&T` como asignable a `T` (auto-deref)
+- `is_assignable`: Soporte completo para Ref→Ref y RefMut→Ref/RefMut
+
+**Casos soportados:**
+```mire
+fn read_ref: (value :&i64) :i64 {
+    return *value
+}
+
+pub fn main: () {
+    set x = 41 :i64
+    set rx = &x
+    set y = read_ref(rx)
+    use dasu(y + 1)  # imprime 42
+}
+```
+
+### Tests
+- 67/67 tests pasando (66 language regressions + 1 lib test)
+- Fix: `shared_reference_lowering_compiles_and_runs` ahora pasa
+
+---
+
 ## v2.1.0 (Mayo 2026)
 
 ### Logical Operators - C-Style Syntax

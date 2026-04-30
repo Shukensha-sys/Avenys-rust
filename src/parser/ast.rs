@@ -82,7 +82,7 @@ impl DataType {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_type(s: &str) -> Self {
         match s {
             "i8" => DataType::I8,
             "i16" => DataType::I16,
@@ -394,8 +394,8 @@ pub enum AssignmentTarget {
     Variable(String),
     Field(String),
     Index {
-        target: Expression,
-        index: Expression,
+        target: Box<Expression>,
+        index: Box<Expression>,
     },
 }
 
@@ -436,8 +436,8 @@ impl AssignmentTarget {
                 expr
             }
             AssignmentTarget::Index { target, index } => Expression::Index {
-                target: Box::new(target.clone()),
-                index: Box::new(index.clone()),
+                target: target.clone(),
+                index: index.clone(),
                 data_type: DataType::Unknown,
             },
         }
@@ -737,7 +737,7 @@ pub struct FunctionDef {
 }
 
 impl MireValue {
-    pub fn eq(&self, other: &MireValue) -> bool {
+    pub fn equals(&self, other: &MireValue) -> bool {
         match (self, other) {
             (MireValue::I8(a), MireValue::I8(b)) => a == b,
             (MireValue::I16(a), MireValue::I16(b)) => a == b,
@@ -758,7 +758,7 @@ impl MireValue {
                     return false;
                 }
                 for (x, y) in a.iter().zip(b.iter()) {
-                    if !x.eq(y) {
+                    if !x.equals(y) {
                         return false;
                     }
                 }
@@ -769,7 +769,7 @@ impl MireValue {
                     return false;
                 }
                 for (x, y) in a.iter().zip(b.iter()) {
-                    if !x.eq(y) {
+                    if !x.equals(y) {
                         return false;
                     }
                 }
@@ -782,7 +782,7 @@ impl MireValue {
                 for ((k, v), _) in a {
                     let mut found = false;
                     for ((ok, ov), _) in b {
-                        if k.eq(ok) && v.eq(ov) {
+                        if k.equals(ok) && v.equals(ov) {
                             found = true;
                             break;
                         }
@@ -813,7 +813,7 @@ impl MireValue {
                     return false;
                 }
                 for (x, y) in a.iter().zip(b.iter()) {
-                    if !x.eq(y) {
+                    if !x.equals(y) {
                         return false;
                     }
                 }
@@ -824,7 +824,7 @@ impl MireValue {
                     return false;
                 }
                 for (x, y) in a.iter().zip(b.iter()) {
-                    if !x.eq(y) {
+                    if !x.equals(y) {
                         return false;
                     }
                 }
@@ -835,6 +835,6 @@ impl MireValue {
     }
 
     pub fn ne(&self, other: &MireValue) -> bool {
-        !self.eq(other)
+        !self.equals(other)
     }
 }

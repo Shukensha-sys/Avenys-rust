@@ -21,6 +21,17 @@ use std::process::{Command, ExitCode, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+type RunOptionsResult = Result<
+    (
+        CommonOptions,
+        Option<String>,
+        Option<PathBuf>,
+        RunStatsOptions,
+        CacheOverrides,
+    ),
+    MireError,
+>;
+
 #[derive(Debug, Clone)]
 struct CommonOptions {
     debug: bool,
@@ -637,19 +648,7 @@ fn create_project_in_dir(project_dir: &Path, manifest_dir: &Path) -> Result<i32,
     Ok(0)
 }
 
-fn parse_run_options(
-    cwd: &Path,
-    args: &[String],
-) -> Result<
-    (
-        CommonOptions,
-        Option<String>,
-        Option<PathBuf>,
-        RunStatsOptions,
-        CacheOverrides,
-    ),
-    MireError,
-> {
+fn parse_run_options(cwd: &Path, args: &[String]) -> RunOptionsResult {
     let (common, file, output, cache) = parse_command_options(cwd, args)?;
     let mut stats = RunStatsOptions::default();
     for arg in args {
@@ -715,10 +714,14 @@ fn print_run_stats(options: &RunStatsOptions, stats: &ProcessStats) {
     if options.show_ms {
         println!("wall_ms {:.3}", stats.wall.as_secs_f64() * 1000.0);
     }
-    if options.show_cpu && let Some(cpu) = stats.cpu {
+    if options.show_cpu
+        && let Some(cpu) = stats.cpu
+    {
         println!("cpu_ms {:.3}", cpu.as_secs_f64() * 1000.0);
     }
-    if options.show_memory && let Some(bytes) = stats.max_rss_bytes {
+    if options.show_memory
+        && let Some(bytes) = stats.max_rss_bytes
+    {
         println!("max_rss {}", format_bytes(bytes));
     }
 }

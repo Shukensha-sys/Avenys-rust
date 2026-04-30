@@ -6,7 +6,7 @@ use crate::parser::ast::{
     AssignmentTarget, DataType, Expression, Identifier, Literal, Statement, TraitMethodSig,
     Visibility,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub use ast::{EnumDef, EnumVariantDef, MireValue, Program};
 
@@ -20,6 +20,7 @@ pub struct Parser {
     pos: usize,
     scopes: Vec<HashSet<String>>,
     enum_names: HashSet<String>,
+    enum_variant_owners: HashMap<String, String>,
     nominal_type_names: HashSet<String>,
     method_context: usize,
 }
@@ -33,6 +34,7 @@ enum BlockBoundary {
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         let enum_names = Self::collect_top_level_nominal_names(&tokens, TokenType::Enum);
+        let enum_variant_owners = Self::collect_unique_top_level_enum_variant_owners(&tokens);
         let mut nominal_type_names =
             Self::collect_top_level_nominal_names(&tokens, TokenType::Struct);
         nominal_type_names.extend(Self::collect_top_level_nominal_names(
@@ -44,6 +46,7 @@ impl Parser {
             pos: 0,
             scopes: vec![HashSet::new()],
             enum_names,
+            enum_variant_owners,
             nominal_type_names,
             method_context: 0,
         }
@@ -62,15 +65,18 @@ impl Parser {
                     if index + 2 < tokens.len()
                         && tokens[index + 1].ttype == keyword
                         && tokens[index + 2].ttype == TokenType::Ident
-                        && let Some(name) = tokens[index + 2].value.clone() {
-                            names.insert(name);
-                        }
+                        && let Some(name) = tokens[index + 2].value.clone()
+                    {
+                        names.insert(name);
+                    }
                 }
                 ttype if brace_depth == 0 && ttype == keyword => {
-                    if index + 1 < tokens.len() && tokens[index + 1].ttype == TokenType::Ident
-                        && let Some(name) = tokens[index + 1].value.clone() {
-                            names.insert(name);
-                        }
+                    if index + 1 < tokens.len()
+                        && tokens[index + 1].ttype == TokenType::Ident
+                        && let Some(name) = tokens[index + 1].value.clone()
+                    {
+                        names.insert(name);
+                    }
                 }
                 _ => {}
             }
@@ -78,6 +84,85 @@ impl Parser {
         }
 
         names
+    }
+
+    fn collect_unique_top_level_enum_variant_owners(tokens: &[Token]) -> HashMap<String, String> {
+        let mut variant_counts = HashMap::new();
+        let mut variant_owners = HashMap::new();
+        let mut brace_depth = 0usize;
+        let mut index = 0usize;
+
+        while index < tokens.len() {
+            match tokens[index].ttype {
+                TokenType::Lbrace => brace_depth += 1,
+                TokenType::Rbrace => brace_depth = brace_depth.saturating_sub(1),
+                ttype if brace_depth == 0 && matches!(ttype, TokenType::Pub | TokenType::Priv) => {
+                    if index + 3 < tokens.len()
+                        && tokens[index + 1].ttype == TokenType::Enum
+                        && tokens[index + 2].ttype == TokenType::Ident
+                        && tokens[index + 3].ttype == TokenType::Lbrace
+                    {
+                        let enum_name = tokens[index + 2].value.clone().unwrap_or_default();
+                        index = Self::collect_enum_variants_into(
+                            tokens,
+                            index + 4,
+                            &enum_name,
+                            &mut variant_counts,
+                            &mut variant_owners,
+                        );
+                        continue;
+                    }
+                }
+                TokenType::Enum if brace_depth == 0 => {
+                    if index + 2 < tokens.len()
+                        && tokens[index + 1].ttype == TokenType::Ident
+                        && tokens[index + 2].ttype == TokenType::Lbrace
+                    {
+                        let enum_name = tokens[index + 1].value.clone().unwrap_or_default();
+                        index = Self::collect_enum_variants_into(
+                            tokens,
+                            index + 3,
+                            &enum_name,
+                            &mut variant_counts,
+                            &mut variant_owners,
+                        );
+                        continue;
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+
+        variant_owners.retain(|variant, _| variant_counts.get(variant) == Some(&1));
+        variant_owners
+    }
+
+    fn collect_enum_variants_into(
+        tokens: &[Token],
+        mut index: usize,
+        enum_name: &str,
+        variant_counts: &mut HashMap<String, usize>,
+        variant_owners: &mut HashMap<String, String>,
+    ) -> usize {
+        let mut enum_brace_depth = 1usize;
+
+        while index < tokens.len() && enum_brace_depth > 0 {
+            match tokens[index].ttype {
+                TokenType::Lbrace => enum_brace_depth += 1,
+                TokenType::Rbrace => enum_brace_depth = enum_brace_depth.saturating_sub(1),
+                TokenType::Ident if enum_brace_depth == 1 => {
+                    if let Some(variant_name) = tokens[index].value.clone() {
+                        *variant_counts.entry(variant_name.clone()).or_insert(0) += 1;
+                        variant_owners.insert(variant_name, enum_name.to_string());
+                    }
+                }
+                _ => {}
+            }
+            index += 1;
+        }
+
+        index
     }
 
     pub fn parse(&mut self) -> Result<Program> {
@@ -112,11 +197,11 @@ impl Parser {
                 let visibility = self.parse_visibility()?;
                 match self.peek().ttype {
                     TokenType::Fn => self.parse_fn_statement(visibility),
-                    TokenType::Type => self.parse_type_statement(),
-                    TokenType::Skill => self.parse_skill_statement(),
-                    TokenType::Struct => self.parse_struct_statement(),
-                    TokenType::Trait => self.parse_trait_statement(),
-                    TokenType::Enum => self.parse_enum_statement(),
+                    TokenType::Type => self.parse_type_statement(visibility),
+                    TokenType::Skill => self.parse_skill_statement(visibility),
+                    TokenType::Struct => self.parse_struct_statement(visibility),
+                    TokenType::Trait => self.parse_trait_statement(visibility),
+                    TokenType::Enum => self.parse_enum_statement(visibility),
                     _ => {
                         Err(self
                             .error("Expected fn, type, skill, struct, or enum after visibility"))
@@ -124,13 +209,13 @@ impl Parser {
                 }
             }
             TokenType::Fn => self.parse_fn_statement(Visibility::Private),
-            TokenType::Type => self.parse_type_statement(),
-            TokenType::Skill => self.parse_skill_statement(),
-            TokenType::Code => self.parse_code_statement(),
-            TokenType::Struct => self.parse_struct_statement(),
+            TokenType::Type => self.parse_type_statement(Visibility::Private),
+            TokenType::Skill => self.parse_skill_statement(Visibility::Private),
+            TokenType::Code => self.parse_code_statement(Visibility::Private),
+            TokenType::Struct => self.parse_struct_statement(Visibility::Private),
             TokenType::Impl => self.parse_impl_statement(),
-            TokenType::Trait => self.parse_trait_statement(),
-            TokenType::Enum => self.parse_enum_statement(),
+            TokenType::Trait => self.parse_trait_statement(Visibility::Private),
+            TokenType::Enum => self.parse_enum_statement(Visibility::Private),
             TokenType::If => self.parse_if_statement(),
             TokenType::While => self.parse_while_statement(),
             TokenType::For => self.parse_for_statement(),
@@ -382,11 +467,12 @@ impl Parser {
         })
     }
 
-    fn parse_struct_statement(&mut self) -> Result<Statement> {
-        if matches!(self.peek().ttype, TokenType::Pub | TokenType::Priv) {
-            self.advance();
-        }
-        self.expect(TokenType::Struct)?;
+    fn parse_nominal_type_statement(
+        &mut self,
+        keyword: TokenType,
+        _visibility: Visibility,
+    ) -> Result<Statement> {
+        self.expect(keyword)?;
         let name = self.expect_ident()?;
 
         let parent = if self.check(TokenType::Extends) {
@@ -441,14 +527,15 @@ impl Parser {
         })
     }
 
-    fn parse_type_statement(&mut self) -> Result<Statement> {
-        self.parse_struct_statement()
+    fn parse_struct_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        self.parse_nominal_type_statement(TokenType::Struct, visibility)
     }
 
-    fn parse_skill_statement(&mut self) -> Result<Statement> {
-        if matches!(self.peek().ttype, TokenType::Pub | TokenType::Priv) {
-            self.advance();
-        }
+    fn parse_type_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        self.parse_nominal_type_statement(TokenType::Type, visibility)
+    }
+
+    fn parse_skill_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Skill)?;
         let name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -487,10 +574,7 @@ impl Parser {
         Ok(Statement::Skill { name, methods })
     }
 
-    fn parse_code_statement(&mut self) -> Result<Statement> {
-        if matches!(self.peek().ttype, TokenType::Pub | TokenType::Priv) {
-            self.advance();
-        }
+    fn parse_code_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Code)?;
         let trait_name = self.expect_ident()?;
 
@@ -522,10 +606,7 @@ impl Parser {
         })
     }
 
-    fn parse_trait_statement(&mut self) -> Result<Statement> {
-        if matches!(self.peek().ttype, TokenType::Pub | TokenType::Priv) {
-            self.advance();
-        }
+    fn parse_trait_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Trait)?;
         let name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -592,10 +673,7 @@ impl Parser {
         })
     }
 
-    fn parse_enum_statement(&mut self) -> Result<Statement> {
-        if matches!(self.peek().ttype, TokenType::Pub | TokenType::Priv) {
-            self.advance();
-        }
+    fn parse_enum_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Enum)?;
         let enum_name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -746,23 +824,14 @@ impl Parser {
         if let Some(second) = &second {
             self.declare(second);
         }
-        let mut body = self.parse_block()?;
+        let body = self.parse_block()?;
         self.pop_scope();
         self.expect_block_close()?;
 
-        if let Some(second) = second {
-            body.insert(
-                0,
-                Statement::Let {
-                    name: second,
-                    data_type: DataType::Anything,
-                    value: None,
-                    is_constant: false,
-                    is_mutable: true,
-                    is_static: false,
-                    visibility: Visibility::Private,
-                },
-            );
+        if second.is_some() {
+            return Err(self.error(
+                "Secondary for-loop bindings are not implemented yet; use a single loop variable",
+            ));
         }
 
         Ok(Statement::For {
@@ -812,6 +881,7 @@ impl Parser {
 
         let mut cases = Vec::new();
         let mut default = Vec::new();
+        let mut consumed_closing_brace = false;
 
         loop {
             self.skip_newlines();
@@ -819,6 +889,7 @@ impl Parser {
             // Stop at final block close (})
             if self.check(TokenType::Rbrace) {
                 self.advance(); // Consume final }
+                consumed_closing_brace = true;
                 break;
             }
 
@@ -848,6 +919,10 @@ impl Parser {
             } else {
                 cases.push((pattern, body));
             }
+        }
+
+        if !consumed_closing_brace {
+            self.expect(TokenType::Rbrace)?;
         }
 
         Ok(Statement::Match {
@@ -1586,6 +1661,7 @@ impl Parser {
 
     fn try_parse_signature_closure(&mut self) -> Result<Option<Expression>> {
         let start = self.pos;
+        // Backtracking here is only safe while `parse_param_list` remains side-effect free.
         let params = match self.parse_param_list() {
             Ok(params) => params,
             Err(_) => {
@@ -1615,13 +1691,11 @@ impl Parser {
         self.expect(TokenType::If)?;
         let condition = self.parse_expression_until_block_open()?;
         self.expect_block_open()?;
-        let then_parsed = self.parse_expression_until_block_close()?;
-        let then_expr = self.coerce_unknown_identifier_to_string(then_parsed);
+        let then_expr = self.parse_expression_until_block_close()?;
         self.expect_block_close()?;
         self.expect(TokenType::Else)?;
         self.expect_block_open()?;
-        let else_parsed = self.parse_expression_until_block_close()?;
-        let else_expr = self.coerce_unknown_identifier_to_string(else_parsed);
+        let else_expr = self.parse_expression_until_block_close()?;
         self.expect_block_close()?;
 
         Ok(Expression::Call {
@@ -1682,6 +1756,7 @@ impl Parser {
 
         let mut cases = Vec::new();
         let mut default = None;
+        let mut consumed_closing_brace = false;
 
         loop {
             self.skip_newlines();
@@ -1689,6 +1764,7 @@ impl Parser {
             // Stop at final }
             if self.check(TokenType::Rbrace) {
                 self.advance(); // Consume final }
+                consumed_closing_brace = true;
                 break;
             }
 
@@ -1722,8 +1798,9 @@ impl Parser {
             self.skip_newlines();
         }
 
-        // Consume final } if present (already consumed in loop, but just in case)
-        self.skip_newlines();
+        if !consumed_closing_brace {
+            self.expect(TokenType::Rbrace)?;
+        }
 
         Ok(Expression::Match {
             value: Box::new(value),
@@ -1776,11 +1853,21 @@ impl Parser {
                     self.advance();
                     let payloads = self.parse_expression_list_until(TokenType::Rparen)?;
                     self.expect(TokenType::Rparen)?;
+                    let Some(enum_name) = self.enum_variant_owners.get(&name).cloned() else {
+                        return Err(self.error_at(
+                            token.line,
+                            token.column,
+                            &format!(
+                                "Cannot resolve enum variant shorthand '{}'; use Enum.{} explicitly",
+                                name, name
+                            ),
+                        ));
+                    };
                     return Ok(Expression::EnumVariant {
-                        enum_name: name.clone(),
-                        variant_name: name.clone(),
+                        enum_name: enum_name.clone(),
+                        variant_name: name,
                         payloads,
-                        data_type: DataType::EnumNamed(name.clone()),
+                        data_type: DataType::EnumNamed(enum_name),
                     });
                 }
 
@@ -1878,6 +1965,10 @@ impl Parser {
     fn subparser_from_slice(&self, slice: Vec<Token>) -> Parser {
         let mut parser = Parser::new(slice);
         parser.scopes = self.scopes.clone();
+        parser.enum_names = self.enum_names.clone();
+        parser.enum_variant_owners = self.enum_variant_owners.clone();
+        parser.nominal_type_names = self.nominal_type_names.clone();
+        parser.method_context = self.method_context;
         parser
     }
 
@@ -1975,9 +2066,10 @@ impl Parser {
 
     fn normalize_io_argument(&self, expr: &mut Expression) -> Result<()> {
         if let Expression::Literal(Literal::Str(value)) = expr
-            && value.contains('{') {
-                *expr = concat_expressions(self.parse_string_template_parts(value)?);
-            }
+            && value.contains('{')
+        {
+            *expr = concat_expressions(self.parse_string_template_parts(value)?);
+        }
 
         Ok(())
     }
@@ -2055,7 +2147,9 @@ impl Parser {
         let mut parser = Parser::new(tokenize(source)?);
         parser.scopes = self.scopes.clone();
         parser.enum_names = self.enum_names.clone();
+        parser.enum_variant_owners = self.enum_variant_owners.clone();
         parser.nominal_type_names = self.nominal_type_names.clone();
+        parser.method_context = self.method_context;
 
         let expr = parser.parse_expression()?;
         if parser.check(TokenType::Colon) {
@@ -2085,6 +2179,7 @@ impl Parser {
     }
 
     fn parse_param_list(&mut self) -> Result<Vec<(String, DataType)>> {
+        // Keep this free of parser-side effects so closure backtracking stays correct.
         let mut params = Vec::new();
         while !self.check(TokenType::Rparen) && !self.is_at_end() {
             let name = if self.check(TokenType::SelfToken) {
@@ -2187,7 +2282,7 @@ impl Parser {
                     } else if self.enum_names.contains(other) {
                         Ok(DataType::EnumNamed(other.to_string()))
                     } else {
-                        Ok(DataType::from_str(other))
+                        Ok(DataType::parse_type(other))
                     }
                 }
             };
@@ -2222,7 +2317,7 @@ impl Parser {
             let mut entries = Vec::new();
             while !self.check(TokenType::Rbracket) && !self.is_at_end() {
                 let parsed_key = self.parse_pipeline_free_expression()?;
-                let key = self.coerce_unknown_identifier_to_string(parsed_key);
+                let key = self.coerce_dict_key_to_string(parsed_key);
                 let value = self.parse_pipeline_free_expression()?;
                 entries.push((key, value));
                 if self.check(TokenType::Comma) {
@@ -2256,7 +2351,7 @@ impl Parser {
 
         while !self.check(TokenType::Rbrace) && !self.is_at_end() {
             let parsed_key = self.parse_pipeline_free_expression()?;
-            let key = self.coerce_unknown_identifier_to_string(parsed_key);
+            let key = self.coerce_dict_key_to_string(parsed_key);
             self.expect(TokenType::Colon)?;
             let value = self.parse_pipeline_free_expression()?;
             entries.push((key, value));
@@ -2325,8 +2420,8 @@ impl Parser {
             self.advance();
             let index = self.parse_additive()?;
             Ok(AssignmentTarget::Index {
-                target: base.as_expression(),
-                index,
+                target: Box::new(base.as_expression()),
+                index: Box::new(index),
             })
         } else {
             Ok(base)
@@ -2638,7 +2733,7 @@ impl Parser {
         }
     }
 
-    fn coerce_unknown_identifier_to_string(&self, expr: Expression) -> Expression {
+    fn coerce_dict_key_to_string(&self, expr: Expression) -> Expression {
         match expr {
             Expression::Identifier(Identifier { name, .. }) if !self.is_declared(&name) => {
                 string_expr(&name)
@@ -3117,6 +3212,19 @@ mod tests {
     }
 
     #[test]
+    fn match_statement_consumes_closing_brace_before_following_statement() {
+        let source = "pub fn main: () {\nset x = 1 :i64\nmatch x {\n    1 { set y = 10 }\n}\nset z = 20\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+
+        assert!(matches!(body[1], Statement::Match { .. }));
+        assert!(matches!(body[2], Statement::Let { .. }));
+    }
+
+    #[test]
     fn match_pattern_bindings_are_visible_inside_dasu_calls() {
         let source = "enum Result {\n    Ok(value :i64)\n}\n\npub fn main: () {\n    set result = Result.Ok(42)\n    match result {\n        Result.Ok(v) {\n            use dasu(v)\n        }\n    }\n}\n";
         let program = parse(source).expect("parse should succeed");
@@ -3131,6 +3239,38 @@ mod tests {
             panic!("expected dasu call");
         };
         assert!(matches!(args.first(), Some(Expression::Identifier(_))));
+    }
+
+    #[test]
+    fn resolves_unique_enum_variant_shorthand_in_match_patterns() {
+        let source = "enum Result {\n    Ok(value :i64)\n}\n\npub fn main: () {\n    set result = Result.Ok(42)\n    match result {\n        Ok(v) {\n            use dasu(v)\n        }\n    }\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[1] else {
+            panic!("expected function");
+        };
+        let Statement::Match { cases, .. } = &body[1] else {
+            panic!("expected match statement");
+        };
+        let Expression::EnumVariant {
+            enum_name,
+            variant_name,
+            ..
+        } = &cases[0].0
+        else {
+            panic!("expected enum variant pattern");
+        };
+
+        assert_eq!(enum_name, "Result");
+        assert_eq!(variant_name, "Ok");
+    }
+
+    #[test]
+    fn rejects_ambiguous_enum_variant_shorthand_in_match_patterns() {
+        let source = "enum Result {\n    Ok(value :i64)\n}\n\nenum Response {\n    Ok(message :str)\n}\n\npub fn main: () {\n    set result = Result.Ok(42)\n    match result {\n        Ok(v) {\n            use dasu(v)\n        }\n    }\n}\n";
+        let err = parse(source).expect_err("parse should reject ambiguous shorthand");
+        let rendered = format!("{err}");
+        assert!(rendered.contains("Cannot resolve enum variant shorthand 'Ok'"));
     }
 
     #[test]
@@ -3253,6 +3393,60 @@ mod tests {
     }
 
     #[test]
+    fn if_expression_preserves_unknown_identifiers_in_branches() {
+        let source =
+            "pub fn main: () {\nset result = if true { missing } else { 0 }\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let {
+            value: Some(Expression::Call { args, .. }),
+            ..
+        } = &body[0]
+        else {
+            panic!("expected let call");
+        };
+        let Expression::Closure { body, .. } = &args[1] else {
+            panic!("expected then-closure");
+        };
+        let Statement::Return(Some(Expression::Identifier(ident))) = &body[0] else {
+            panic!("expected identifier return");
+        };
+        assert_eq!(ident.name, "missing");
+    }
+
+    #[test]
+    fn subparsers_preserve_nominal_context_for_conditions() {
+        let source = "enum Result {\n    Ok\n}\n\npub fn main: () {\n    if Result.Ok {\n        use dasu(\"ok\")\n    }\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[1] else {
+            panic!("expected function");
+        };
+        let Statement::If { condition, .. } = &body[0] else {
+            panic!("expected if statement");
+        };
+
+        assert!(matches!(condition, Expression::EnumVariantPath { .. }));
+    }
+
+    #[test]
+    fn rejects_secondary_for_loop_binding_until_semantics_exist() {
+        let source = "pub fn main: () {\nfor item, index in [1 2 3] {\n    use dasu(item)\n}\n}\n";
+        let err = parse(source).expect_err("parse should reject incomplete two-binding for loop");
+        let rendered = format!("{err}");
+        assert!(rendered.contains("Secondary for-loop bindings are not implemented yet"));
+    }
+
+    #[test]
+    fn rejects_duplicate_visibility_before_type_declaration() {
+        let source = "pub pub type Point {\n    x :i64\n}\n";
+        assert!(parse(source).is_err());
+    }
+
+    #[test]
     fn rejects_legacy_angle_block_syntax() {
         let source = "pub fn main: () >\nuse dasu(\"no\")\n<\n";
         let program = parse(source);
@@ -3262,10 +3456,11 @@ mod tests {
 
 fn apply_vector_type_to_list(expr: &mut Expression, element_type: Box<DataType>, dynamic: bool) {
     if let Expression::List {
-            elements: _,
-            element_type: elem,
-            data_type: dt,
-        } = expr {
+        elements: _,
+        element_type: elem,
+        data_type: dt,
+    } = expr
+    {
         *elem = (*element_type).clone();
         *dt = DataType::Vector {
             element_type,

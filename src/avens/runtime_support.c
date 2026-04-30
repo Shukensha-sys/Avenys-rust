@@ -757,6 +757,10 @@ char *mire_bool_to_string(int64_t value) {
     return mire_managed_from_slice(value ? "true" : "false", value ? 4 : 5);
 }
 
+char *mire_f64_to_string(double value) {
+    return mire_managed_printf_f64("%.6g", value);
+}
+
 char *mire_string_copy(const char *value) {
     if (value == NULL) {
         return mire_managed_from_slice("", 0);
@@ -1189,6 +1193,47 @@ void *mire_list_slice(void *list_ptr, int64_t start, int64_t end) {
     return new_data;
 }
 
+// mire_strings_split_list - splits string and returns a list (for strings.split)
+void *mire_strings_split_list(const char *input, const char *delimiter) {
+    if (input == NULL || delimiter == NULL) {
+        void *list = mire_list_create(4, sizeof(void *));
+        return list;
+    }
+    
+    size_t delim_len = strlen(delimiter);
+    if (delim_len == 0) {
+        void *list = mire_list_create(1, sizeof(void *));
+        char *copy = mire_strdup_raw(input);
+        mire_list_push_ptr(list, copy);
+        return list;
+    }
+    
+    size_t count = 1;
+    const char *p = input;
+    while ((p = strstr(p, delimiter)) != NULL) {
+        count++;
+        p += delim_len;
+    }
+    
+    void *list = mire_list_create(count, sizeof(void *));
+    if (list == NULL) {
+        return NULL;
+    }
+    
+    char *input_copy = mire_strdup_raw(input);
+    char *token = strtok(input_copy, delimiter);
+    
+    while (token != NULL) {
+        char *copy = mire_strdup_raw(token);
+        mire_list_push_ptr(list, copy);
+        token = strtok(NULL, delimiter);
+    }
+    
+    free(input_copy);
+    return list;
+}
+
+// Old version kept for backward compatibility - returns concatenated string
 char *mire_strings_split(const char *input, const char *delimiter) {
     if (input == NULL || delimiter == NULL) {
         return mire_managed_from_slice("", 0);
@@ -1335,7 +1380,8 @@ void *mire_dict_keys(void *dict_ptr) {
     
     result[0] = new_cap;
     result[1] = dict->len;
-    int64_t *data = result + 2;
+    int64_t *list_ptr = result + 1;
+    int64_t *data = list_ptr + 1;
     
     for (int64_t i = 0; i < dict->len; i++) {
         if (dict->key_kind == MIRE_KIND_SCALAR) {
@@ -1345,7 +1391,7 @@ void *mire_dict_keys(void *dict_ptr) {
         }
     }
     
-    return data;
+    return list_ptr;
 }
 
 void *mire_dict_values(void *dict_ptr) {
@@ -1362,7 +1408,8 @@ void *mire_dict_values(void *dict_ptr) {
     
     result[0] = new_cap;
     result[1] = dict->len;
-    int64_t *data = result + 2;
+    int64_t *list_ptr = result + 1;
+    int64_t *data = list_ptr + 1;
     
     for (int64_t i = 0; i < dict->len; i++) {
         if (dict->value_kind == MIRE_KIND_PTR) {
@@ -1372,5 +1419,5 @@ void *mire_dict_values(void *dict_ptr) {
         }
     }
     
-    return data;
+    return list_ptr;
 }

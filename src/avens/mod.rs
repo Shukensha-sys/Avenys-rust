@@ -644,6 +644,7 @@ fn llvm_version() -> Result<String> {
 enum LlType {
     I64,
     I1,
+    F64,
     Ptr,
 }
 
@@ -949,6 +950,7 @@ impl LlvmIrGen {
             "declare ptr @mire_gpu_snapshot()".to_string(),
             "declare ptr @mire_i64_to_string(i64)".to_string(),
             "declare ptr @mire_bool_to_string(i64)".to_string(),
+            "declare ptr @mire_f64_to_string(double)".to_string(),
             "declare ptr @mire_string_copy(ptr)".to_string(),
             "declare ptr @mire_string_concat(ptr, ptr)".to_string(),
             "declare ptr @mire_string_append_owned(ptr, ptr)".to_string(),
@@ -957,6 +959,7 @@ impl LlvmIrGen {
             "declare ptr @mire_string_to_lower(ptr)".to_string(),
             "declare ptr @mire_strings_replace(ptr, ptr, ptr)".to_string(),
             "declare ptr @mire_strings_split(ptr, ptr)".to_string(),
+            "declare ptr @mire_strings_split_list(ptr, ptr)".to_string(),
             "declare ptr @mire_strings_join(ptr, i64, ptr)".to_string(),
             "declare ptr @mire_strings_trim(ptr)".to_string(),
             "declare ptr @mire_list_create(i64, i64)".to_string(),
@@ -978,6 +981,7 @@ impl LlvmIrGen {
             "@.fmt_i64 = private unnamed_addr constant [5 x i8] c\"%ld\\0A\\00\"".to_string(),
             "@.fmt_str = private unnamed_addr constant [4 x i8] c\"%s\\0A\\00\"".to_string(),
             "@.fmt_float = private unnamed_addr constant [4 x i8] c\"%f\\0A\\00\"".to_string(),
+            "@.fmt_f64 = private unnamed_addr constant [6 x i8] c\"%.6g\\0A\\00\"".to_string(),
             "@.fmt_bool_true = private unnamed_addr constant [5 x i8] c\"true\\00\"".to_string(),
             "@.fmt_bool_false = private unnamed_addr constant [6 x i8] c\"false\\00\"".to_string(),
             "@.fmt_i32 = private unnamed_addr constant [4 x i8] c\"%d\\0A\\00\"".to_string(),
@@ -1180,7 +1184,11 @@ impl LlvmIrGen {
                 repr: value.to_string(),
                 owned: false,
             }),
-            Expression::Literal(Literal::Float(value)) => Ok(self.string_value(&value.to_string())),
+            Expression::Literal(Literal::Float(value)) => Ok(LlValue {
+                ty: LlType::F64,
+                repr: value.to_string(),
+                owned: false,
+            }),
             Expression::Literal(Literal::Bool(value)) => Ok(LlValue {
                 ty: LlType::I1,
                 repr: if *value {
@@ -1311,6 +1319,18 @@ impl LlvmIrGen {
                             owned: true,
                         })
                     }
+                    DataType::F64 => {
+                        let tmp = self.tmp();
+                        self.body.push(format!(
+                            "  {tmp} = call ptr @mire_f64_to_string(double {})",
+                            value.repr
+                        ));
+                        Ok(LlValue {
+                            ty: LlType::Ptr,
+                            repr: tmp,
+                            owned: true,
+                        })
+                    }
                     _ => match value.ty {
                         LlType::Ptr => Ok(value),
                         LlType::I64 => {
@@ -1331,6 +1351,18 @@ impl LlvmIrGen {
                             self.body.push(format!(
                                 "  {tmp} = call ptr @mire_bool_to_string(i64 {})",
                                 i64_value.repr
+                            ));
+                            Ok(LlValue {
+                                ty: LlType::Ptr,
+                                repr: tmp,
+                                owned: true,
+                            })
+                        }
+                        LlType::F64 => {
+                            let tmp = self.tmp();
+                            self.body.push(format!(
+                                "  {tmp} = call ptr @mire_f64_to_string(double {})",
+                                value.repr
                             ));
                             Ok(LlValue {
                                 ty: LlType::Ptr,
@@ -1488,9 +1520,6 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "mem.process" => {
                 self.compile_mem_process(args)
             }
-            Expression::Call { name, args, .. } if name == "lists.push" => {
-                self.compile_lists_push(args)
-            }
             Expression::Call { name, args, .. } if name == "lists.fold" => {
                 self.compile_lists_fold(args)
             }
@@ -1502,9 +1531,6 @@ impl LlvmIrGen {
             }
             Expression::Call { name, args, .. } if name == "math.sum" => {
                 self.compile_math_sum(args)
-            }
-            Expression::Call { name, args, .. } if name == "strings.replace" => {
-                self.compile_strings_replace(args)
             }
             Expression::Call {
                 name,
@@ -1572,6 +1598,7 @@ impl LlvmIrGen {
                     let casted = match expected_ty {
                         LlType::I64 => self.cast_to_i64(value)?,
                         LlType::I1 => self.cast_to_i1(value)?,
+                        LlType::F64 => value,
                         LlType::Ptr if value.ty == LlType::Ptr => value,
                         LlType::Ptr => {
                             return Err(MireError::new(ErrorKind::Runtime {
@@ -1726,12 +1753,7 @@ impl LlvmIrGen {
                         body,
                         return_type,
                         capture: _,
-                    } => self.compile_pipeline_closure(
-                        input_val,
-                        params,
-                        body,
-                        return_type,
-                    ),
+                    } => self.compile_pipeline_closure(input_val, params, body, return_type),
                     _ => Err(MireError::new(ErrorKind::Runtime {
                         message: "Pipeline stage must be a function call, identifier, or closure"
                             .to_string(),
@@ -1755,12 +1777,6 @@ impl LlvmIrGen {
     }
 
     fn compile_list_len_value(&mut self, list: LlValue) -> Result<LlValue> {
-        let list_ptr = self.tmp();
-        self.body.push(format!(
-            "  {list_ptr} = getelementptr inbounds i8, ptr {}, i64 -8",
-            list.repr
-        ));
-
         let is_null = self.tmp();
         let loaded_len = self.tmp();
         let len = self.tmp();
@@ -1772,7 +1788,7 @@ impl LlvmIrGen {
             .push(format!("  {result_ptr} = alloca i64"));
 
         self.body
-            .push(format!("  {is_null} = icmp eq ptr {list_ptr}, null"));
+            .push(format!("  {is_null} = icmp eq ptr {}, null", list.repr));
         self.body.push(format!(
             "  br i1 {is_null}, label %{null_label}, label %{load_label}"
         ));
@@ -1783,7 +1799,7 @@ impl LlvmIrGen {
 
         self.body.push(format!("{load_label}:"));
         self.body
-            .push(format!("  {loaded_len} = load i64, ptr {list_ptr}"));
+            .push(format!("  {loaded_len} = load i64, ptr {}", list.repr));
         self.body
             .push(format!("  store i64 {loaded_len}, ptr {result_ptr}"));
         self.body.push(format!("  br label %{end_label}"));
@@ -1813,7 +1829,7 @@ impl LlvmIrGen {
             DataType::List | DataType::Vector { .. } => self.compile_list_len_value(value),
             _ => match value.ty {
                 LlType::Ptr => self.compile_list_len_value(value),
-                LlType::I64 | LlType::I1 => Ok(LlValue {
+                LlType::I64 | LlType::I1 | LlType::F64 => Ok(LlValue {
                     ty: LlType::I64,
                     repr: "0".to_string(),
                     owned: false,
@@ -2656,6 +2672,16 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
+            LlType::F64 => {
+                let value = self.tmp();
+                self.body
+                    .push(format!("  {value} = load double, ptr {field_ptr}"));
+                Ok(LlValue {
+                    ty: LlType::F64,
+                    repr: value,
+                    owned: false,
+                })
+            }
             LlType::Ptr => {
                 let value = self.tmp();
                 self.body
@@ -2953,11 +2979,9 @@ impl LlvmIrGen {
                 message: "Avenys list.pop(...) expects 1 argument".to_string(),
             }));
         }
-        Ok(LlValue {
-            ty: LlType::I64,
-            repr: "0".to_string(),
-            owned: false,
-        })
+        Err(MireError::new(ErrorKind::Backend {
+            message: "Avenys does not yet lower list.pop(...) safely".to_string(),
+        }))
     }
 
     fn compile_dict_get(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3116,11 +3140,9 @@ impl LlvmIrGen {
                 message: "Avenys contains(...) expects 2 arguments".to_string(),
             }));
         }
-        Ok(LlValue {
-            ty: LlType::I1,
-            repr: "0".to_string(),
-            owned: false,
-        })
+        Err(MireError::new(ErrorKind::Backend {
+            message: "Avenys does not yet lower contains(...) safely".to_string(),
+        }))
     }
 
     fn compile_dict_keys(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3232,9 +3254,10 @@ impl LlvmIrGen {
 
         if let (_, Expression::Literal(Literal::Str(from)), Expression::Literal(Literal::Str(to))) =
             (&args[0], &args[1], &args[2])
-            && (from.is_empty() || from == to) {
-                return self.compile_expr(&args[0]);
-            }
+            && (from.is_empty() || from == to)
+        {
+            return self.compile_expr(&args[0]);
+        }
 
         let input = self.compile_expr(&args[0])?;
         let from = self.compile_expr(&args[1])?;
@@ -3261,7 +3284,7 @@ impl LlvmIrGen {
         let delimiter = self.compile_expr(&args[1])?;
         let result = self.tmp();
         self.body.push(format!(
-            "  {result} = call ptr @mire_strings_split(ptr {}, ptr {})",
+            "  {result} = call ptr @mire_strings_split_list(ptr {}, ptr {})",
             input.repr, delimiter.repr
         ));
         Ok(LlValue {
@@ -3279,10 +3302,16 @@ impl LlvmIrGen {
         }
         let input = self.compile_expr(&args[0])?;
         let delimiter = self.compile_expr(&args[1])?;
+        let count = self.compile_list_len_value(input.clone())?;
+        let data_ptr = self.tmp();
+        self.body.push(format!(
+            "  {data_ptr} = getelementptr inbounds i8, ptr {}, i64 8",
+            input.repr
+        ));
         let result = self.tmp();
         self.body.push(format!(
-            "  {result} = call ptr @mire_strings_join(ptr {}, i64 0, ptr {})",
-            input.repr, delimiter.repr
+            "  {result} = call ptr @mire_strings_join(ptr {data_ptr}, i64 {}, ptr {})",
+            count.repr, delimiter.repr
         ));
         Ok(LlValue {
             ty: LlType::Ptr,
@@ -3399,11 +3428,9 @@ impl LlvmIrGen {
                 message: "Avenys sqrt(...) expects 1 argument".to_string(),
             }));
         }
-        Ok(LlValue {
-            ty: LlType::Ptr,
-            repr: "null".to_string(),
-            owned: false,
-        })
+        Err(MireError::new(ErrorKind::Backend {
+            message: "Avenys does not yet lower sqrt(...) safely".to_string(),
+        }))
     }
 
     fn compile_pow(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3494,11 +3521,10 @@ impl LlvmIrGen {
     }
 
     fn compile_range(&mut self, _args: &[Expression]) -> Result<LlValue> {
-        Ok(LlValue {
-            ty: LlType::Ptr,
-            repr: "null".to_string(),
-            owned: false,
-        })
+        Err(MireError::new(ErrorKind::Backend {
+            message: "Avenys does not yet lower range(...) as a first-class value safely"
+                .to_string(),
+        }))
     }
 
     fn compile_sleep(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -4089,10 +4115,6 @@ impl LlvmIrGen {
         })
     }
 
-    fn compile_strings_replace(&mut self, args: &[Expression]) -> Result<LlValue> {
-        self.compile_replace(args)
-    }
-
     fn compile_struct_constructor(
         &mut self,
         type_name: &str,
@@ -4114,36 +4136,43 @@ impl LlvmIrGen {
 
         for arg in args {
             if let Expression::NamedArg { name, value, .. } = arg
-                && let Some(field_index) = struct_info.field_indices.get(name) {
-                    let field_value = self.compile_expr(value)?;
-                    let field_ptr = self.tmp();
-                    self.body.push(format!(
-                        "  {field_ptr} = getelementptr inbounds {}, ptr {ptr}, i32 0, i32 {}",
-                        struct_ty, field_index
-                    ));
+                && let Some(field_index) = struct_info.field_indices.get(name)
+            {
+                let field_value = self.compile_expr(value)?;
+                let field_ptr = self.tmp();
+                self.body.push(format!(
+                    "  {field_ptr} = getelementptr inbounds {}, ptr {ptr}, i32 0, i32 {}",
+                    struct_ty, field_index
+                ));
 
-                    let field_type = struct_info
-                        .fields
-                        .get(*field_index)
-                        .cloned()
-                        .unwrap_or(LlType::I64);
-                    match field_type {
-                        LlType::I64 => {
-                            let casted = self.cast_to_i64(field_value)?;
-                            self.body
-                                .push(format!("  store i64 {}, ptr {field_ptr}", casted.repr));
-                        }
-                        LlType::I1 => {
-                            let casted = self.cast_to_i1(field_value)?;
-                            self.body
-                                .push(format!("  store i1 {}, ptr {field_ptr}", casted.repr));
-                        }
-                        LlType::Ptr => {
-                            self.body
-                                .push(format!("  store ptr {}, ptr {field_ptr}", field_value.repr));
-                        }
+                let field_type = struct_info
+                    .fields
+                    .get(*field_index)
+                    .cloned()
+                    .unwrap_or(LlType::I64);
+                match field_type {
+                    LlType::I64 => {
+                        let casted = self.cast_to_i64(field_value)?;
+                        self.body
+                            .push(format!("  store i64 {}, ptr {field_ptr}", casted.repr));
+                    }
+                    LlType::I1 => {
+                        let casted = self.cast_to_i1(field_value)?;
+                        self.body
+                            .push(format!("  store i1 {}, ptr {field_ptr}", casted.repr));
+                    }
+                    LlType::F64 => {
+                        self.body.push(format!(
+                            "  store double {}, ptr {field_ptr}",
+                            field_value.repr
+                        ));
+                    }
+                    LlType::Ptr => {
+                        self.body
+                            .push(format!("  store ptr {}, ptr {field_ptr}", field_value.repr));
                     }
                 }
+            }
         }
 
         Ok(LlValue {
@@ -4198,7 +4227,7 @@ impl LlvmIrGen {
             DataType::List | DataType::Vector { .. } => self.compile_list_len(args),
             _ => match value.ty {
                 LlType::Ptr => self.compile_list_len(args),
-                LlType::I64 | LlType::I1 => Ok(LlValue {
+                LlType::I64 | LlType::I1 | LlType::F64 => Ok(LlValue {
                     ty: LlType::I64,
                     repr: "0".to_string(),
                     owned: false,
@@ -4535,15 +4564,16 @@ impl LlvmIrGen {
     ) -> Result<LlValue> {
         // Handle wildcard pattern - always matches (true)
         if let Expression::Identifier(ident) = pattern
-            && ident.name == "_" {
-                let result = self.tmp();
-                self.body.push(format!("  {result} = add i1 0, 1"));
-                return Ok(LlValue {
-                    ty: LlType::I1,
-                    repr: result,
-                    owned: false,
-                });
-            }
+            && ident.name == "_"
+        {
+            let result = self.tmp();
+            self.body.push(format!("  {result} = add i1 0, 1"));
+            return Ok(LlValue {
+                ty: LlType::I1,
+                repr: result,
+                owned: false,
+            });
+        }
 
         // Handle enum variant patterns (Status.Ok or Result.Ok(value))
         if let Expression::EnumVariantPath {
@@ -4551,28 +4581,29 @@ impl LlvmIrGen {
             variant_name,
             ..
         } = pattern
-            && value.ty == LlType::Ptr {
-                let (enum_ty, tag) = {
-                    let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
-                    (enum_info.llvm_type.clone(), variant.tag)
-                };
-                let tag_ptr = self.tmp();
-                self.body.push(format!(
-                    "  {tag_ptr} = getelementptr inbounds {}, ptr {}, i32 0, i32 0",
-                    enum_ty, value.repr
-                ));
-                let loaded_tag = self.tmp();
-                self.body
-                    .push(format!("  {loaded_tag} = load i32, ptr {tag_ptr}"));
-                let result = self.tmp();
-                self.body
-                    .push(format!("  {result} = icmp eq i32 {loaded_tag}, {}", tag));
-                return Ok(LlValue {
-                    ty: LlType::I1,
-                    repr: result,
-                    owned: false,
-                });
-            }
+            && value.ty == LlType::Ptr
+        {
+            let (enum_ty, tag) = {
+                let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
+                (enum_info.llvm_type.clone(), variant.tag)
+            };
+            let tag_ptr = self.tmp();
+            self.body.push(format!(
+                "  {tag_ptr} = getelementptr inbounds {}, ptr {}, i32 0, i32 0",
+                enum_ty, value.repr
+            ));
+            let loaded_tag = self.tmp();
+            self.body
+                .push(format!("  {loaded_tag} = load i32, ptr {tag_ptr}"));
+            let result = self.tmp();
+            self.body
+                .push(format!("  {result} = icmp eq i32 {loaded_tag}, {}", tag));
+            return Ok(LlValue {
+                ty: LlType::I1,
+                repr: result,
+                owned: false,
+            });
+        }
 
         // Handle enum variant with payloads: Ok(value) / Pair(a b) in match pattern
         if let Expression::EnumVariant {
@@ -4581,29 +4612,30 @@ impl LlvmIrGen {
             payloads: _,
             ..
         } = pattern
-            && value.ty == LlType::Ptr {
-                let (enum_ty, tag) = {
-                    let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
-                    (enum_info.llvm_type.clone(), variant.tag)
-                };
-                let tag_ptr = self.tmp();
-                self.body.push(format!(
-                    "  {tag_ptr} = getelementptr inbounds {}, ptr {}, i32 0, i32 0",
-                    enum_ty, value.repr
-                ));
-                let loaded_tag = self.tmp();
-                self.body
-                    .push(format!("  {loaded_tag} = load i32, ptr {tag_ptr}"));
-                let result = self.tmp();
-                self.body
-                    .push(format!("  {result} = icmp eq i32 {loaded_tag}, {}", tag));
+            && value.ty == LlType::Ptr
+        {
+            let (enum_ty, tag) = {
+                let (enum_info, variant) = self.lookup_enum_variant(enum_name, variant_name)?;
+                (enum_info.llvm_type.clone(), variant.tag)
+            };
+            let tag_ptr = self.tmp();
+            self.body.push(format!(
+                "  {tag_ptr} = getelementptr inbounds {}, ptr {}, i32 0, i32 0",
+                enum_ty, value.repr
+            ));
+            let loaded_tag = self.tmp();
+            self.body
+                .push(format!("  {loaded_tag} = load i32, ptr {tag_ptr}"));
+            let result = self.tmp();
+            self.body
+                .push(format!("  {result} = icmp eq i32 {loaded_tag}, {}", tag));
 
-                return Ok(LlValue {
-                    ty: LlType::I1,
-                    repr: result,
-                    owned: false,
-                });
-            }
+            return Ok(LlValue {
+                ty: LlType::I1,
+                repr: result,
+                owned: false,
+            });
+        }
 
         let pattern_value = self.compile_expr(pattern)?;
         let result = self.tmp();
@@ -4776,6 +4808,11 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
+            LlType::F64 => Ok(LlValue {
+                ty: LlType::F64,
+                repr: raw_value,
+                owned: false,
+            }),
             LlType::Ptr => {
                 let ptr_value = self.tmp();
                 self.body
@@ -5063,6 +5100,13 @@ impl LlvmIrGen {
                 ));
                 Ok(())
             }
+            LlType::F64 => {
+                self.body.push(format!(
+                    "  call i32 (ptr, ...) @printf(ptr @.fmt_f64, double {})",
+                    value.repr
+                ));
+                Ok(())
+            }
         }
     }
 
@@ -5132,13 +5176,9 @@ impl LlvmIrGen {
                 })
             }
             _ => {
-                let malloc_result = self.tmp();
                 let input_buf = self.tmp();
                 self.body
-                    .push(format!("  {malloc_result} = call i64 @malloc(i64 256)"));
-                self.body.push(format!(
-                    "  {input_buf} = inttoptr i64 {malloc_result} to ptr"
-                ));
+                    .push(format!("  {input_buf} = call ptr @malloc(i64 256)"));
                 self.body.push(format!(
                     "  call i32 (ptr, ...) @scanf(ptr @.scanf_str, ptr {input_buf})"
                 ));
@@ -5239,7 +5279,7 @@ impl LlvmIrGen {
             DataType::I32 => Ok(LlType::I64),
             DataType::I8 | DataType::I16 => Ok(LlType::I64),
             DataType::U8 | DataType::U16 | DataType::U32 | DataType::U64 => Ok(LlType::I64),
-            DataType::F32 | DataType::F64 => Ok(LlType::Ptr),
+            DataType::F32 | DataType::F64 => Ok(LlType::F64),
             DataType::Bool => Ok(LlType::I1),
             DataType::Str => Ok(LlType::Ptr),
             DataType::List
@@ -5360,6 +5400,11 @@ impl LlvmIrGen {
                 repr: "0".to_string(),
                 owned: false,
             },
+            LlType::F64 => LlValue {
+                ty,
+                repr: "0.0".to_string(),
+                owned: false,
+            },
             LlType::Ptr => self.string_value(""),
         }
     }
@@ -5395,6 +5440,16 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
+            LlType::F64 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = fptosi double {} to i64", value.repr));
+                Ok(LlValue {
+                    ty: LlType::I64,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
             LlType::Ptr => {
                 let tmp = self.tmp();
                 self.body
@@ -5415,6 +5470,16 @@ impl LlvmIrGen {
                 let tmp = self.tmp();
                 self.body
                     .push(format!("  {tmp} = icmp ne i64 {}, 0", value.repr));
+                Ok(LlValue {
+                    ty: LlType::I1,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
+            LlType::F64 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = fcmp one double {}, 0.0", value.repr));
                 Ok(LlValue {
                     ty: LlType::I1,
                     repr: tmp,
@@ -5505,7 +5570,7 @@ impl LlvmIrGen {
             "/" => {
                 self.emit_nonzero_check(&right_repr, "division by zero");
                 self.body
-                    .push(format!("  {result} = udiv i64 {left_repr}, {right_repr}"));
+                    .push(format!("  {result} = sdiv i64 {left_repr}, {right_repr}"));
                 Ok(LlValue {
                     ty: LlType::I64,
                     repr: result,
@@ -5515,7 +5580,7 @@ impl LlvmIrGen {
             "%" => {
                 self.emit_nonzero_check(&right_repr, "division by zero");
                 self.body
-                    .push(format!("  {result} = urem i64 {left_repr}, {right_repr}"));
+                    .push(format!("  {result} = srem i64 {left_repr}, {right_repr}"));
                 Ok(LlValue {
                     ty: LlType::I64,
                     repr: result,
@@ -5747,7 +5812,7 @@ impl LlvmIrGen {
         let list_ptr = self.tmp();
         let elem_size = self.element_size(element_type);
         self.body.push(format!(
-            "  {malloc} = call i8* @malloc(i64 {})",
+            "  {malloc} = call ptr @malloc(i64 {})",
             16 + size * elem_size
         ));
         self.body
@@ -5860,6 +5925,7 @@ impl LlvmIrGen {
         match ty {
             LlType::I64 => self.cast_to_i64(value),
             LlType::I1 => self.cast_to_i1(value),
+            LlType::F64 => Ok(value),
             LlType::Ptr if value.ty == LlType::Ptr => Ok(value),
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
                 message: "Avenys cannot cast non-pointer value to string".to_string(),
@@ -5871,6 +5937,7 @@ impl LlvmIrGen {
         let value = match ty {
             LlType::I64 => self.cast_to_i64(value)?,
             LlType::I1 => self.cast_to_i1(value)?,
+            LlType::F64 => value,
             LlType::Ptr if value.ty == LlType::Ptr => value,
             LlType::Ptr => {
                 return Err(MireError::new(ErrorKind::Runtime {
@@ -5993,6 +6060,7 @@ impl LlvmIrGen {
         match ty {
             LlType::I64 => "i64",
             LlType::I1 => "i1",
+            LlType::F64 => "double",
             LlType::Ptr => "ptr",
         }
     }
@@ -6058,9 +6126,7 @@ impl LlvmIrGen {
                     let ty_str = self.ty(param_ty.clone());
                     self.user_structs
                         .iter()
-                        .find(|(_, info)| {
-                            self.render_struct_ty(&info.fields) == ty_str
-                        })
+                        .find(|(_, info)| self.render_struct_ty(&info.fields) == ty_str)
                         .map(|(name, _)| name.clone())
                 }
             };

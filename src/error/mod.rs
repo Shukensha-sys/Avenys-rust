@@ -164,7 +164,9 @@ impl MireError {
     }
 
     pub fn explanation(&self) -> Option<&String> {
-        self.context.as_ref().and_then(|ctx| ctx.explanation.as_ref())
+        self.context
+            .as_ref()
+            .and_then(|ctx| ctx.explanation.as_ref())
     }
 
     pub fn set_source(&mut self, source: Option<String>) {
