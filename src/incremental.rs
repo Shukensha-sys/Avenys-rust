@@ -480,8 +480,11 @@ impl IncrementalCache {
             blob_store: BlobStore::default(),
             metrics: CacheMetrics::default(),
         };
+        let mut found_cache_file = false;
+        let mut loaded_cache = false;
 
         if let Ok(file) = File::open(&cache.cache_path) {
+            found_cache_file = true;
             #[cfg(unix)]
             {
                 if let Ok(Some(mapping)) = MemoryMappedFile::map(&file) {
@@ -490,6 +493,7 @@ impl IncrementalCache {
                     {
                         cache.db = db;
                         cache.blob_store = BlobStore::from_mapped(mapping, layout);
+                        loaded_cache = true;
                     }
                 } else if let Ok(raw) = fs::read(&cache.cache_path)
                     && let Ok((db, layout)) = decode_cache_db(&raw)
@@ -499,6 +503,7 @@ impl IncrementalCache {
                     cache.blob_store = BlobStore::from_owned(
                         raw[layout.start..layout.start + layout.len].to_vec(),
                     );
+                    loaded_cache = true;
                 }
             }
 
@@ -511,10 +516,16 @@ impl IncrementalCache {
                             cache.blob_store = BlobStore::from_owned(
                                 raw[layout.start..layout.start + layout.len].to_vec(),
                             );
+                            loaded_cache = true;
                         }
                     }
                 }
             }
+        }
+
+        if found_cache_file && !loaded_cache {
+            // Best-effort self-heal: keep running with an empty cache and remove corrupt/incompatible file.
+            let _ = fs::remove_file(&cache.cache_path);
         }
 
         cache.prune_lru();
@@ -2446,6 +2457,41 @@ mod tests {
                 assert!(err.to_string().contains("cached type failure"));
             }
         }
+    }
+
+    #[test]
+    fn load_with_settings_recovers_from_corrupt_cache_file() {
+        let root = std::env::temp_dir().join(format!("mire_cache_corrupt_{}", now_epoch_ms()));
+        fs::create_dir_all(&root).expect("temp dir");
+        let source_path = root.join("main.mire");
+        fs::write(&source_path, "pub fn main: () {}\n").expect("source");
+
+        let cache_path = cache_file_path(&source_path);
+        if let Some(parent) = cache_path.parent() {
+            fs::create_dir_all(parent).expect("cache dir");
+        }
+        fs::write(&cache_path, b"not-a-valid-incremental-cache").expect("write corrupt cache");
+
+        let settings = CacheSettings {
+            max_units: Some(16),
+            analysis_cache: true,
+            compression: false,
+        };
+        let mut cache = IncrementalCache::load_with_settings(&source_path, settings).expect("load");
+
+        assert!(cache.db.files.is_empty());
+        assert!(cache.db.analyses.is_empty());
+        assert!(cache.db.builds.is_empty());
+        assert!(!cache_path.exists(), "corrupt cache file should be removed");
+
+        cache
+            .store_analysis(&source_path, 42, &demo_program("typed_main"))
+            .expect("store analysis");
+        cache.save().expect("save rebuilt cache");
+
+        let mut reloaded =
+            IncrementalCache::load_with_settings(&source_path, settings).expect("reload");
+        assert!(reloaded.cached_analysis(&source_path, 42).is_some());
     }
 
     #[test]

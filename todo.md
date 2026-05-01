@@ -81,6 +81,18 @@ Infiere tipo del target expression.
 
 ## 📝 Notas de Desarrollo
 
+### Próximas Líneas (Post v2.3.1)
+1. Hardening de cache incremental:
+- Tests de corrupción parcial de `.cache/incremental.bin`
+- Recuperación graceful (sin crash, fallback limpio)
+- Auto-saneado del archivo corrupto/incompatible para evitar degradación repetida
+2. Performance del frontend de análisis:
+- Bench/perf tests para `analysis_units_for_program`
+- Bench/perf tests para `compute_invalidation_report` en programas grandes
+3. Limpieza operativa del backlog:
+- Separar "histórico resuelto" vs "pendiente real" en `docs/issues.md`
+- Mantener tablero accionable por prioridad real
+
 ### Reglas de Implementación
 - Antes de modificar src/: crear backup con git commit
 - Aplicar SOLID principles
