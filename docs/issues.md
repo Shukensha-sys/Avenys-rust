@@ -1136,5 +1136,5 @@ serialized.hash(&mut hasher);
 10. **D5**: ✅ Resuelto (&mut validado contra mutabilidad real)
 
 ### Optimización (ℹ️)
-11. **M1**: Hash estructural en lugar de JSON serializado
-12. **M2**: TYPE_CHECKER_SOURCE como thread_local (dificultan razonamiento)
+11. **M1**: ✅ Mejorado (hash streaming sin buffer intermedio + regresiones de estabilidad)
+12. **M2**: ✅ Resuelto (sin thread_local; contexto explícito en TypeChecker)

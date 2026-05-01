@@ -2612,6 +2612,57 @@ mod tests {
     }
 
     #[test]
+    fn stable_statement_hash_is_deterministic_for_same_statement() {
+        let stmt = Statement::Function {
+            name: "main".to_string(),
+            params: vec![("x".to_string(), DataType::I64)],
+            body: vec![Statement::Return(Some(Expression::BinaryOp {
+                left: Box::new(Expression::Identifier(Identifier {
+                    name: "x".to_string(),
+                    data_type: DataType::I64,
+                    line: 0,
+                    column: 0,
+                })),
+                operator: "+".to_string(),
+                right: Box::new(Expression::Literal(Literal::Int(1))),
+                data_type: DataType::I64,
+            }))],
+            return_type: DataType::I64,
+            visibility: Visibility::Public,
+            is_method: false,
+        };
+
+        let h1 = stable_statement_hash(&stmt);
+        let h2 = stable_statement_hash(&stmt);
+        assert_eq!(h1, h2);
+        assert_ne!(h1, 0);
+    }
+
+    #[test]
+    fn stable_statement_hash_changes_when_statement_changes() {
+        let stmt_a = Statement::Function {
+            name: "main".to_string(),
+            params: Vec::new(),
+            body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(1))))],
+            return_type: DataType::I64,
+            visibility: Visibility::Public,
+            is_method: false,
+        };
+        let stmt_b = Statement::Function {
+            name: "main".to_string(),
+            params: Vec::new(),
+            body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(2))))],
+            return_type: DataType::I64,
+            visibility: Visibility::Public,
+            is_method: false,
+        };
+
+        let h1 = stable_statement_hash(&stmt_a);
+        let h2 = stable_statement_hash(&stmt_b);
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
     fn invalidation_report_marks_dependents_of_changed_impl_method() {
         let previous = parse(
             "impl Point {\n    fn new: () :i64 {\n        return 1\n    }\n}\nfn main: () :i64 {\n    return Point::new()\n}\n",
