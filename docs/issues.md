@@ -1047,7 +1047,13 @@ serialized.hash(&mut hasher);
 **Descripción:**
 `TYPE_CHECKER_SOURCE` como thread_local en typeck causa estado implícito, dificulta razonamiento.
 
-**Status:** ℹ️ DESIGN CONCERN
+**Implementación (Mayo 2026):**
+- Eliminado `thread_local TYPE_CHECKER_SOURCE` en `typeck.rs`.
+- El contexto de fuente ahora vive en `TypeChecker` (`base_source`) y se adjunta explícitamente vía `attach_current_context`.
+- `check_program_types` y `check_program_types_partial_with_origins` inicializan el checker con fuente explícita.
+- Se mantiene el comportamiento de diagnóstico (línea/columna + source) sin estado global implícito.
+
+**Status:** ✅ RESOLVED (Mayo 2026)
 
 ---
 

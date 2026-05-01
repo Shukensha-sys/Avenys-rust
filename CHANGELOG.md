@@ -12,6 +12,7 @@ All notable changes to Mire are documented in this file.
 - Incremental cache format updated to `v5` to reduce in-memory and on-disk metadata duplication.
 - Incremental cache blob store now auto-compacts when sparse to avoid unbounded growth under frequent invalidations.
 - `stable_statement_hash` now hashes in streaming mode (no intermediate JSON `Vec<u8>` allocation).
+- Type checker source context no longer relies on thread-local state; diagnostics now use explicit checker context.
 
 ### Fixed
 - Removed unused constant in incremental cache module (`src/incremental.rs`) to keep warnings clean.

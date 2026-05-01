@@ -48,12 +48,10 @@ enum MethodKind {
 }
 
 pub fn check_program_types(program: &mut Program, source: &str) -> Result<()> {
-    TYPE_CHECKER_SOURCE.with(|s| {
-        *s.borrow_mut() = Some(source.to_string());
-    });
-
-    let mut checker = TypeChecker::new();
-    checker.collect_function_signatures(&program.statements)?;
+    let mut checker = TypeChecker::new(source);
+    checker
+        .collect_function_signatures(&program.statements)
+        .map_err(|err| checker.attach_current_context(err))?;
     checker.check_top_level_statements(&mut program.statements)
 }
 
@@ -79,11 +77,7 @@ pub fn check_program_types_partial_with_origins(
     sources: &HashMap<PathBuf, String>,
     selection: &AnalysisSelection,
 ) -> Result<()> {
-    TYPE_CHECKER_SOURCE.with(|s| {
-        *s.borrow_mut() = Some(source.to_string());
-    });
-
-    let mut checker = TypeChecker::new();
+    let mut checker = TypeChecker::new(source);
     checker.statement_origins = statement_origins
         .iter()
         .map(|path| path.display().to_string())
@@ -93,12 +87,10 @@ pub fn check_program_types_partial_with_origins(
         .map(|(path, source)| (path.display().to_string(), source.clone()))
         .collect();
     checker.nested_statement_masks = selection.nested_statement_masks.clone();
-    checker.collect_function_signatures(&program.statements)?;
+    checker
+        .collect_function_signatures(&program.statements)
+        .map_err(|err| checker.attach_current_context(err))?;
     checker.check_selected_top_level_statements(&mut program.statements, &selection.statement_mask)
-}
-
-thread_local! {
-    static TYPE_CHECKER_SOURCE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 struct TypeChecker {
@@ -116,6 +108,7 @@ struct TypeChecker {
     impl_self_name: Option<String>,
     statement_origins: Vec<String>,
     sources_by_filename: HashMap<String, String>,
+    base_source: Option<String>,
     current_filename: Option<String>,
     current_top_level_index: Option<usize>,
     current_top_level_key: Option<String>,
@@ -123,7 +116,7 @@ struct TypeChecker {
 }
 
 impl TypeChecker {
-    fn new() -> Self {
+    fn new(source: &str) -> Self {
         Self {
             scopes: vec![HashMap::new()],
             struct_scopes: vec![HashMap::new()],
@@ -139,6 +132,7 @@ impl TypeChecker {
             impl_self_name: None,
             statement_origins: Vec::new(),
             sources_by_filename: HashMap::new(),
+            base_source: (!source.is_empty()).then(|| source.to_string()),
             current_filename: None,
             current_top_level_index: None,
             current_top_level_key: None,
@@ -241,11 +235,15 @@ impl TypeChecker {
             err
         };
 
-        if err.source().is_none()
-            && let Some(filename) = err.filename()
-            && let Some(source) = self.sources_by_filename.get(filename)
-        {
-            return err.with_source(source.clone());
+        if err.source().is_none() {
+            if let Some(filename) = err.filename()
+                && let Some(source) = self.sources_by_filename.get(filename)
+            {
+                return err.with_source(source.clone());
+            }
+            if let Some(source) = &self.base_source {
+                return err.with_source(source.clone());
+            }
         }
 
         err
@@ -3445,13 +3443,8 @@ fn type_error(message: String) -> MireError {
 }
 
 fn type_error_at(line: usize, column: usize, message: String) -> MireError {
-    let source = TYPE_CHECKER_SOURCE.with(|source_guard| source_guard.borrow().clone());
     let (err_line, err_col) = if line == 0 { (1, 1) } else { (line, column) };
-    let mut err = MireError::type_error_at(err_line, err_col, message);
-    if let Some(src) = source {
-        err = err.with_source(src);
-    }
-    err
+    MireError::type_error_at(err_line, err_col, message)
 }
 
 fn statements_contain_explicit_return(statements: &[Statement]) -> bool {
