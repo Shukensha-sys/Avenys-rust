@@ -1002,66 +1002,23 @@ if (kind == MIRE_KIND_MAP) {
 El compilador permite `set rx = &x` donde `x` no es `mut`. Ej.:
 ```mire
 set x = 5 :i64        # x no es mutable
-set rx = &x           # ✅ Compila, pero x no es mutable
+set rx = &x           # shared ref (correcto)
+
+set m = 5 :i64 mut
+set rm = &m           # mutable ref inferida (correcto)
 ```
 
----
+**Implementación (Mayo 2026):**
+- `&x` ahora deriva mutabilidad desde el binding original:
+  - si `x` es `mut` => referencia mutable
+  - si `x` no es `mut` => referencia compartida
+- Se mantiene validación explícita: `&mut x` sobre `x` inmutable produce error.
+- Tests rápidos añadidos en `src/compiler/typeck.rs`:
+  - `mutable_binding_reference_is_inferred_as_refmut`
+  - `immutable_binding_reference_is_inferred_as_shared_ref`
+  - `explicit_mut_reference_rejected_for_immutable_binding`
 
-## Análisis Técnico (Mayo 2026)
-
-### Verificación
-
-```bash
-$ echo 'import std
-
-pub fn main: () {
-    set x = 5 :i64
-    set rx = &x
-    use dasu(rx)
-}' | ./target/release/mire run -
-# Compila y ejecuta sin error
-```
-
-### Análisis
-
-En Mire, las referencias funcionan diferente a Rust:
-- En Rust: `&mut x` requiere que `x` sea `mut`
-- En Mire: No hay esta restricción
-
-Esto PUEDE ser decisión de diseño - Mire es más permisivo.
-
-### Preguntas para Decisión
-
-1. **¿Es esto un bug o característica?**
-   - Si es característica: Documentar en README
-   - Si es bug: Requiere cambio en type checker
-
-2. **Si es bug, qué comportamiento quieres?**
-   - Opción A: `&x` permite shared ref siempre
-   - Opción B: Requiere `x` sea `mut` para shared ref
-   - Opción C: `&x` para ref, `&x mut` para mutable
-
-### Código Relevante
-
-| Archivo | Línea | Descripción |
-|---------|-------|-------------|
-| parser/mod.rs | ~ | Parsing de expresiones `&` |
-| typeck.rs | ~ | Validación de referencias |
-| semantic.rs | ~ | Binding info con mutabilidad |
-
-### Test Actual
-
-```mire
-# Este código COMPILA (comportamiento actual):
-set x = 5 :i64
-set rx = &x          # OK, aunque x no es mut
-
-# Este código NO compila (shadowing):
-set x = 5 :i64 mut
-set x = 10 :i64     # Error: Cannot reassign
-```
-
-**Status:** 🟡 DECISIÓN PENDIENTE - ¿Bug o Diseño?
+**Status:** ✅ RESOLVED (Mayo 2026)
 
 ---
 

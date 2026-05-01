@@ -1702,8 +1702,15 @@ impl TypeChecker {
                 referenced_type,
             } => {
                 let target_type = self.check_expression(expr)?;
+                let target_is_mutable = self.reference_target_is_mutable(expr);
+                if *is_mutable && !target_is_mutable {
+                    return Err(type_error(
+                        "Cannot take mutable reference from immutable target".to_string(),
+                    ));
+                }
+                *is_mutable = target_is_mutable;
                 *referenced_type = target_type.clone();
-                *data_type = if *is_mutable {
+                *data_type = if target_is_mutable {
                     DataType::RefMut {
                         inner: Box::new(target_type.clone()),
                     }
@@ -3168,6 +3175,22 @@ impl TypeChecker {
         }
     }
 
+    fn reference_target_is_mutable(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Identifier(Identifier { name, .. }) => self
+                .lookup_var(name)
+                .map(|(_, is_mutable)| is_mutable)
+                .unwrap_or(false),
+            Expression::MemberAccess { target, .. } | Expression::Index { target, .. } => {
+                self.reference_target_is_mutable(target)
+            }
+            Expression::Reference { expr, .. } | Expression::Dereference { expr, .. } => {
+                self.reference_target_is_mutable(expr)
+            }
+            _ => false,
+        }
+    }
+
     fn referenced_type_for_expr(&self, expr: &Expression) -> Option<DataType> {
         match expr {
             Expression::Identifier(Identifier { name, .. }) => self
@@ -4139,7 +4162,7 @@ mod tests {
                             data_type: DataType::I64,
                             value: Some(Expression::Literal(Literal::Int(1))),
                             is_constant: false,
-                            is_mutable: true,
+                            is_mutable: false,
                             is_static: false,
                             visibility: Visibility::Public,
                         },
@@ -4187,5 +4210,49 @@ mod tests {
                 .contains("Function 'bump' argument 1 expects")
         );
         assert!(err.to_string().contains("RefMut"));
+    }
+
+    #[test]
+    fn mutable_binding_reference_is_inferred_as_refmut() {
+        let source = "pub fn main: () {\n    set x = 1 :i64 mut\n    set r = &x\n}\n";
+        let mut program = parse(source).expect("source should parse");
+
+        check_program_types(&mut program, source).expect("type check should pass");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let { data_type, .. } = &body[1] else {
+            panic!("expected second let");
+        };
+        assert!(matches!(data_type, DataType::RefMut { .. }));
+    }
+
+    #[test]
+    fn immutable_binding_reference_is_inferred_as_shared_ref() {
+        let source = "pub fn main: () {\n    set x = 1 :i64\n    set r = &x\n}\n";
+        let mut program = parse(source).expect("source should parse");
+
+        check_program_types(&mut program, source).expect("type check should pass");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let { data_type, .. } = &body[1] else {
+            panic!("expected second let");
+        };
+        assert!(matches!(data_type, DataType::Ref { .. }));
+    }
+
+    #[test]
+    fn explicit_mut_reference_rejected_for_immutable_binding() {
+        let source = "pub fn main: () {\n    set x = 1 :i64\n    set r = &mut x\n}\n";
+        let mut program = parse(source).expect("source should parse");
+        let err = check_program_types(&mut program, source)
+            .expect_err("immutable binding cannot produce mutable reference");
+        assert!(
+            err.to_string()
+                .contains("Cannot take mutable reference from immutable target")
+        );
     }
 }

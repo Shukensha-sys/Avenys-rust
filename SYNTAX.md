@@ -71,6 +71,7 @@ pub fn main: () {
 ```
 
 Parameter and return types use `name :Type` syntax.
+Visibility is private by default; use `pub` only for exported APIs.
 
 ---
 
@@ -431,6 +432,12 @@ set x = 1 :i64
 set shared = &x
 set copied = *shared
 
+set m = 10 :i64 mut
+set rm = &m
+
+set n = 10 :i64
+set rn = &n
+
 fn read_ref: (value :&i64) :i64 {
     return *value
 }
@@ -449,6 +456,8 @@ Type checking also treats references strictly:
 - `&T` can flow into plain `T` through auto-deref
 - `&mut T` can satisfy `&T`
 - `&T` does not satisfy `&mut T`
+- `&x` derives mutability from the original binding (`mut` => mutable ref, otherwise shared)
+- `&mut x` is rejected when `x` is immutable
 
 `unsafe` blocks bypass checks:
 
