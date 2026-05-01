@@ -14,9 +14,11 @@ Limitaciones actuales del compilador Avenys.
 | 🟠 Bug Real | 0 | Resultados incorrectos/falsos |
 | 🟡 Deuda | 0 | Comportamiento incorrecto |
 | ℹ️ Diseño | 2 | Mantenimiento/diseño |
-| ✅ Verificado | 21 | Fixes ya aplicados |
+| ✅ Verificado | 24 | Fixes ya aplicados |
 
-**Tests:** 74/74 pasando (100% passed)
+**Tests:**
+- Unit/internos: 79/79 ✅
+- Regresiones: 73/73 ✅
 
 **Fix Completados:**
 - C1: FxHasher (FNV-1a) para cache determinista
@@ -28,6 +30,8 @@ Limitaciones actuales del compilador Avenys.
 - D3: to_upper/to_lower con soporte Latin-1
 - D4: Memory leak en MAP fixeado
 - D5: mutabilidad de referencias inferida/validada correctamente
+- Hardening cache: auto-saneado de cache corrupto/incompatible al cargar
+- Perf incremental: `compute_invalidation_report` optimizado con índice inverso de dependencias
 
 ---
 
@@ -1117,24 +1121,11 @@ serialized.hash(&mut hasher);
 
 ---
 
-## 🎯 PRIORIDADES DE FIX
+## 🎯 PRIORIDADES REALES (ABIERTAS)
 
-### Alta Prioridad (🔴 Crítico)
-1. **C1**: DefaultHasher → FxHasher o AHash (cache no persiste entre procesos)
-2. **C2**: strings.split retorna lista, no string concatenada
-3. **C3**: strings.split implementar en codegen
+No hay issues críticas/medias abiertas en este documento al corte actual.
 
-### Media Prioridad (🟠 Bug Real)
-4. **B1**: ✅ Resuelto (usa timestamp de creación)
-5. **B2/B3**: ✅ Verificados (semantic_binding y ensure_return_is_safe)
-
-### Baja Prioridad (🟡 Deuda Técnica)
-6. **D1**: ✅ Resuelto (prune_lru incluye builds)
-7. **D2**: ✅ Resuelto (blob store con compactación)
-8. **D3**: ✅ Resuelto (to_upper/to_lower Latin-1)
-9. **D4**: ✅ Resuelto (memory leak en mire_dict_format_value)
-10. **D5**: ✅ Resuelto (&mut validado contra mutabilidad real)
-
-### Optimización (ℹ️)
-11. **M1**: ✅ Mejorado (hash streaming sin buffer intermedio + regresiones de estabilidad)
-12. **M2**: ✅ Resuelto (sin thread_local; contexto explícito en TypeChecker)
+### Siguientes objetivos recomendados
+1. Benchmarks dedicados para `analysis_units_for_program` y rutas calientes de invalidación incremental.
+2. Hardening extra de cache: casos de corrupción truncada con fuzzing/light property tests.
+3. Separar este documento en `open-issues.md` + `resolved-history.md` para reducir ruido operativo.
