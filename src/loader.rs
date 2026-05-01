@@ -219,19 +219,26 @@ impl ImportResolver {
                 });
             }
         }
-        let cached = CachedParsedFile {
+        let exports: Vec<String> = program
+            .statements
+            .iter()
+            .filter_map(statement_export_name)
+            .map(ToString::to_string)
+            .collect();
+        self.cache.store_file(
+            path,
+            CachedParsedFile {
+                hash,
+                exports,
+                local_imports: local_imports.clone(),
+                program: program.clone(),
+            },
+        )?;
+        Ok(ResolvedFile {
             hash,
-            exports: program
-                .statements
-                .iter()
-                .filter_map(statement_export_name)
-                .map(ToString::to_string)
-                .collect(),
+            program,
             local_imports,
-            program: program.clone(),
-        };
-        self.cache.store_file(path, cached.clone())?;
-        Ok(ResolvedFile::from_cached(cached, source))
+        })
     }
 
     fn load_selected_imports(

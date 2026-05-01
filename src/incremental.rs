@@ -70,9 +70,8 @@ impl Hasher for FxHasher {
 const CACHE_DIR_NAME: &str = ".cache";
 const CACHE_FILE_NAME: &str = "incremental.bin";
 const CACHE_MAGIC: &[u8; 8] = b"MIREINC2";
-const CACHE_FORMAT_VERSION: u32 = 4;
+const CACHE_FORMAT_VERSION: u32 = 5;
 const DEFAULT_MAX_UNITS: usize = 256;
-const BLOB_COMPACT_THRESHOLD_RATIO: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheSettings {
@@ -273,8 +272,6 @@ struct CacheDb {
 #[derive(Debug, Clone)]
 struct FileCacheEntry {
     hash: u64,
-    exports: Vec<String>,
-    local_imports: Vec<CachedImport>,
     blob_offset: u64,
     blob_len: u64,
     last_access_epoch_ms: u64,
@@ -604,8 +601,6 @@ impl IncrementalCache {
             normalize_path_key(path),
             FileCacheEntry {
                 hash: entry.hash,
-                exports: stored.exports.clone(),
-                local_imports: stored.local_imports.clone(),
                 blob_offset,
                 blob_len,
                 last_access_epoch_ms: now_epoch_ms(),
@@ -1033,8 +1028,6 @@ fn encode_cache_db(db: &CacheDb, blob_store: &[u8]) -> Result<Vec<u8>> {
         write_string(&mut out, key)?;
         write_u64(&mut out, entry.hash);
         write_u64(&mut out, entry.last_access_epoch_ms);
-        write_string_vec(&mut out, &entry.exports)?;
-        write_imports(&mut out, &entry.local_imports)?;
         write_u64(&mut out, entry.blob_offset);
         write_u64(&mut out, entry.blob_len);
     }
@@ -1087,16 +1080,12 @@ fn decode_cache_db(raw: &[u8]) -> Result<(CacheDb, BlobStoreLayout)> {
         let key = cursor.read_string()?;
         let hash = cursor.read_u64()?;
         let last_access_epoch_ms = cursor.read_u64()?;
-        let exports = cursor.read_string_vec()?;
-        let local_imports = cursor.read_imports()?;
         let blob_offset = cursor.read_u64()?;
         let blob_len = cursor.read_u64()?;
         files.insert(
             key,
             FileCacheEntry {
                 hash,
-                exports,
-                local_imports,
                 blob_offset,
                 blob_len,
                 last_access_epoch_ms,
@@ -1200,41 +1189,6 @@ fn write_build_entry(out: &mut Vec<u8>, entry: &BuildCacheEntry) -> Result<()> {
     write_path(out, &entry.binary_path)?;
     write_optional_path(out, entry.ir_path.as_ref())?;
     write_optional_path(out, entry.optimized_ir_path.as_ref())?;
-    Ok(())
-}
-
-fn write_imports(out: &mut Vec<u8>, imports: &[CachedImport]) -> Result<()> {
-    write_u64(
-        out,
-        u64::try_from(imports.len()).map_err(|_| cache_runtime_err("Too many cached imports"))?,
-    );
-    for import in imports {
-        write_string(out, &import.raw_path)?;
-        write_path(out, &import.resolved_path)?;
-        write_optional_string_vec(out, import.items.as_deref())?;
-    }
-    Ok(())
-}
-
-fn write_string_vec(out: &mut Vec<u8>, values: &[String]) -> Result<()> {
-    write_u64(
-        out,
-        u64::try_from(values.len()).map_err(|_| cache_runtime_err("Too many cached strings"))?,
-    );
-    for value in values {
-        write_string(out, value)?;
-    }
-    Ok(())
-}
-
-fn write_optional_string_vec(out: &mut Vec<u8>, values: Option<&[String]>) -> Result<()> {
-    match values {
-        Some(values) => {
-            write_bool(out, true);
-            write_string_vec(out, values)?;
-        }
-        None => write_bool(out, false),
-    }
     Ok(())
 }
 
@@ -1354,24 +1308,6 @@ impl<'a> Cursor<'a> {
         })
     }
 
-    fn read_string_vec(&mut self) -> Result<Vec<String>> {
-        let len = usize::try_from(self.read_u64()?)
-            .map_err(|_| cache_runtime_err("Invalid string vector length"))?;
-        let mut values = Vec::with_capacity(len);
-        for _ in 0..len {
-            values.push(self.read_string()?);
-        }
-        Ok(values)
-    }
-
-    fn read_optional_string_vec(&mut self) -> Result<Option<Vec<String>>> {
-        if self.read_bool()? {
-            Ok(Some(self.read_string_vec()?))
-        } else {
-            Ok(None)
-        }
-    }
-
     fn read_path(&mut self) -> Result<PathBuf> {
         Ok(PathBuf::from(self.read_string()?))
     }
@@ -1382,20 +1318,6 @@ impl<'a> Cursor<'a> {
         } else {
             Ok(None)
         }
-    }
-
-    fn read_imports(&mut self) -> Result<Vec<CachedImport>> {
-        let len = usize::try_from(self.read_u64()?)
-            .map_err(|_| cache_runtime_err("Invalid imports length"))?;
-        let mut imports = Vec::with_capacity(len);
-        for _ in 0..len {
-            imports.push(CachedImport {
-                raw_path: self.read_string()?,
-                resolved_path: self.read_path()?,
-                items: self.read_optional_string_vec()?,
-            });
-        }
-        Ok(imports)
     }
 
     fn read_build_entry(&mut self) -> Result<BuildCacheEntry> {

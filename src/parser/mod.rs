@@ -65,17 +65,17 @@ impl Parser {
                     if index + 2 < tokens.len()
                         && tokens[index + 1].ttype == keyword
                         && tokens[index + 2].ttype == TokenType::Ident
-                        && let Some(name) = tokens[index + 2].value.clone()
+                        && let Some(name) = tokens[index + 2].value.as_ref()
                     {
-                        names.insert(name);
+                        names.insert(name.clone());
                     }
                 }
                 ttype if brace_depth == 0 && ttype == keyword => {
                     if index + 1 < tokens.len()
                         && tokens[index + 1].ttype == TokenType::Ident
-                        && let Some(name) = tokens[index + 1].value.clone()
+                        && let Some(name) = tokens[index + 1].value.as_ref()
                     {
-                        names.insert(name);
+                        names.insert(name.clone());
                     }
                 }
                 _ => {}
@@ -96,38 +96,47 @@ impl Parser {
             match tokens[index].ttype {
                 TokenType::Lbrace => brace_depth += 1,
                 TokenType::Rbrace => brace_depth = brace_depth.saturating_sub(1),
-                ttype if brace_depth == 0 && matches!(ttype, TokenType::Pub | TokenType::Priv) => {
-                    if index + 3 < tokens.len()
+                ttype
+                    if brace_depth == 0
+                        && matches!(ttype, TokenType::Pub | TokenType::Priv)
+                        && index + 3 < tokens.len()
                         && tokens[index + 1].ttype == TokenType::Enum
                         && tokens[index + 2].ttype == TokenType::Ident
-                        && tokens[index + 3].ttype == TokenType::Lbrace
-                    {
-                        let enum_name = tokens[index + 2].value.clone().unwrap_or_default();
-                        index = Self::collect_enum_variants_into(
-                            tokens,
-                            index + 4,
-                            &enum_name,
-                            &mut variant_counts,
-                            &mut variant_owners,
-                        );
-                        continue;
-                    }
+                        && tokens[index + 3].ttype == TokenType::Lbrace =>
+                {
+                    let enum_name = tokens[index + 2]
+                        .value
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_owned();
+                    index = Self::collect_enum_variants_into(
+                        tokens,
+                        index + 4,
+                        &enum_name,
+                        &mut variant_counts,
+                        &mut variant_owners,
+                    );
+                    continue;
                 }
-                TokenType::Enum if brace_depth == 0 => {
-                    if index + 2 < tokens.len()
+                TokenType::Enum
+                    if brace_depth == 0
+                        && index + 2 < tokens.len()
                         && tokens[index + 1].ttype == TokenType::Ident
-                        && tokens[index + 2].ttype == TokenType::Lbrace
-                    {
-                        let enum_name = tokens[index + 1].value.clone().unwrap_or_default();
-                        index = Self::collect_enum_variants_into(
-                            tokens,
-                            index + 3,
-                            &enum_name,
-                            &mut variant_counts,
-                            &mut variant_owners,
-                        );
-                        continue;
-                    }
+                        && tokens[index + 2].ttype == TokenType::Lbrace =>
+                {
+                    let enum_name = tokens[index + 1]
+                        .value
+                        .as_deref()
+                        .unwrap_or_default()
+                        .to_owned();
+                    index = Self::collect_enum_variants_into(
+                        tokens,
+                        index + 3,
+                        &enum_name,
+                        &mut variant_counts,
+                        &mut variant_owners,
+                    );
+                    continue;
                 }
                 _ => {}
             }
@@ -152,7 +161,8 @@ impl Parser {
                 TokenType::Lbrace => enum_brace_depth += 1,
                 TokenType::Rbrace => enum_brace_depth = enum_brace_depth.saturating_sub(1),
                 TokenType::Ident if enum_brace_depth == 1 => {
-                    if let Some(variant_name) = tokens[index].value.clone() {
+                    if let Some(variant_name) = tokens[index].value.as_ref() {
+                        let variant_name = variant_name.clone();
                         *variant_counts.entry(variant_name.clone()).or_insert(0) += 1;
                         variant_owners.insert(variant_name, enum_name.to_string());
                     }
@@ -1369,10 +1379,14 @@ impl Parser {
 
         if self.check(TokenType::Amp) {
             self.advance();
+            let is_mutable = self.check(TokenType::Mut);
+            if is_mutable {
+                self.expect(TokenType::Mut)?;
+            }
             let expr = self.parse_unary()?;
             return Ok(Expression::Reference {
                 expr: Box::new(expr),
-                is_mutable: false,
+                is_mutable,
                 data_type: DataType::shared_ref(DataType::Unknown),
                 referenced_type: DataType::Unknown,
             });
@@ -3394,8 +3408,7 @@ mod tests {
 
     #[test]
     fn if_expression_preserves_unknown_identifiers_in_branches() {
-        let source =
-            "pub fn main: () {\nset result = if true { missing } else { 0 }\n}\n";
+        let source = "pub fn main: () {\nset result = if true { missing } else { 0 }\n}\n";
         let program = parse(source).expect("parse should succeed");
 
         let Statement::Function { body, .. } = &program.statements[0] else {
