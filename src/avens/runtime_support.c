@@ -198,6 +198,18 @@ static char *mire_strdup_raw(const char *src) {
     return out;
 }
 
+static char *mire_strdup_raw_n(const char *src, size_t len) {
+    char *out = (char *)malloc(len + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    if (len > 0) {
+        memcpy(out, src, len);
+    }
+    out[len] = '\0';
+    return out;
+}
+
 static char *mire_managed_alloc(size_t len) {
     size_t cap = mire_string_growth_cap(len);
     MireManagedString *header =
@@ -953,6 +965,17 @@ static char *mire_dict_format_value(const MireDict *dict, int64_t entry_index) {
     return mire_dict_format_scalar(scalar, kind);
 }
 
+static void mire_dict_free_repr(char *repr) {
+    if (repr == NULL) {
+        return;
+    }
+    if (mire_managed_contains(repr)) {
+        mire_string_free(repr);
+        return;
+    }
+    free(repr);
+}
+
 int64_t mire_dict_get_i64(
     void *dict_ptr,
     int64_t key_kind,
@@ -1074,8 +1097,8 @@ char *mire_dict_to_string(void *dict_ptr) {
         char *key_repr = mire_dict_format_key(dict, i);
         char *value_repr = mire_dict_format_value(dict, i);
         total += strlen(key_repr) + strlen(value_repr) + 4;
-        free(key_repr);
-        free(value_repr);
+        mire_dict_free_repr(key_repr);
+        mire_dict_free_repr(value_repr);
     }
 
     char *out = mire_managed_alloc(total - 1);
@@ -1100,8 +1123,8 @@ char *mire_dict_to_string(void *dict_ptr) {
         size_t value_len = strlen(value_repr);
         memcpy(out + pos, value_repr, value_len);
         pos += value_len;
-        free(key_repr);
-        free(value_repr);
+        mire_dict_free_repr(key_repr);
+        mire_dict_free_repr(value_repr);
     }
     out[pos++] = '}';
     out[pos] = '\0';
@@ -1210,40 +1233,53 @@ void *mire_list_slice(void *list_ptr, int64_t start, int64_t end) {
 // mire_strings_split_list - splits string and returns a list (for strings.split)
 void *mire_strings_split_list(const char *input, const char *delimiter) {
     if (input == NULL || delimiter == NULL) {
-        void *list = mire_list_create(4, sizeof(void *));
-        return list;
+        return mire_list_create(0, sizeof(void *));
     }
     
     size_t delim_len = strlen(delimiter);
+    size_t input_len = strlen(input);
     if (delim_len == 0) {
         void *list = mire_list_create(1, sizeof(void *));
+        if (list == NULL) {
+            return NULL;
+        }
         char *copy = mire_strdup_raw(input);
-        mire_list_push_ptr(list, copy);
+        if (copy != NULL) {
+            mire_list_push_ptr(list, copy);
+        }
         return list;
     }
     
     size_t count = 1;
-    const char *p = input;
-    while ((p = strstr(p, delimiter)) != NULL) {
+    const char *cursor = input;
+    const char *match = NULL;
+    while ((match = strstr(cursor, delimiter)) != NULL) {
         count++;
-        p += delim_len;
+        cursor = match + delim_len;
     }
     
     void *list = mire_list_create(count, sizeof(void *));
     if (list == NULL) {
         return NULL;
     }
-    
-    char *input_copy = mire_strdup_raw(input);
-    char *token = strtok(input_copy, delimiter);
-    
-    while (token != NULL) {
-        char *copy = mire_strdup_raw(token);
-        mire_list_push_ptr(list, copy);
-        token = strtok(NULL, delimiter);
+
+    const char *segment_start = input;
+    cursor = input;
+    while ((match = strstr(cursor, delimiter)) != NULL) {
+        size_t segment_len = (size_t)(match - segment_start);
+        char *copy = mire_strdup_raw_n(segment_start, segment_len);
+        if (copy != NULL) {
+            mire_list_push_ptr(list, copy);
+        }
+        segment_start = match + delim_len;
+        cursor = segment_start;
     }
-    
-    free(input_copy);
+
+    size_t tail_len = input_len - (size_t)(segment_start - input);
+    char *tail = mire_strdup_raw_n(segment_start, tail_len);
+    if (tail != NULL) {
+        mire_list_push_ptr(list, tail);
+    }
     return list;
 }
 

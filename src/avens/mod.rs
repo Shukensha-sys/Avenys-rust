@@ -5112,7 +5112,21 @@ impl LlvmIrGen {
 
     fn emit_dasu_expr(&mut self, expr: &Expression) -> Result<()> {
         let value = self.compile_expr(expr)?;
-        self.emit_print(&value)?;
+        match self.expression_data_type(expr) {
+            DataType::Dict | DataType::Map { .. } => {
+                let rendered = self.tmp();
+                self.body.push(format!(
+                    "  {rendered} = call ptr @mire_dict_to_string(ptr {})",
+                    value.repr
+                ));
+                self.emit_print(&LlValue {
+                    ty: LlType::Ptr,
+                    repr: rendered,
+                    owned: true,
+                })?;
+            }
+            _ => self.emit_print(&value)?,
+        }
         Ok(())
     }
 

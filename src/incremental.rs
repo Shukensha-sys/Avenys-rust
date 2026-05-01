@@ -860,17 +860,42 @@ impl IncrementalCache {
         }
 
         let mut live_ranges = Vec::with_capacity(self.db.files.len() + self.db.analyses.len());
-        let mut live_bytes: usize = 0;
         for entry in self.db.files.values() {
             live_ranges.push((entry.blob_offset, entry.blob_len));
-            live_bytes = live_bytes.saturating_add(entry.blob_len as usize);
         }
         for entry in self.db.analyses.values() {
             live_ranges.push((entry.blob_offset, entry.blob_len));
-            live_bytes = live_bytes.saturating_add(entry.blob_len as usize);
         }
 
         if live_ranges.is_empty() {
+            if total_len > 0 {
+                self.blob_store = BlobStore::from_owned(Vec::new());
+            }
+            return;
+        }
+
+        live_ranges.sort_unstable_by_key(|(offset, _)| *offset);
+        let mut unique_live_ranges = Vec::with_capacity(live_ranges.len());
+        for (offset, len) in live_ranges {
+            let start = offset as usize;
+            let end = start.saturating_add(len as usize).min(total_len);
+            if start >= end {
+                continue;
+            }
+            if let Some((last_start, last_end)) = unique_live_ranges.last_mut() {
+                if start <= *last_end {
+                    *last_end = (*last_end).max(end);
+                    continue;
+                }
+                let _ = last_start;
+            }
+            unique_live_ranges.push((start, end));
+        }
+
+        let live_bytes = unique_live_ranges.iter().fold(0usize, |acc, (start, end)| {
+            acc.saturating_add(end.saturating_sub(*start))
+        });
+        if live_bytes == 0 {
             if total_len > 0 {
                 self.blob_store = BlobStore::from_owned(Vec::new());
             }
@@ -882,30 +907,36 @@ impl IncrementalCache {
             return;
         }
 
-        live_ranges.sort_unstable_by_key(|(offset, _)| *offset);
         let old_blob = self.blob_store.bytes();
         let mut compacted = Vec::with_capacity(live_bytes);
-        let mut relocation = HashMap::with_capacity(live_ranges.len());
+        let mut relocated_ranges = Vec::with_capacity(unique_live_ranges.len());
 
-        for (old_offset, len) in live_ranges {
-            let old_start = old_offset as usize;
-            let old_end = old_start.saturating_add(len as usize);
-            if old_end > old_blob.len() {
-                continue;
-            }
+        for (old_start, old_end) in unique_live_ranges {
             let new_offset = compacted.len() as u64;
             compacted.extend_from_slice(&old_blob[old_start..old_end]);
-            relocation.insert(old_offset, new_offset);
+            relocated_ranges.push((old_start as u64, old_end as u64, new_offset));
         }
 
         for entry in self.db.files.values_mut() {
-            if let Some(new_offset) = relocation.get(&entry.blob_offset) {
-                entry.blob_offset = *new_offset;
+            if let Some((old_start, _old_end, new_start)) = relocated_ranges
+                .iter()
+                .find(|(old_start, old_end, _)| {
+                    entry.blob_offset >= *old_start
+                        && entry.blob_offset.saturating_add(entry.blob_len) <= *old_end
+                })
+            {
+                entry.blob_offset = new_start.saturating_add(entry.blob_offset - *old_start);
             }
         }
         for entry in self.db.analyses.values_mut() {
-            if let Some(new_offset) = relocation.get(&entry.blob_offset) {
-                entry.blob_offset = *new_offset;
+            if let Some((old_start, _old_end, new_start)) = relocated_ranges
+                .iter()
+                .find(|(old_start, old_end, _)| {
+                    entry.blob_offset >= *old_start
+                        && entry.blob_offset.saturating_add(entry.blob_len) <= *old_end
+                })
+            {
+                entry.blob_offset = new_start.saturating_add(entry.blob_offset - *old_start);
             }
         }
 
@@ -915,11 +946,11 @@ impl IncrementalCache {
     fn latest_analysis_units(&self, source_path: &Path) -> Option<Vec<AnalysisUnitMetadata>> {
         let prefix = format!("{}::analysis::", normalize_path_key(source_path));
         let mut latest_key: Option<&str> = None;
-        let mut latest_access = 0_u64;
+        let mut latest_created = 0_u64;
 
         for (key, entry) in &self.db.analyses {
-            if key.starts_with(&prefix) && entry.last_access_epoch_ms >= latest_access {
-                latest_access = entry.last_access_epoch_ms;
+            if key.starts_with(&prefix) && entry.created_epoch_ms >= latest_created {
+                latest_created = entry.created_epoch_ms;
                 latest_key = Some(key.as_str());
             }
         }
@@ -2304,6 +2335,41 @@ mod tests {
     }
 
     #[test]
+    fn blob_store_compaction_preserves_offsets_inside_merged_ranges() {
+        let root = std::env::temp_dir().join(format!("mire_cache_compact_ranges_{}", now_epoch_ms()));
+        fs::create_dir_all(&root).expect("temp dir");
+        let source_path = root.join("main.mire");
+        fs::write(&source_path, "pub fn main: () {}\n").expect("source");
+
+        let settings = CacheSettings {
+            max_units: Some(256),
+            analysis_cache: true,
+            compression: false,
+        };
+        let mut cache = IncrementalCache::load_with_settings(&source_path, settings).expect("load");
+
+        cache
+            .store_analysis(&source_path, 1, &demo_program("a"))
+            .expect("store analysis a");
+        cache
+            .store_analysis(&source_path, 2, &demo_program("b"))
+            .expect("store analysis b");
+
+        // Keep entry 2 and force a sparse blob by dropping the first entry.
+        let key1 = analysis_cache_key(&source_path, 1);
+        cache.db.analyses.remove(&key1);
+        cache.maybe_compact_blob_store();
+
+        let cached = cache
+            .cached_analysis(&source_path, 2)
+            .expect("analysis 2 should survive compaction");
+        match cached {
+            CachedAnalysis::Success(program) => assert_eq!(program.statements.len(), 1),
+            CachedAnalysis::Error(err) => panic!("unexpected cached error: {err}"),
+        }
+    }
+
+    #[test]
     fn cache_metrics_track_file_and_analysis_hits_and_misses() {
         let root = std::env::temp_dir().join(format!("mire_cache_metrics_{}", now_epoch_ms()));
         fs::create_dir_all(&root).expect("temp dir");
@@ -2424,6 +2490,56 @@ mod tests {
         );
         assert_eq!(reverse.removed_units, vec!["main".to_string()]);
         assert!(reverse.invalidated_units.contains(&"main".to_string()));
+    }
+
+    #[test]
+    fn invalidation_report_uses_latest_created_not_last_access() {
+        let root =
+            std::env::temp_dir().join(format!("mire_cache_latest_created_{}", now_epoch_ms()));
+        fs::create_dir_all(&root).expect("temp dir");
+        let source_path = root.join("main.mire");
+        fs::write(&source_path, "pub fn main: () {}\n").expect("source");
+
+        let settings = CacheSettings {
+            max_units: Some(32),
+            analysis_cache: true,
+            compression: false,
+        };
+        let mut cache = IncrementalCache::load_with_settings(&source_path, settings).expect("load");
+
+        let older =
+            parse("fn helper: () :i64 {\n    return 1\n}\nfn main: () :i64 {\n    return helper()\n}\n")
+                .expect("parse older");
+        cache
+            .store_analysis(&source_path, 100, &older)
+            .expect("store older analysis");
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+
+        let newer = parse(
+            "fn helper: () :i64 {\n    return 1\n}\nfn main: () :i64 {\n    return helper()\n}\nfn extra: () :i64 {\n    return 7\n}\n",
+        )
+        .expect("parse newer");
+        cache
+            .store_analysis(&source_path, 101, &newer)
+            .expect("store newer analysis");
+
+        // Touch old fingerprint so its last_access becomes newer than the actual latest snapshot.
+        let _ = cache.cached_analysis(&source_path, 100);
+
+        let report = cache
+            .analysis_invalidation_report(&source_path, &newer)
+            .expect("report");
+        assert!(
+            report.changed_units.is_empty(),
+            "must compare against newest created snapshot, got changed={:?}",
+            report.changed_units
+        );
+        assert!(
+            report.added_units.is_empty(),
+            "must compare against newest created snapshot, got added={:?}",
+            report.added_units
+        );
     }
 
     #[test]

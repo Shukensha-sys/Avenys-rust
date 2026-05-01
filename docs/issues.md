@@ -11,12 +11,12 @@ Limitaciones actuales del compilador Avenys.
 | Severidad | Cantidad | Descripción |
 |-----------|----------|-------------|
 | 🔴 Crítico | 0 | Rompe funcionalidad core |
-| 🟠 Bug Real | 1 | Resultados incorrectos/falsos |
-| 🟡 Deuda | 2 | Comportamiento incorrecto |
+| 🟠 Bug Real | 0 | Resultados incorrectos/falsos |
+| 🟡 Deuda | 0 | Comportamiento incorrecto |
 | ℹ️ Diseño | 2 | Mantenimiento/diseño |
 | ✅ Verificado | 21 | Fixes ya aplicados |
 
-**Tests:** 70/70 pasando (100% passed)
+**Tests:** 74/74 pasando (100% passed)
 
 **Fix Completados:**
 - C1: FxHasher (FNV-1a) para cache determinista
@@ -27,6 +27,7 @@ Limitaciones actuales del compilador Avenys.
 - D1: prune_lru ahora incluye builds
 - D3: to_upper/to_lower con soporte Latin-1
 - D4: Memory leak en MAP fixeado
+- D5: mutabilidad de referencias inferida/validada correctamente
 
 ---
 
@@ -594,7 +595,7 @@ Métodos `from_str` y `eq` causaban advertencias de clippy porque pueden confund
   - `stable_statement_hash()` (línea ~2110)
 
 **Verificación:**
-- Tests pasan: 70/70 ✅
+- Tests pasan: 74/74 ✅
 - Cache funciona entre procesos separados ✅
 
 **Status:** ✅ RESOLVED (Mayo 2026)
@@ -605,8 +606,11 @@ Métodos `from_str` y `eq` causaban advertencias de clippy porque pueden confund
 `mire_strings_split` en `runtime_support.c` retornaba una string plana con espacios en vez de una lista. Esto rompía completamente `strings.split`.
 
 **Fix Aplicado:**
-- Nueva función `mire_strings_split_list` en `runtime_support.c:1196-1231` que retorna `void *` (lista)
-- Actualizado `compile_split` en `avenys/mod.rs:3286-3304` para llamar a la nueva función
+- `mire_strings_split_list` ahora usa parser lineal con `strstr` (sin `strtok`):
+  - soporta delimitadores multi-caracter correctamente
+  - preserva segmentos vacíos (`"a,,b,"` -> `["a", "", "b", ""]`)
+  - evita copia mutable completa del input y reduce overhead
+- `compile_split` en `avenys/mod.rs` llama a `mire_strings_split_list` y retorna lista nativa
 - Actualizado type checker para devolver `DataType::List` para `strings.split` (typeck.rs)
 
 **Verificación:**
@@ -614,6 +618,9 @@ Métodos `from_str` y `eq` causaban advertencias de clippy porque pueden confund
 set parts = strings.split("a,b,c" ",")
 set joined = strings.join(parts "-")  # "a-b-c" ✅
 ```
+- Regresiones añadidas:
+  - delimitador multi-caracter (`"--"`)
+  - preservación de vacíos en split
 
 **Status:** ✅ RESOLVED (Mayo 2026)
 
@@ -642,7 +649,7 @@ El backend `avenys/mod.rs` retorna `Err(Backend)` correctamente para `strings.sp
 - Actualizado serialización/deserialización del cache
 
 **Verificación:**
-- Tests: 70/70 ✅
+- Tests: 74/74 ✅
 - Ahora selecciona por timestamp de creación, no de acceso
 
 **Status:** ✅ RESOLVED (Mayo 2026)
@@ -689,7 +696,7 @@ Puede no detectar ref escapes si los scope IDs del modelo semántico no alinean 
 - Añadido manejo de `CacheVictim::Build` en la eviction
 
 **Verificación:**
-- Tests: 70/70 ✅
+- Tests: 74/74 ✅
 
 **Status:** ✅ RESOLVED (Mayo 2026)
 
@@ -836,6 +843,10 @@ pub fn save(&mut self) -> Result<()> {
 - Se agregó test rápido de regresión:
   `blob_store_compacts_when_sparse_after_overwrites` en `src/incremental.rs`.
 - También se redujo el umbral mínimo para activar compactación en blobs medianos.
+- Optimización adicional: compactación por rangos vivos fusionados (evita sobrecontar bytes vivos)
+  y remapeo correcto de offsets internos en rangos compactados.
+- Regresión adicional:
+  `blob_store_compaction_preserves_offsets_inside_merged_ranges` en `src/incremental.rs`.
 
 **Status:** ✅ RESOLVED (Mayo 2026)
 
@@ -924,6 +935,11 @@ char *mire_string_to_upper_latin1(const char *value) {
 **Status:** ✅ RESOLVED (Mayo 2026)
 - Bug fix: removido strdup redundante
 - No hay más leak de memoria para tipos MAP
+- Verificado con test de ejecución rápida:
+  `nested_map_string_render_executes_without_runtime_errors` (`tests/language_regressions.rs`)
+- Continuación D4 (runtime output): corregido `dasu(map)` para usar `mire_dict_to_string`
+  y corregida liberación de `repr` temporales (managed vs raw) en `mire_dict_to_string`.
+- Regresión reforzada: el test ahora exige presencia de `child`, `x`, `y` en salida.
 
 **Descripción (histórico):**
 `mire_dict_format_value` para tipos MAP (línea 933) tenía leak:
@@ -986,13 +1002,10 @@ if (kind == MIRE_KIND_MAP) {
 // Línea 1076: también en el segundo loop de mire_dict_to_string
 ```
 
-### Impacto
+### Impacto (histórico)
 
-- **Memory leak** en cada print de dict con valores anidados
-- Afecta: `use dasu(dict)` cuando dict contiene maps
-- Severity: Media - no/crashes pero consume memoria extra
-
-**Status:** 🟡 PENDIENTE - Fix simple (~15 min)
+- Afectaba `use dasu(dict)` con valores MAP anidados.
+- Queda cerrado tras remover `mire_strdup_raw(...)` redundante en el branch MAP.
 
 ---
 
@@ -1098,9 +1111,9 @@ serialized.hash(&mut hasher);
 | edge/recursion | 1 | ✅ Passing |
 | edge/error_handling | 1 | ✅ Passing |
 | behavior/typeck | 2 | ✅ Passing |
-| behavior/borrowck | 3 | ⚠️ Partial |
+| behavior/borrowck | 3 | ✅ Passing |
 | modules | 1 | ✅ Passing |
-| **Total** | **70** | **70 ✅, 0 ❌** |
+| **Total** | **74** | **74 ✅, 0 ❌** |
 
 ---
 
@@ -1112,15 +1125,15 @@ serialized.hash(&mut hasher);
 3. **C3**: strings.split implementar en codegen
 
 ### Media Prioridad (🟠 Bug Real)
-4. **B1**: latest_successful_analysis usa last_access en vez de timestamp creación
-5. **B2/B3**: Verificar semantic_binding y ensure_return_is_safe
+4. **B1**: ✅ Resuelto (usa timestamp de creación)
+5. **B2/B3**: ✅ Verificados (semantic_binding y ensure_return_is_safe)
 
 ### Baja Prioridad (🟡 Deuda Técnica)
-6. **D1**: prune_lru incluye builds en el conteo
-7. **D2**: Blob store con compactación
-8. **D3**: to_upper/to_lower con Unicode (áspero, no manejan acentos)
-9. **D4**: Memory leak en mire_dict_format_value
-10. **D5**: &mut x sin mut -documentar o cambiar
+6. **D1**: ✅ Resuelto (prune_lru incluye builds)
+7. **D2**: ✅ Resuelto (blob store con compactación)
+8. **D3**: ✅ Resuelto (to_upper/to_lower Latin-1)
+9. **D4**: ✅ Resuelto (memory leak en mire_dict_format_value)
+10. **D5**: ✅ Resuelto (&mut validado contra mutabilidad real)
 
 ### Optimización (ℹ️)
 11. **M1**: Hash estructural en lugar de JSON serializado

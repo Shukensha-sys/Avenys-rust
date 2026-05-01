@@ -1096,6 +1096,83 @@ fn strings_split_returns_list_and_works_with_join() {
 }
 
 #[test]
+fn strings_split_supports_multi_char_delimiter() {
+    let root = make_temp_project_root("mire_strings_split_multichar");
+    let source_path = root.join("strings_split_multichar.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"strings-split-multichar\"\nversion = \"0.1.0\"\nentry = \"strings_split_multichar.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set parts = strings.split(\"alpha--beta--gamma\" \"--\")\n    use dasu(strings.join(parts \"|\"))\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("strings.split multichar should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("alpha|beta|gamma"),
+        "Expected 'alpha|beta|gamma', got: {stdout}"
+    );
+}
+
+#[test]
+fn strings_split_preserves_empty_segments() {
+    let root = make_temp_project_root("mire_strings_split_empty_segments");
+    let source_path = root.join("strings_split_empty_segments.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"strings-split-empty\"\nversion = \"0.1.0\"\nentry = \"strings_split_empty_segments.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set parts = strings.split(\"a,,b,\" \",\")\n    use dasu(strings.join(parts \"|\"))\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("strings.split empty segments should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a||b|"), "Expected 'a||b|', got: {stdout}");
+}
+
+#[test]
 fn array_index_assignment_mutates_elements_in_place() {
     let root = make_temp_project_root("mire_array_index_assignment");
     let source_path = root.join("array_index_assignment.mire");
@@ -1841,6 +1918,46 @@ fn list_hofs_infer_closure_params_and_execute() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("15 6 4"), "{stdout}");
+}
+
+#[test]
+fn nested_map_string_render_executes_without_runtime_errors() {
+    let root = make_temp_project_root("mire_nested_map_string");
+    let source_path = root.join("nested_map_string.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"nested-map-string\"\nversion = \"0.1.0\"\nentry = \"nested_map_string.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set inner = {x: 1, y: 2} :map[str i64]\n    set outer = {child: inner} :map[str map[str i64]]\n    use dasu(outer)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("nested map sample should compile");
+
+    let output = Command::new(&build.binary_path)
+        .current_dir(&root)
+        .output()
+        .expect("run compiled binary");
+    assert!(output.status.success(), "{output:?}");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("child"), "{stdout:?}");
+    assert!(stdout.contains("x"), "{stdout:?}");
+    assert!(stdout.contains("y"), "{stdout:?}");
 }
 
 fn make_temp_project_root(prefix: &str) -> PathBuf {
