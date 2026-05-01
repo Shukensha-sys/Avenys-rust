@@ -1657,24 +1657,44 @@ pub fn compute_invalidation_report(
         }
     }
 
+    let mut reverse_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+    for current in current_units {
+        for dep in &current.dependencies {
+            reverse_dependencies
+                .entry(dep.clone())
+                .or_default()
+                .push(current.unit_key.clone());
+        }
+    }
+
     let mut invalidated: HashMap<String, ()> = HashMap::new();
     let mut queue = changed_units.clone();
     queue.extend(added_units.clone());
     queue.extend(removed_units.clone());
+    let mut queued: HashMap<String, ()> = queue.iter().cloned().map(|k| (k, ())).collect();
 
     while let Some(unit) = queue.pop() {
+        queued.remove(&unit);
         if invalidated.insert(unit.clone(), ()).is_some() {
             continue;
         }
 
-        for current in current_units {
-            if current
-                .dependencies
-                .iter()
-                .any(|dep| dependency_matches_unit(dep, &unit))
-                && !invalidated.contains_key(&current.unit_key)
-            {
-                queue.push(current.unit_key.clone());
+        let mut keys = vec![unit.clone()];
+        if let Some((_, suffix)) = unit.rsplit_once('.') {
+            keys.push(suffix.to_string());
+        }
+        if let Some((_, suffix)) = unit.rsplit_once('#') {
+            keys.push(suffix.to_string());
+        }
+
+        for key in keys {
+            if let Some(dependents) = reverse_dependencies.get(&key) {
+                for dependent in dependents {
+                    if !invalidated.contains_key(dependent) && !queued.contains_key(dependent) {
+                        queue.push(dependent.clone());
+                        queued.insert(dependent.clone(), ());
+                    }
+                }
             }
         }
     }
@@ -1837,6 +1857,7 @@ fn direct_analysis_children(statement: &Statement) -> Option<&[Statement]> {
     }
 }
 
+#[cfg(test)]
 fn dependency_matches_unit(dependency: &str, unit_key: &str) -> bool {
     dependency == unit_key
         || dependency
@@ -2706,6 +2727,161 @@ mod tests {
         let h1 = stable_statement_hash(&stmt_a);
         let h2 = stable_statement_hash(&stmt_b);
         assert_ne!(h1, h2);
+    }
+
+    fn compute_invalidation_report_naive(
+        previous_units: &[AnalysisUnitMetadata],
+        current_units: &[AnalysisUnitMetadata],
+    ) -> AnalysisInvalidationReport {
+        let previous_by_key: HashMap<_, _> = previous_units
+            .iter()
+            .map(|unit| (unit.unit_key.clone(), unit))
+            .collect();
+        let current_by_key: HashMap<_, _> = current_units
+            .iter()
+            .map(|unit| (unit.unit_key.clone(), unit))
+            .collect();
+
+        let mut changed_units = Vec::new();
+        let mut added_units = Vec::new();
+        let mut removed_units = Vec::new();
+
+        for (key, current) in &current_by_key {
+            match previous_by_key.get(key) {
+                Some(previous) => {
+                    if previous.body_hash != current.body_hash
+                        || previous.dependencies != current.dependencies
+                        || previous.unit_kind != current.unit_kind
+                    {
+                        changed_units.push(key.clone());
+                    }
+                }
+                None => added_units.push(key.clone()),
+            }
+        }
+
+        for key in previous_by_key.keys() {
+            if !current_by_key.contains_key(key) {
+                removed_units.push(key.clone());
+            }
+        }
+
+        let mut invalidated: HashMap<String, ()> = HashMap::new();
+        let mut queue = changed_units.clone();
+        queue.extend(added_units.clone());
+        queue.extend(removed_units.clone());
+
+        while let Some(unit) = queue.pop() {
+            if invalidated.insert(unit.clone(), ()).is_some() {
+                continue;
+            }
+
+            for current in current_units {
+                if current
+                    .dependencies
+                    .iter()
+                    .any(|dep| dependency_matches_unit(dep, &unit))
+                    && !invalidated.contains_key(&current.unit_key)
+                {
+                    queue.push(current.unit_key.clone());
+                }
+            }
+        }
+
+        let mut invalidated_units: Vec<_> = invalidated.into_keys().collect();
+        changed_units.sort();
+        added_units.sort();
+        removed_units.sort();
+        invalidated_units.sort();
+
+        AnalysisInvalidationReport {
+            changed_units,
+            invalidated_units,
+            added_units,
+            removed_units,
+        }
+    }
+
+    #[test]
+    fn invalidation_report_indexed_matches_naive_behavior() {
+        let mut previous = Vec::new();
+        let mut current = Vec::new();
+        let n = 300usize;
+
+        for i in 0..n {
+            let key = format!("Type{i}.run");
+            let dep = if i == 0 {
+                "seed".to_string()
+            } else {
+                format!("run{}", i - 1)
+            };
+            let unit_prev = AnalysisUnitMetadata {
+                unit_key: key.clone(),
+                unit_kind: AnalysisUnitKind::Function,
+                body_hash: (1000 + i) as u64,
+                dependencies: vec![dep.clone()],
+                origin: None,
+            };
+            let unit_curr = AnalysisUnitMetadata {
+                body_hash: if i % 37 == 0 {
+                    (2000 + i) as u64
+                } else {
+                    (1000 + i) as u64
+                },
+                ..unit_prev.clone()
+            };
+            previous.push(unit_prev);
+            current.push(unit_curr);
+        }
+
+        current.push(AnalysisUnitMetadata {
+            unit_key: "TypeExtra.run".to_string(),
+            unit_kind: AnalysisUnitKind::Function,
+            body_hash: 999_999,
+            dependencies: vec!["run299".to_string()],
+            origin: None,
+        });
+        let _ = previous.pop();
+
+        let indexed = compute_invalidation_report(&previous, &current);
+        let naive = compute_invalidation_report_naive(&previous, &current);
+        assert_eq!(indexed.changed_units, naive.changed_units);
+        assert_eq!(indexed.added_units, naive.added_units);
+        assert_eq!(indexed.removed_units, naive.removed_units);
+        assert_eq!(indexed.invalidated_units, naive.invalidated_units);
+    }
+
+    #[test]
+    fn invalidation_report_handles_large_dependency_chains() {
+        let n = 4000usize;
+        let mut previous = Vec::with_capacity(n);
+        let mut current = Vec::with_capacity(n);
+        for i in 0..n {
+            let key = format!("unit_{i}");
+            let dep = if i == 0 {
+                "root".to_string()
+            } else {
+                format!("unit_{}", i - 1)
+            };
+            previous.push(AnalysisUnitMetadata {
+                unit_key: key.clone(),
+                unit_kind: AnalysisUnitKind::Function,
+                body_hash: i as u64,
+                dependencies: vec![dep.clone()],
+                origin: None,
+            });
+            current.push(AnalysisUnitMetadata {
+                unit_key: key,
+                unit_kind: AnalysisUnitKind::Function,
+                body_hash: if i == 0 { 777 } else { i as u64 },
+                dependencies: vec![dep],
+                origin: None,
+            });
+        }
+
+        let report = compute_invalidation_report(&previous, &current);
+        assert_eq!(report.changed_units, vec!["unit_0".to_string()]);
+        assert_eq!(report.invalidated_units.len(), n);
     }
 
     #[test]
