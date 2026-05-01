@@ -98,6 +98,9 @@ Infiere tipo del target expression.
 8. ✅ Struct field reassignment
 9. ✅ Critical borrow/semantic (ya estaban)
 10. ✅ Type checking (investigados)
+11. ✅ D2 Blob store compactación automática (Mayo 2026)
+12. ✅ B3 return-safety scope alignment verificado con test de regresión (Mayo 2026)
+13. ✅ M1 stable hash sin buffer intermedio (streaming) (Mayo 2026)
 
 ---
 

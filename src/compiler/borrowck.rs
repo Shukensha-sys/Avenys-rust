@@ -1126,6 +1126,46 @@ mod tests {
     }
 
     #[test]
+    fn rejects_returning_reference_to_local_from_impl_method() {
+        let program = Program {
+            statements: vec![
+                Statement::Type {
+                    name: "Point".to_string(),
+                    parent: None,
+                    fields: vec![],
+                },
+                Statement::Impl {
+                    trait_name: None,
+                    type_name: "Point".to_string(),
+                    methods: vec![Statement::Function {
+                        name: "leak".to_string(),
+                        params: vec![(
+                            "self".to_string(),
+                            DataType::StructNamed("Point".to_string()),
+                        )],
+                        body: vec![
+                            let_stmt("tmp", Some(Expression::Literal(Literal::Int(1)))),
+                            Statement::Return(Some(Expression::Reference {
+                                expr: Box::new(ident("tmp")),
+                                is_mutable: false,
+                                data_type: DataType::Unknown,
+                                referenced_type: DataType::Unknown,
+                            })),
+                        ],
+                        return_type: DataType::shared_ref(DataType::Unknown),
+                        visibility: Visibility::Public,
+                        is_method: true,
+                    }],
+                },
+            ],
+        };
+
+        let semantic_model = semantic::analyze_program(&program);
+        let err = check_program(&program, &semantic_model).unwrap_err();
+        assert!(format!("{}", err).contains("Borrow outlives owner scope"));
+    }
+
+    #[test]
     fn rejects_call_that_requires_mut_ref_but_receives_shared_ref() {
         let program = Program {
             statements: vec![

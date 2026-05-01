@@ -665,14 +665,14 @@ El backend `avenys/mod.rs` retorna `Err(Backend)` correctamente para `strings.sp
 **Descripción:**
 Puede no detectar ref escapes si los scope IDs del modelo semántico no alinean con el checker.
 
-**Status:** ⚠️ REQUIERE MÁS INVESTIGACIÓN
-
-**Descripción:**
-Puede no detectar ref escapes si los scope IDs del modelo semántico no alinean con el checker.
-
 **Ubicación:** `src/compiler/borrowck.rs:711-732`
 
-**Status:** 🟠 POTENTIAL BUG - Requiere verificación adicional
+**Verificación (Mayo 2026):**
+- Se añadió test de regresión para método `impl` que retorna referencia a binding local temporal.
+- El checker rechaza correctamente el escape con error `Borrow outlives owner scope`.
+- Test: `rejects_returning_reference_to_local_from_impl_method` en `src/compiler/borrowck.rs`.
+
+**Status:** ✅ RESOLVED (Mayo 2026)
 
 ---
 
@@ -830,7 +830,14 @@ pub fn save(&mut self) -> Result<()> {
 - Test de compactación automática
 - Test de restauración después de compactación
 
-**Status:** 🟡 PENDIENTE - Requiere ~2-4 horas de trabajo
+**Implementación (Mayo 2026):**
+- Se añadió compactación automática del blob store cuando la densidad útil cae por debajo de 70%.
+- La compactación actualiza offsets en `db.files` y `db.analyses` para mantener consistencia.
+- Se agregó test rápido de regresión:
+  `blob_store_compacts_when_sparse_after_overwrites` en `src/incremental.rs`.
+- También se redujo el umbral mínimo para activar compactación en blobs medianos.
+
+**Status:** ✅ RESOLVED (Mayo 2026)
 
 ### D3 - to_upper/to_lower Solo ASCII
 
@@ -1072,7 +1079,11 @@ let mut hasher = DefaultHasher::new();
 serialized.hash(&mut hasher);
 ```
 
-**Status:** ℹ️ OPTIMIZATION OPPORTUNITY
+**Mejora aplicada (Mayo 2026):**
+- `stable_statement_hash` ahora hashea en streaming con `serde_json::to_writer` hacia un writer sobre `FxHasher`.
+- Se elimina el buffer intermedio `Vec<u8>` para cada statement, reduciendo presión de RAM.
+
+**Status:** ✅ IMPROVED (Mayo 2026)
 
 ### M2 - TYPE_CHECKER_SOURCE como thread_local
 

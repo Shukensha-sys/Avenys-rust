@@ -10,11 +10,14 @@ All notable changes to Mire are documented in this file.
 - Syntax documentation standardized into a single canonical file: `SYNTAX.md`.
 - `README.md` rewritten for current project status and clearer onboarding.
 - Incremental cache format updated to `v5` to reduce in-memory and on-disk metadata duplication.
+- Incremental cache blob store now auto-compacts when sparse to avoid unbounded growth under frequent invalidations.
+- `stable_statement_hash` now hashes in streaming mode (no intermediate JSON `Vec<u8>` allocation).
 
 ### Fixed
 - Removed unused constant in incremental cache module (`src/incremental.rs`) to keep warnings clean.
 - Simplified enum top-level scan patterns in parser (`src/parser/mod.rs`) by collapsing nested match/if branches without behavior changes.
 - Reduced unnecessary `Program` cloning in loader parse/cache path (`src/loader.rs`).
+- Added borrow-check regression coverage for impl-method local-reference escapes.
 
 ## [2.2.0]
 

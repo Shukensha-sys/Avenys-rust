@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -72,6 +73,7 @@ const CACHE_FILE_NAME: &str = "incremental.bin";
 const CACHE_MAGIC: &[u8; 8] = b"MIREINC2";
 const CACHE_FORMAT_VERSION: u32 = 5;
 const DEFAULT_MAX_UNITS: usize = 256;
+const BLOB_COMPACT_THRESHOLD_RATIO: f64 = 0.7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CacheSettings {
@@ -790,11 +792,13 @@ impl IncrementalCache {
 
     fn prune_lru(&mut self) {
         let Some(max_units) = self.settings.max_units else {
+            self.maybe_compact_blob_store();
             return;
         };
 
         let current_units = self.db.files.len() + self.db.analyses.len() + self.db.builds.len();
         if current_units <= max_units {
+            self.maybe_compact_blob_store();
             return;
         }
 
@@ -845,6 +849,67 @@ impl IncrementalCache {
                 }
             }
         }
+
+        self.maybe_compact_blob_store();
+    }
+
+    fn maybe_compact_blob_store(&mut self) {
+        let total_len = self.blob_store.bytes().len();
+        if total_len < 512 {
+            return;
+        }
+
+        let mut live_ranges = Vec::with_capacity(self.db.files.len() + self.db.analyses.len());
+        let mut live_bytes: usize = 0;
+        for entry in self.db.files.values() {
+            live_ranges.push((entry.blob_offset, entry.blob_len));
+            live_bytes = live_bytes.saturating_add(entry.blob_len as usize);
+        }
+        for entry in self.db.analyses.values() {
+            live_ranges.push((entry.blob_offset, entry.blob_len));
+            live_bytes = live_bytes.saturating_add(entry.blob_len as usize);
+        }
+
+        if live_ranges.is_empty() {
+            if total_len > 0 {
+                self.blob_store = BlobStore::from_owned(Vec::new());
+            }
+            return;
+        }
+
+        let ratio = (live_bytes as f64) / (total_len as f64);
+        if ratio >= BLOB_COMPACT_THRESHOLD_RATIO {
+            return;
+        }
+
+        live_ranges.sort_unstable_by_key(|(offset, _)| *offset);
+        let old_blob = self.blob_store.bytes();
+        let mut compacted = Vec::with_capacity(live_bytes);
+        let mut relocation = HashMap::with_capacity(live_ranges.len());
+
+        for (old_offset, len) in live_ranges {
+            let old_start = old_offset as usize;
+            let old_end = old_start.saturating_add(len as usize);
+            if old_end > old_blob.len() {
+                continue;
+            }
+            let new_offset = compacted.len() as u64;
+            compacted.extend_from_slice(&old_blob[old_start..old_end]);
+            relocation.insert(old_offset, new_offset);
+        }
+
+        for entry in self.db.files.values_mut() {
+            if let Some(new_offset) = relocation.get(&entry.blob_offset) {
+                entry.blob_offset = *new_offset;
+            }
+        }
+        for entry in self.db.analyses.values_mut() {
+            if let Some(new_offset) = relocation.get(&entry.blob_offset) {
+                entry.blob_offset = *new_offset;
+            }
+        }
+
+        self.blob_store = BlobStore::from_owned(compacted);
     }
 
     fn latest_analysis_units(&self, source_path: &Path) -> Option<Vec<AnalysisUnitMetadata>> {
@@ -2056,9 +2121,28 @@ fn collect_type_dependencies(data_type: &crate::parser::ast::DataType, deps: &mu
 }
 
 fn stable_statement_hash(statement: &Statement) -> u64 {
-    let serialized = serde_json::to_vec(statement).unwrap_or_default();
+    struct HasherWriter<'a> {
+        hasher: &'a mut FxHasher,
+    }
+
+    impl Write for HasherWriter<'_> {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.hasher.write(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
     let mut hasher = FxHasher::new();
-    serialized.hash(&mut hasher);
+    let mut writer = HasherWriter {
+        hasher: &mut hasher,
+    };
+    if serde_json::to_writer(&mut writer, statement).is_err() {
+        return 0;
+    }
     hasher.finish()
 }
 
@@ -2184,6 +2268,39 @@ mod tests {
             .expect("store analysis");
         assert!(cache.db.files.len() + cache.db.analyses.len() <= 1);
         assert!(cache.metrics().evictions >= 1);
+    }
+
+    #[test]
+    fn blob_store_compacts_when_sparse_after_overwrites() {
+        let root = std::env::temp_dir().join(format!("mire_cache_compact_{}", now_epoch_ms()));
+        fs::create_dir_all(&root).expect("temp dir");
+        let source_path = root.join("main.mire");
+        fs::write(&source_path, "pub fn main: () {}\n").expect("source");
+
+        let settings = CacheSettings {
+            max_units: Some(256),
+            analysis_cache: true,
+            compression: false,
+        };
+        let mut cache = IncrementalCache::load_with_settings(&source_path, settings).expect("load");
+
+        for i in 0..32 {
+            let function_name = format!("main_{}", i);
+            cache
+                .store_analysis(&source_path, 7, &demo_program(&function_name))
+                .expect("store analysis overwrite");
+        }
+
+        let blob_len = cache.blob_store.bytes().len();
+        let active_len = cache
+            .db
+            .analyses
+            .values()
+            .next()
+            .map(|entry| entry.blob_len as usize)
+            .unwrap_or(0);
+
+        assert!(blob_len <= active_len.saturating_mul(2));
     }
 
     #[test]
