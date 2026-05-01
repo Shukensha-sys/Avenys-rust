@@ -1173,6 +1173,43 @@ fn strings_split_preserves_empty_segments() {
 }
 
 #[test]
+fn syntax_reference_prototype_compiles_and_runs() {
+    let root = make_temp_project_root("mire_syntax_prototype");
+    let source_path = root.join("prototype.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"syntax-prototype\"\nversion = \"0.1.0\"\nentry = \"prototype.mire\"\n",
+    )
+    .expect("write project");
+    let prototype_source = fs::read_to_string("tests/syntax/prototype.mire")
+        .expect("read syntax prototype source");
+    fs::write(&source_path, prototype_source).expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+        },
+    )
+    .expect("syntax prototype should compile");
+
+    let output = Command::new(&build.binary_path)
+        .current_dir(&root)
+        .output()
+        .expect("run binary");
+    assert!(output.status.success(), "{output:?}");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a|b|c"), "{stdout:?}");
+    assert!(stdout.contains("child"), "{stdout:?}");
+}
+
+#[test]
 fn array_index_assignment_mutates_elements_in_place() {
     let root = make_temp_project_root("mire_array_index_assignment");
     let source_path = root.join("array_index_assignment.mire");

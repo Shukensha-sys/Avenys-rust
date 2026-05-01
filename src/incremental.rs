@@ -2,12 +2,15 @@ use crate::avens::{BuildMode, find_project_root};
 use crate::error::mss::MssError;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::parser::Program;
-use crate::parser::ast::{Expression, Statement};
+use crate::parser::ast::{
+    AssignmentTarget, DataType, EnumVariantDef, Expression, FunctionDef, Identifier, Literal,
+    MireValue, QueryBinding, QueryGet, QueryGroup, QueryJoin, QueryOp, Statement, TraitMethodSig,
+    Visibility,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2184,29 +2187,944 @@ fn collect_type_dependencies(data_type: &crate::parser::ast::DataType, deps: &mu
 }
 
 fn stable_statement_hash(statement: &Statement) -> u64 {
-    struct HasherWriter<'a> {
-        hasher: &'a mut FxHasher,
-    }
-
-    impl Write for HasherWriter<'_> {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.hasher.write(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
     let mut hasher = FxHasher::new();
-    let mut writer = HasherWriter {
-        hasher: &mut hasher,
-    };
-    if serde_json::to_writer(&mut writer, statement).is_err() {
-        return 0;
-    }
+    hash_statement(statement, &mut hasher);
     hasher.finish()
+}
+
+fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
+    match statement {
+        Statement::Let {
+            name,
+            data_type,
+            value,
+            is_constant,
+            is_mutable,
+            is_static,
+            visibility,
+        } => {
+            hasher.write_u8(0);
+            name.hash(hasher);
+            hash_data_type(data_type, hasher);
+            hash_option_expr(value, hasher);
+            is_constant.hash(hasher);
+            is_mutable.hash(hasher);
+            is_static.hash(hasher);
+            hash_visibility(*visibility, hasher);
+        }
+        Statement::Assignment {
+            target,
+            value,
+            is_mutable,
+        } => {
+            hasher.write_u8(1);
+            hash_assignment_target(target, hasher);
+            hash_expression(value, hasher);
+            is_mutable.hash(hasher);
+        }
+        Statement::Function {
+            name,
+            params,
+            body,
+            return_type,
+            visibility,
+            is_method,
+        } => {
+            hasher.write_u8(2);
+            name.hash(hasher);
+            hash_params(params, hasher);
+            hash_statements(body, hasher);
+            hash_data_type(return_type, hasher);
+            hash_visibility(*visibility, hasher);
+            is_method.hash(hasher);
+        }
+        Statement::Return(expr) => {
+            hasher.write_u8(3);
+            hash_option_expr(expr, hasher);
+        }
+        Statement::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            hasher.write_u8(4);
+            hash_expression(condition, hasher);
+            hash_statements(then_branch, hasher);
+            hash_optional_statements(else_branch, hasher);
+        }
+        Statement::While { condition, body } => {
+            hasher.write_u8(5);
+            hash_expression(condition, hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::For {
+            variable,
+            iterable,
+            body,
+        } => {
+            hasher.write_u8(6);
+            variable.hash(hasher);
+            hash_expression(iterable, hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::Expression(expr) => {
+            hasher.write_u8(7);
+            hash_expression(expr, hasher);
+        }
+        Statement::Break => hasher.write_u8(8),
+        Statement::Continue => hasher.write_u8(9),
+        Statement::Find {
+            variable,
+            iterable,
+            body,
+        } => {
+            hasher.write_u8(10);
+            variable.hash(hasher);
+            hash_expression(iterable, hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::Match {
+            value,
+            cases,
+            default,
+        } => {
+            hasher.write_u8(11);
+            hash_expression(value, hasher);
+            cases.len().hash(hasher);
+            for (case, body) in cases {
+                hash_expression(case, hasher);
+                hash_statements(body, hasher);
+            }
+            hash_statements(default, hasher);
+        }
+        Statement::Type {
+            name,
+            parent,
+            fields,
+        } => {
+            hasher.write_u8(12);
+            name.hash(hasher);
+            parent.hash(hasher);
+            hash_statements(fields, hasher);
+        }
+        Statement::Skill { name, methods } => {
+            hasher.write_u8(13);
+            name.hash(hasher);
+            hash_trait_methods(methods, hasher);
+        }
+        Statement::Code {
+            trait_name,
+            type_name,
+            methods,
+        } => {
+            hasher.write_u8(14);
+            trait_name.hash(hasher);
+            type_name.hash(hasher);
+            hash_statements(methods, hasher);
+        }
+        Statement::Class {
+            name,
+            parent,
+            methods,
+        } => {
+            hasher.write_u8(15);
+            name.hash(hasher);
+            parent.hash(hasher);
+            hash_statements(methods, hasher);
+        }
+        Statement::Trait { name, methods } => {
+            hasher.write_u8(16);
+            name.hash(hasher);
+            hash_trait_methods(methods, hasher);
+        }
+        Statement::Impl {
+            trait_name,
+            type_name,
+            methods,
+        } => {
+            hasher.write_u8(17);
+            trait_name.hash(hasher);
+            type_name.hash(hasher);
+            hash_statements(methods, hasher);
+        }
+        Statement::ExternLib { name, path } => {
+            hasher.write_u8(18);
+            name.hash(hasher);
+            path.hash(hasher);
+        }
+        Statement::ExternFunction {
+            name,
+            lib_name,
+            params,
+            return_type,
+        } => {
+            hasher.write_u8(19);
+            name.hash(hasher);
+            lib_name.hash(hasher);
+            hash_params(params, hasher);
+            hash_data_type(return_type, hasher);
+        }
+        Statement::Unsafe { body } => {
+            hasher.write_u8(20);
+            hash_statements(body, hasher);
+        }
+        Statement::Asm { instructions } => {
+            hasher.write_u8(21);
+            instructions.len().hash(hasher);
+            for (name, expr) in instructions {
+                name.hash(hasher);
+                hash_expression(expr, hasher);
+            }
+        }
+        Statement::AddLib { path } => {
+            hasher.write_u8(22);
+            path.hash(hasher);
+        }
+        Statement::Use {
+            path,
+            alias,
+            items,
+            is_local,
+        } => {
+            hasher.write_u8(23);
+            path.hash(hasher);
+            alias.hash(hasher);
+            items.hash(hasher);
+            is_local.hash(hasher);
+        }
+        Statement::Module { name, body } => {
+            hasher.write_u8(24);
+            name.hash(hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::Drop { value } => {
+            hasher.write_u8(25);
+            hash_expression(value, hasher);
+        }
+        Statement::Move { target, value } => {
+            hasher.write_u8(26);
+            target.hash(hasher);
+            hash_expression(value, hasher);
+        }
+        Statement::Enum { name, variants } => {
+            hasher.write_u8(27);
+            name.hash(hasher);
+            hash_enum_variants(variants, hasher);
+        }
+        Statement::DmireTable {
+            name,
+            columns,
+            body,
+        } => {
+            hasher.write_u8(28);
+            name.hash(hasher);
+            columns.hash(hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::DmireColumn {
+            name,
+            col_type,
+            body,
+        } => {
+            hasher.write_u8(29);
+            name.hash(hasher);
+            col_type.hash(hasher);
+            hash_statements(body, hasher);
+        }
+        Statement::DmireDlist { index, data } => {
+            hasher.write_u8(30);
+            index.hash(hasher);
+            hash_expressions(data, hasher);
+        }
+        Statement::Query {
+            table,
+            bindings,
+            ops,
+            joins,
+            group_by,
+        } => {
+            hasher.write_u8(31);
+            table.hash(hasher);
+            hash_query_bindings(bindings, hasher);
+            hash_query_ops(ops, hasher);
+            hash_query_joins(joins, hasher);
+            hash_query_group(group_by.as_ref(), hasher);
+        }
+    }
+}
+
+fn hash_expression(expr: &Expression, hasher: &mut FxHasher) {
+    match expr {
+        Expression::Literal(lit) => {
+            hasher.write_u8(0);
+            hash_literal(lit, hasher);
+        }
+        Expression::Identifier(ident) => {
+            hasher.write_u8(1);
+            hash_identifier(ident, hasher);
+        }
+        Expression::BinaryOp {
+            operator,
+            left,
+            right,
+            data_type,
+        } => {
+            hasher.write_u8(2);
+            operator.hash(hasher);
+            hash_expression(left, hasher);
+            hash_expression(right, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::UnaryOp {
+            operator,
+            operand,
+            data_type,
+        } => {
+            hasher.write_u8(3);
+            operator.hash(hasher);
+            hash_expression(operand, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::NamedArg {
+            name,
+            value,
+            data_type,
+        } => {
+            hasher.write_u8(4);
+            name.hash(hasher);
+            hash_expression(value, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Call {
+            name,
+            args,
+            data_type,
+        } => {
+            hasher.write_u8(5);
+            name.hash(hasher);
+            hash_expressions(args, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::List {
+            elements,
+            element_type,
+            data_type,
+        } => {
+            hasher.write_u8(6);
+            hash_expressions(elements, hasher);
+            hash_data_type(element_type, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Dict {
+            entries,
+            key_type,
+            value_type,
+            data_type,
+        } => {
+            hasher.write_u8(7);
+            entries.len().hash(hasher);
+            for (k, v) in entries {
+                hash_expression(k, hasher);
+                hash_expression(v, hasher);
+            }
+            hash_data_type(key_type, hasher);
+            hash_data_type(value_type, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Tuple {
+            elements,
+            data_type,
+        } => {
+            hasher.write_u8(8);
+            hash_expressions(elements, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Index {
+            target,
+            index,
+            data_type,
+        } => {
+            hasher.write_u8(9);
+            hash_expression(target, hasher);
+            hash_expression(index, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::MemberAccess {
+            target,
+            member,
+            data_type,
+        } => {
+            hasher.write_u8(10);
+            hash_expression(target, hasher);
+            member.hash(hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Closure {
+            params,
+            body,
+            return_type,
+            capture,
+        } => {
+            hasher.write_u8(11);
+            hash_params(params, hasher);
+            hash_statements(body, hasher);
+            hash_data_type(return_type, hasher);
+            capture.len().hash(hasher);
+            for (name, value) in capture {
+                name.hash(hasher);
+                hash_mire_value(value, hasher);
+            }
+        }
+        Expression::Reference {
+            expr,
+            is_mutable,
+            data_type,
+            referenced_type,
+        } => {
+            hasher.write_u8(12);
+            hash_expression(expr, hasher);
+            is_mutable.hash(hasher);
+            hash_data_type(data_type, hasher);
+            hash_data_type(referenced_type, hasher);
+        }
+        Expression::Dereference { expr, data_type } => {
+            hasher.write_u8(13);
+            hash_expression(expr, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Box { value, data_type } => {
+            hasher.write_u8(14);
+            hash_expression(value, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Pipeline {
+            input,
+            stage,
+            safe,
+            data_type,
+        } => {
+            hasher.write_u8(15);
+            hash_expression(input, hasher);
+            hash_expression(stage, hasher);
+            safe.hash(hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::Match {
+            value,
+            cases,
+            default,
+            data_type,
+        } => {
+            hasher.write_u8(16);
+            hash_expression(value, hasher);
+            cases.len().hash(hasher);
+            for (a, b) in cases {
+                hash_expression(a, hasher);
+                hash_expression(b, hasher);
+            }
+            hash_expression(default, hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::EnumVariantPath {
+            enum_name,
+            variant_name,
+            data_type,
+        } => {
+            hasher.write_u8(17);
+            enum_name.hash(hasher);
+            variant_name.hash(hasher);
+            hash_data_type(data_type, hasher);
+        }
+        Expression::EnumVariant {
+            enum_name,
+            variant_name,
+            payloads,
+            data_type,
+        } => {
+            hasher.write_u8(18);
+            enum_name.hash(hasher);
+            variant_name.hash(hasher);
+            hash_expressions(payloads, hasher);
+            hash_data_type(data_type, hasher);
+        }
+    }
+}
+
+fn hash_literal(lit: &Literal, hasher: &mut FxHasher) {
+    match lit {
+        Literal::Int(value) => {
+            hasher.write_u8(0);
+            value.hash(hasher);
+        }
+        Literal::Float(value) => {
+            hasher.write_u8(1);
+            value.to_bits().hash(hasher);
+        }
+        Literal::Str(value) => {
+            hasher.write_u8(2);
+            value.hash(hasher);
+        }
+        Literal::Bool(value) => {
+            hasher.write_u8(3);
+            value.hash(hasher);
+        }
+        Literal::None => hasher.write_u8(4),
+        Literal::List(values) => {
+            hasher.write_u8(5);
+            hash_expressions(values, hasher);
+        }
+        Literal::Dict(values) => {
+            hasher.write_u8(6);
+            values.len().hash(hasher);
+            for ((k, v), dt) in values {
+                hash_expression(k, hasher);
+                hash_expression(v, hasher);
+                hash_data_type(dt, hasher);
+            }
+        }
+        Literal::Tuple(values) => {
+            hasher.write_u8(7);
+            hash_expressions(values, hasher);
+        }
+    }
+}
+
+fn hash_data_type(data_type: &DataType, hasher: &mut FxHasher) {
+    match data_type {
+        DataType::I8 => hasher.write_u8(0),
+        DataType::I16 => hasher.write_u8(1),
+        DataType::I32 => hasher.write_u8(2),
+        DataType::I64 => hasher.write_u8(3),
+        DataType::U8 => hasher.write_u8(4),
+        DataType::U16 => hasher.write_u8(5),
+        DataType::U32 => hasher.write_u8(6),
+        DataType::U64 => hasher.write_u8(7),
+        DataType::F32 => hasher.write_u8(8),
+        DataType::F64 => hasher.write_u8(9),
+        DataType::Str => hasher.write_u8(10),
+        DataType::Bool => hasher.write_u8(11),
+        DataType::None => hasher.write_u8(12),
+        DataType::List => hasher.write_u8(13),
+        DataType::Vector {
+            element_type,
+            dynamic,
+        } => {
+            hasher.write_u8(14);
+            hash_data_type(element_type, hasher);
+            dynamic.hash(hasher);
+        }
+        DataType::Dict => hasher.write_u8(15),
+        DataType::Map {
+            key_type,
+            value_type,
+        } => {
+            hasher.write_u8(16);
+            hash_data_type(key_type, hasher);
+            hash_data_type(value_type, hasher);
+        }
+        DataType::Anything => hasher.write_u8(17),
+        DataType::Function => hasher.write_u8(18),
+        DataType::Struct => hasher.write_u8(19),
+        DataType::StructNamed(name) => {
+            hasher.write_u8(20);
+            name.hash(hasher);
+        }
+        DataType::Db => hasher.write_u8(21),
+        DataType::Tuple => hasher.write_u8(22),
+        DataType::Set => hasher.write_u8(23),
+        DataType::Datetime => hasher.write_u8(24),
+        DataType::Unknown => hasher.write_u8(25),
+        DataType::Ref { inner } => {
+            hasher.write_u8(26);
+            hash_data_type(inner, hasher);
+        }
+        DataType::RefMut { inner } => {
+            hasher.write_u8(27);
+            hash_data_type(inner, hasher);
+        }
+        DataType::Box => hasher.write_u8(28),
+        DataType::Enum => hasher.write_u8(29),
+        DataType::EnumNamed(name) => {
+            hasher.write_u8(30);
+            name.hash(hasher);
+        }
+        DataType::DynTrait { trait_name } => {
+            hasher.write_u8(31);
+            trait_name.hash(hasher);
+        }
+        DataType::Array { element_type, size } => {
+            hasher.write_u8(32);
+            hash_data_type(element_type, hasher);
+            size.hash(hasher);
+        }
+        DataType::Slice { element_type } => {
+            hasher.write_u8(33);
+            hash_data_type(element_type, hasher);
+        }
+        DataType::Result { ok } => {
+            hasher.write_u8(34);
+            hash_data_type(ok, hasher);
+        }
+    }
+}
+
+fn hash_assignment_target(target: &AssignmentTarget, hasher: &mut FxHasher) {
+    match target {
+        AssignmentTarget::Variable(name) => {
+            hasher.write_u8(0);
+            name.hash(hasher);
+        }
+        AssignmentTarget::Field(name) => {
+            hasher.write_u8(1);
+            name.hash(hasher);
+        }
+        AssignmentTarget::Index { target, index } => {
+            hasher.write_u8(2);
+            hash_expression(target, hasher);
+            hash_expression(index, hasher);
+        }
+    }
+}
+
+fn hash_identifier(identifier: &Identifier, hasher: &mut FxHasher) {
+    identifier.name.hash(hasher);
+    hash_data_type(&identifier.data_type, hasher);
+    identifier.line.hash(hasher);
+    identifier.column.hash(hasher);
+}
+
+fn hash_visibility(visibility: Visibility, hasher: &mut FxHasher) {
+    match visibility {
+        Visibility::Public => hasher.write_u8(0),
+        Visibility::Private => hasher.write_u8(1),
+        Visibility::Protected => hasher.write_u8(2),
+    }
+}
+
+fn hash_trait_methods(methods: &[TraitMethodSig], hasher: &mut FxHasher) {
+    methods.len().hash(hasher);
+    for method in methods {
+        method.name.hash(hasher);
+        hash_params(&method.params, hasher);
+        hash_data_type(&method.return_type, hasher);
+    }
+}
+
+fn hash_enum_variants(variants: &[EnumVariantDef], hasher: &mut FxHasher) {
+    variants.len().hash(hasher);
+    for variant in variants {
+        variant.enum_name.hash(hasher);
+        variant.name.hash(hasher);
+        variant.payload_names.hash(hasher);
+        hash_data_types(&variant.data_types, hasher);
+    }
+}
+
+fn hash_query_bindings(bindings: &[QueryBinding], hasher: &mut FxHasher) {
+    bindings.len().hash(hasher);
+    for binding in bindings {
+        binding.target.hash(hasher);
+        binding.alias.hash(hasher);
+        binding.column.hash(hasher);
+    }
+}
+
+fn hash_query_ops(ops: &[QueryOp], hasher: &mut FxHasher) {
+    ops.len().hash(hasher);
+    for op in ops {
+        match op {
+            QueryOp::Insert { assigns } => {
+                hasher.write_u8(0);
+                hash_string_expr_pairs(assigns, hasher);
+            }
+            QueryOp::Update { condition, assigns } => {
+                hasher.write_u8(1);
+                hash_expression(condition, hasher);
+                hash_string_expr_pairs(assigns, hasher);
+            }
+            QueryOp::Delete { condition } => {
+                hasher.write_u8(2);
+                hash_expression(condition, hasher);
+            }
+            QueryOp::Get(QueryGet {
+                target,
+                condition,
+                body,
+            }) => {
+                hasher.write_u8(3);
+                target.hash(hasher);
+                hash_expression(condition, hasher);
+                hash_statements(body, hasher);
+            }
+            QueryOp::Export { path } => {
+                hasher.write_u8(4);
+                path.hash(hasher);
+            }
+            QueryOp::Import { path } => {
+                hasher.write_u8(5);
+                path.hash(hasher);
+            }
+        }
+    }
+}
+
+fn hash_query_joins(joins: &[QueryJoin], hasher: &mut FxHasher) {
+    joins.len().hash(hasher);
+    for join in joins {
+        join.right_table.hash(hasher);
+        join.left_column.hash(hasher);
+        join.right_column.hash(hasher);
+    }
+}
+
+fn hash_query_group(group: Option<&QueryGroup>, hasher: &mut FxHasher) {
+    match group {
+        Some(group) => {
+            hasher.write_u8(1);
+            group.column.hash(hasher);
+        }
+        None => hasher.write_u8(0),
+    }
+}
+
+fn hash_mire_value(value: &MireValue, hasher: &mut FxHasher) {
+    match value {
+        MireValue::I8(v) => {
+            hasher.write_u8(0);
+            v.hash(hasher);
+        }
+        MireValue::I16(v) => {
+            hasher.write_u8(1);
+            v.hash(hasher);
+        }
+        MireValue::I32(v) => {
+            hasher.write_u8(2);
+            v.hash(hasher);
+        }
+        MireValue::I64(v) => {
+            hasher.write_u8(3);
+            v.hash(hasher);
+        }
+        MireValue::U8(v) => {
+            hasher.write_u8(4);
+            v.hash(hasher);
+        }
+        MireValue::U16(v) => {
+            hasher.write_u8(5);
+            v.hash(hasher);
+        }
+        MireValue::U32(v) => {
+            hasher.write_u8(6);
+            v.hash(hasher);
+        }
+        MireValue::U64(v) => {
+            hasher.write_u8(7);
+            v.hash(hasher);
+        }
+        MireValue::Float(v) => {
+            hasher.write_u8(8);
+            v.to_bits().hash(hasher);
+        }
+        MireValue::F32(v) => {
+            hasher.write_u8(9);
+            v.to_bits().hash(hasher);
+        }
+        MireValue::F64(v) => {
+            hasher.write_u8(10);
+            v.to_bits().hash(hasher);
+        }
+        MireValue::Str(v) => {
+            hasher.write_u8(11);
+            v.hash(hasher);
+        }
+        MireValue::Bool(v) => {
+            hasher.write_u8(12);
+            v.hash(hasher);
+        }
+        MireValue::None => hasher.write_u8(13),
+        MireValue::List(values) => {
+            hasher.write_u8(14);
+            values.len().hash(hasher);
+            for value in values {
+                hash_mire_value(value, hasher);
+            }
+        }
+        MireValue::Dict(values) => {
+            hasher.write_u8(15);
+            values.len().hash(hasher);
+            for ((k, v), dt) in values {
+                hash_mire_value(k, hasher);
+                hash_mire_value(v, hasher);
+                hash_data_type(dt, hasher);
+            }
+        }
+        MireValue::Tuple(values) => {
+            hasher.write_u8(16);
+            values.len().hash(hasher);
+            for value in values {
+                hash_mire_value(value, hasher);
+            }
+        }
+        MireValue::Function(function) => {
+            hasher.write_u8(17);
+            hash_function_def(function, hasher);
+        }
+        MireValue::Builtinfn(name) => {
+            hasher.write_u8(18);
+            name.hash(hasher);
+        }
+        MireValue::Object {
+            class_name,
+            parent,
+            fields,
+            methods,
+        } => {
+            hasher.write_u8(19);
+            class_name.hash(hasher);
+            parent.hash(hasher);
+            fields.len().hash(hasher);
+            for ((name, value), dt) in fields {
+                name.hash(hasher);
+                hash_mire_value(value, hasher);
+                hash_data_type(dt, hasher);
+            }
+            hash_function_defs(methods, hasher);
+        }
+        MireValue::Trait { name, methods } => {
+            hasher.write_u8(20);
+            name.hash(hasher);
+            hash_trait_methods(methods, hasher);
+        }
+        MireValue::Instance {
+            class_name,
+            fields,
+            methods,
+        } => {
+            hasher.write_u8(21);
+            class_name.hash(hasher);
+            fields.len().hash(hasher);
+            for ((name, value), dt) in fields {
+                name.hash(hasher);
+                hash_mire_value(value, hasher);
+                hash_data_type(dt, hasher);
+            }
+            hash_function_defs(methods, hasher);
+        }
+        MireValue::Ref { value, is_mutable } => {
+            hasher.write_u8(22);
+            hash_mire_value(value, hasher);
+            is_mutable.hash(hasher);
+        }
+        MireValue::Box { value } => {
+            hasher.write_u8(23);
+            hash_mire_value(value, hasher);
+        }
+        MireValue::Array { elements, size } => {
+            hasher.write_u8(24);
+            size.hash(hasher);
+            elements.len().hash(hasher);
+            for value in elements {
+                hash_mire_value(value, hasher);
+            }
+        }
+        MireValue::Slice { elements } => {
+            hasher.write_u8(25);
+            elements.len().hash(hasher);
+            for value in elements {
+                hash_mire_value(value, hasher);
+            }
+        }
+        MireValue::EnumVariant {
+            enum_name,
+            variant_name,
+            data,
+        } => {
+            hasher.write_u8(26);
+            enum_name.hash(hasher);
+            variant_name.hash(hasher);
+            data.len().hash(hasher);
+            for value in data {
+                hash_mire_value(value, hasher);
+            }
+        }
+    }
+}
+
+fn hash_function_def(function: &FunctionDef, hasher: &mut FxHasher) {
+    function.name.hash(hasher);
+    hash_params(&function.params, hasher);
+    hash_statements(function.body.as_ref(), hasher);
+    hash_data_type(&function.return_type, hasher);
+    function.is_method.hash(hasher);
+    function.capture.len().hash(hasher);
+    for (name, value) in &function.capture {
+        name.hash(hasher);
+        hash_mire_value(value, hasher);
+    }
+}
+
+fn hash_function_defs(functions: &[FunctionDef], hasher: &mut FxHasher) {
+    functions.len().hash(hasher);
+    for function in functions {
+        hash_function_def(function, hasher);
+    }
+}
+
+fn hash_params(params: &[(String, DataType)], hasher: &mut FxHasher) {
+    params.len().hash(hasher);
+    for (name, dt) in params {
+        name.hash(hasher);
+        hash_data_type(dt, hasher);
+    }
+}
+
+fn hash_data_types(types: &[DataType], hasher: &mut FxHasher) {
+    types.len().hash(hasher);
+    for data_type in types {
+        hash_data_type(data_type, hasher);
+    }
+}
+
+fn hash_statements(statements: &[Statement], hasher: &mut FxHasher) {
+    statements.len().hash(hasher);
+    for statement in statements {
+        hash_statement(statement, hasher);
+    }
+}
+
+fn hash_optional_statements(statements: &Option<Vec<Statement>>, hasher: &mut FxHasher) {
+    match statements {
+        Some(statements) => {
+            hasher.write_u8(1);
+            hash_statements(statements, hasher);
+        }
+        None => hasher.write_u8(0),
+    }
+}
+
+fn hash_expressions(expressions: &[Expression], hasher: &mut FxHasher) {
+    expressions.len().hash(hasher);
+    for expr in expressions {
+        hash_expression(expr, hasher);
+    }
+}
+
+fn hash_option_expr(expr: &Option<Expression>, hasher: &mut FxHasher) {
+    match expr {
+        Some(expr) => {
+            hasher.write_u8(1);
+            hash_expression(expr, hasher);
+        }
+        None => hasher.write_u8(0),
+    }
+}
+
+fn hash_string_expr_pairs(pairs: &[(String, Expression)], hasher: &mut FxHasher) {
+    pairs.len().hash(hasher);
+    for (name, expr) in pairs {
+        name.hash(hasher);
+        hash_expression(expr, hasher);
+    }
 }
 
 #[cfg(test)]

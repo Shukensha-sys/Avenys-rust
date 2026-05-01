@@ -253,7 +253,7 @@ set first = lists.get(counts 0)
 ### Dicts/Maps
 
 ```mire
-set m = {a: 1, b: 2} :map![str,i64]
+set m = {a: 1, b: 2} :map[str i64]
 ```
 
 Typed map bindings expect actual map/dict values. List/vector values are not accepted as map fallbacks during type checking.
@@ -488,7 +488,7 @@ unsafe {
 |------|--------|
 | Array | `arr[T N]` |
 | Vector | `vec![T]` |
-| Map | `map![K,V]` |
+| Map | `map[K V]` |
 
 ### Custom Types
 
@@ -568,7 +568,7 @@ set total = math.sum(counts)
 
 ```mire
 set arr = [] :vec![i64] mut
-set m = {} :map![str,i64] mut
+set m = {} :map[str i64] mut
 ```
 
 ---
@@ -587,3 +587,10 @@ set m = {} :map![str,i64] mut
 - Field-level constructor validation
 - Advanced trait conformance
 - Pipelines (`=>`)
+
+## Prototype Validation
+
+La sintaxis de este documento se valida con un prototipo ejecutable:
+
+- `tests/syntax/prototype.mire`
+- Regresión: `syntax_reference_prototype_compiles_and_runs` en `tests/language_regressions.rs`

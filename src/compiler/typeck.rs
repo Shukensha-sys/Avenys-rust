@@ -3495,7 +3495,10 @@ fn implicit_return_expression_mut(statements: &mut [Statement]) -> Option<&mut E
 
 #[cfg(test)]
 mod tests {
-    use super::{check_program_types, check_program_types_partial_with_origins};
+    use super::{
+        check_program_types, check_program_types_partial_with_origins,
+        check_program_types_with_origins,
+    };
     use crate::compiler::AnalysisSelection;
     use crate::parse;
     use crate::parser::ast::{
@@ -4247,5 +4250,34 @@ mod tests {
             err.to_string()
                 .contains("Cannot take mutable reference from immutable target")
         );
+    }
+
+    #[test]
+    fn type_checker_source_context_does_not_leak_between_runs() {
+        let source_a = "pub fn main: () {\n    use dasu(missing_a)\n}\n";
+        let mut program_a = parse(source_a).expect("source A should parse");
+        let err_a = check_program_types(&mut program_a, source_a).expect_err("A must fail");
+        assert_eq!(err_a.source(), Some(&source_a.to_string()));
+
+        let source_b = "pub fn main: () {\n    use dasu(missing_b)\n}\n";
+        let mut program_b = parse(source_b).expect("source B should parse");
+        let err_b = check_program_types(&mut program_b, source_b).expect_err("B must fail");
+        assert_eq!(err_b.source(), Some(&source_b.to_string()));
+        assert_ne!(err_a.source(), err_b.source());
+    }
+
+    #[test]
+    fn type_checker_uses_file_source_from_origins_without_global_state() {
+        let source = "pub fn main: () {\n    use dasu(missing_file)\n}\n";
+        let mut program = parse(source).expect("source should parse");
+        let file = PathBuf::from("prototype_typeck_context.mire");
+        let origins = vec![file.clone()];
+        let mut sources = HashMap::new();
+        sources.insert(file.clone(), source.to_string());
+
+        let err = check_program_types_with_origins(&mut program, "", &origins, &sources)
+            .expect_err("must fail and attach origin source");
+        assert_eq!(err.filename().map(String::as_str), Some("prototype_typeck_context.mire"));
+        assert_eq!(err.source(), Some(&source.to_string()));
     }
 }

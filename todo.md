@@ -112,7 +112,8 @@ Infiere tipo del target expression.
 10. ✅ Type checking (investigados)
 11. ✅ D2 Blob store compactación automática (Mayo 2026)
 12. ✅ B3 return-safety scope alignment verificado con test de regresión (Mayo 2026)
-13. ✅ M1 stable hash sin buffer intermedio (streaming) (Mayo 2026)
+13. ✅ M1 hash estructural directo del AST (sin serialización) (Mayo 2026)
+14. ✅ M2 contexto explícito de fuente en type checker validado con regresiones (Mayo 2026)
 
 ---
 
