@@ -24,6 +24,7 @@ pub enum DataType {
     U64,
     F32,
     F64,
+    Char,
     Str,
     Bool,
     None,
@@ -94,6 +95,7 @@ impl DataType {
             "u64" => DataType::U64,
             "f32" => DataType::F32,
             "f64" => DataType::F64,
+            "char" => DataType::Char,
             "str" => DataType::Str,
             "bool" => DataType::Bool,
             "none" => DataType::None,
@@ -279,6 +281,7 @@ pub enum Expression {
 pub enum Literal {
     Int(i64),
     Float(f64),
+    Char(u32),
     Str(String),
     Bool(bool),
     None,
@@ -501,6 +504,8 @@ pub enum Statement {
     },
     For {
         variable: String,
+        #[serde(default)]
+        index: Option<String>,
         iterable: Expression,
         body: Vec<Statement>,
     },

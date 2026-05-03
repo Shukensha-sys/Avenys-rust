@@ -4,6 +4,57 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.6.1 (Mayo 2026)
+
+### std.mire - Standard Library
+- Creado archivo `std.mire` con la Standard Library completa
+- Todas las funciones organizadas por categorías con comentarios de sección:
+  - MATH: abs, min, max, sum, clamp, range, round, floor, ceil
+  - LISTS: len, push, pop, append, remove, delete, clear, join, contains, index_of, first, last, slice, concat, flatten, reverse, sort, unique, is_empty, map, filter, fold
+  - STRINGS: upper, lower, strip, split, replace, contains, startswith, endswith, len, trim, ltrim, rtrim, substr, pad_left, pad_right, repeat, is_empty
+  - DICTS: len, keys, values, has, get, set, remove, delete, entries, merge, is_empty
+  - TIME: unix_ms, unix_ns, since_ms, since_ns, mark, elapsed, elapsed_ms, elapsed_ns, sleep_ms, sleep_ns
+  - TERM: style, hr, clear
+  - MEM: used, total, free, available, percent, process, snapshot, format
+  - CPU: time_ns, time_ms, mark, elapsed, elapsed_ms, elapsed_ns, count, freq_mhz, cycles_est, loadavg, snapshot
+  - GPU: available, snapshot
+  - FS: read, write, append, exists, size, copy, move, drop, list, mkdir, rmdir, join, dir, name, ext
+  - ENV: get, set, all, args, cwd, chdir
+  - PROC: run, spawn, pipe, shell, read, write, on, exit, err, exec, exec_bg, kill, wait, exists
+- Documentación actualizada:
+  - CHANGELOG.md: added entrada de std.mire
+  - docs/avenys-roadmap.md: actualizado con información de std.mire
+
+### Validación
+- `cargo test`: 80/80 tests pasando
+
+---
+
+## v2.6.0 (Mayo 2026)
+
+### Unsafe Blocks
+- Lexer + parser reconocen `unsafe { ... }`.
+- Semantic model y borrow checker ya contabilizan contexto `unsafe`.
+- Backend Avenys compila el contenido del bloque `unsafe` en el flujo normal.
+
+### Extern / FFI
+- Parser soporta:
+  - `extern lib "alias" "ruta"`
+  - `extern fn name: (...) :ret lib "alias"`
+- Type checker registra firmas de `extern fn`.
+- Tipos FFI puntero (`*const T`, `*mut T`) se normalizan como `i64` en el frontend actual.
+
+### Inline Assembly
+- Parser soporta bloques:
+  - `asm { mov rax, rbx ... }`
+- Instrucciones se preservan en AST.
+- Backend Avenys actual acepta `asm` como no-op (sin emisión IR específica todavía).
+
+### Validación
+- `cargo test`: 80/80 tests de integración pasando.
+
+---
+
 ## v2.0.0 (Abril 2026)
 
 ### Compilation & Build

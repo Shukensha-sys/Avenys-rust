@@ -199,7 +199,7 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 }
 
 fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    let (common, file, _output, cache) = parse_command_options(cwd, args)?;
+    let (common, file, _, cache) = parse_command_options(cwd, args)?;
     let test_root = if let Some(file) = file {
         PathBuf::from(file)
     } else {
@@ -513,7 +513,8 @@ fn format_duration(d: std::time::Duration) -> String {
     }
 }
 
-fn clean_command(cwd: &Path, _args: &[String]) -> Result<i32, MireError> {
+fn clean_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
+    let _ = args;
     let bin_dir = cwd.join("bin");
     if bin_dir.exists() {
         fs::remove_dir_all(&bin_dir).map_err(runtime_err)?;
@@ -531,7 +532,8 @@ fn clean_command(cwd: &Path, _args: &[String]) -> Result<i32, MireError> {
     Ok(0)
 }
 
-fn info_command(cwd: &Path, _args: &[String]) -> Result<i32, MireError> {
+fn info_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
+    let _ = args;
     println!("Mire Avenys Compiler Information");
     println!("================================");
     println!();
@@ -1090,8 +1092,9 @@ where
         }
     }
 
-    let mut runs = Vec::with_capacity(repeat.max(1));
-    for _ in 0..repeat.max(1) {
+    let runs_count = repeat.max(1);
+    let mut runs = Vec::with_capacity(runs_count);
+    for _ in 0..runs_count {
         let outcome = run_command_with_timeout(make_command(), timeout)?;
         if outcome.timed_out || outcome.status_code.unwrap_or(1) != 0 {
             return Ok(outcome);
@@ -1285,8 +1288,9 @@ fn format_process_cell(run: Option<Duration>, status: Option<i32>, timed_out: bo
     if timed_out {
         return "timeout".to_string();
     }
-    if status.unwrap_or(0) != 0 {
-        return format!("exit {}", status.unwrap_or(-1));
+    let status_code = status.unwrap_or(0);
+    if status_code != 0 {
+        return format!("exit {}", status_code);
     }
     run.map(format_duration)
         .unwrap_or_else(|| "n/a".to_string())

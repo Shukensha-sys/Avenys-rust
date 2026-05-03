@@ -1,6 +1,19 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
-### Version: v2.2.0
+### Version: v2.5.0
+
+### Nuevo: std.mire
+- Archivo de Standard Library disponible: `std.mire`
+- Contains todas las funciones estándar organizadas por categorías
+- Uso con imports de la forma:
+  ```
+  import std
+  
+  use std.time.mark()
+  use std.lists.push(list 1)
+  use std.strings.upper("hello")
+  ```
+- Categories: MATH, LISTS, STRINGS, DICTS, TIME, TERM, MEM, CPU, GPU, FS, ENV, PROC
 
 ### Compilation Stats
 - **Clippy:** 0 warnings ✅
@@ -64,11 +77,13 @@ if a || expensive_check() { }
 - Arrays en struct fields: `struct Stack { items :arr[i64 10] }`
 - Match multilínea
 - Struct field access en impl methods
+- For-loop con índice secundario: `for item, index in range(n)`
 
 ### Lo que NO funciona o sigue incompleto:
 
-- Float arithmetic `x + 1.5` - type unification issues between literal floats and typed floats
-- `vec[vec[T]]` - no conserva tipo interno en todas las rutas
+- (Actualizado 2026-05-04) Sin pendientes abiertos en:
+  - Float arithmetic `x + 1.5` con variables `:f32/:f64`
+  - Conservacion de tipo interno en `vec[vec[T]]` durante inferencia/asignacion/push
 
 ### ✅ Resuelto en v2.2.0:
 - Float literals: `3.14`, `3.14 :f64` ✅
@@ -125,11 +140,13 @@ if a || expensive_check() { }
 - `i1` (bool)
 - `ptr` (strings, listas - como punteros)
 
-### Propuestas de sintaxis para implementar:
+### Estado de sintaxis (actualizado 2026-05-04)
 
-1. **Struct field reassignment:** Implementar setter semántico para fields mutables
+Implementado:
 
-2. **Bitwise operators:** `&`, `|`, `<<`, `>>` (pendientes de implementación)
+1. Literales numéricos prefijados: `0b`, `0o`, `0x`
+2. Raw strings con delimitadores: `r"..."`, `r#"..."#`, `r##"..."##`
+3. Character literals con tipo `char` (Unicode scalar `u32`)
 
 ### Migración de v1.x a v2.x:
 

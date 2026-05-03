@@ -1089,9 +1089,10 @@ impl LlvmIrGen {
             }
             Statement::For {
                 variable,
+                index,
                 iterable,
                 body,
-            } => self.compile_for_range(variable, iterable, body),
+            } => self.compile_for_range(variable, index.as_deref(), iterable, body),
             Statement::If {
                 condition,
                 then_branch,
@@ -1171,6 +1172,14 @@ impl LlvmIrGen {
                     .push(format!("  ret {} {}", self.ty(ret_ty), ret.repr));
                 Ok(())
             }
+            Statement::Unsafe { body } => {
+                for stmt in body {
+                    self.compile_statement(stmt)?;
+                }
+                Ok(())
+            }
+            Statement::ExternLib { .. } | Statement::ExternFunction { .. } => Ok(()),
+            Statement::Asm { .. } => Ok(()),
             other => Err(MireError::new(ErrorKind::Backend {
                 message: format!("Avenys does not yet lower statement {:?}", other),
             })),
@@ -1186,7 +1195,12 @@ impl LlvmIrGen {
             }),
             Expression::Literal(Literal::Float(value)) => Ok(LlValue {
                 ty: LlType::F64,
-                repr: value.to_string(),
+                repr: format!("{value:?}"),
+                owned: false,
+            }),
+            Expression::Literal(Literal::Char(value)) => Ok(LlValue {
+                ty: LlType::I64,
+                repr: (*value as i64).to_string(),
                 owned: false,
             }),
             Expression::Literal(Literal::Bool(value)) => Ok(LlValue {
@@ -1974,7 +1988,7 @@ impl LlvmIrGen {
         self.body
             .push(format!("  store i64 {}, ptr {}", elem_val, param_var_ptr));
 
-        let result_val = self.compile_closure_body(body, return_type);
+        let result_val = self.compile_closure_body(body, return_type)?;
         self.vars = old_vars;
 
         let result_i64 = self.cast_to_i64(result_val)?;
@@ -2014,46 +2028,42 @@ impl LlvmIrGen {
         })
     }
 
-    fn compile_closure_body(&mut self, body: &[Statement], _expected_type: &DataType) -> LlValue {
+    fn compile_closure_body(
+        &mut self,
+        body: &[Statement],
+        _expected_type: &DataType,
+    ) -> Result<LlValue> {
         if body.is_empty() {
-            return LlValue {
+            return Ok(LlValue {
                 ty: LlType::I64,
                 repr: "0".to_string(),
                 owned: false,
-            };
+            });
         }
 
         for stmt in body.iter().take(body.len() - 1) {
-            let _ = self.compile_statement(stmt);
+            self.compile_statement(stmt)?;
         }
 
         if let Some(last) = body.last() {
             match last {
-                Statement::Return(Some(expr)) => self.compile_expr(expr).unwrap_or(LlValue {
-                    ty: LlType::I64,
-                    repr: "0".to_string(),
-                    owned: false,
-                }),
-                Statement::Expression(expr) => self.compile_expr(expr).unwrap_or(LlValue {
-                    ty: LlType::I64,
-                    repr: "0".to_string(),
-                    owned: false,
-                }),
+                Statement::Return(Some(expr)) => self.compile_expr(expr),
+                Statement::Expression(expr) => self.compile_expr(expr),
                 _ => {
-                    let _ = self.compile_statement(last);
-                    LlValue {
+                    self.compile_statement(last)?;
+                    Ok(LlValue {
                         ty: LlType::I64,
                         repr: "0".to_string(),
                         owned: false,
-                    }
+                    })
                 }
             }
         } else {
-            LlValue {
+            Ok(LlValue {
                 ty: LlType::I64,
                 repr: "0".to_string(),
                 owned: false,
-            }
+            })
         }
     }
 
@@ -2084,7 +2094,7 @@ impl LlvmIrGen {
             );
         }
 
-        let result = self.compile_closure_body(body, return_type);
+        let result = self.compile_closure_body(body, return_type)?;
         self.vars = old_vars;
         Ok(result)
     }
@@ -4833,6 +4843,13 @@ impl LlvmIrGen {
         self.emit_runtime_guard(cond, message);
     }
 
+    fn emit_nonzero_check_f64(&mut self, value_repr: &str, message: &str) {
+        let cond = self.tmp();
+        self.body
+            .push(format!("  {cond} = fcmp une double {value_repr}, 0.0"));
+        self.emit_runtime_guard(cond, message);
+    }
+
     fn emit_bounds_check(&mut self, index: LlValue, len: LlValue, message: &str) {
         let non_negative = self.tmp();
         self.body
@@ -4904,6 +4921,7 @@ impl LlvmIrGen {
     fn compile_for_range(
         &mut self,
         variable: &str,
+        index: Option<&str>,
         iterable: &Expression,
         body: &[Statement],
     ) -> Result<()> {
@@ -4958,6 +4976,24 @@ impl LlvmIrGen {
                 struct_name: None,
             },
         );
+        let (index_ptr, saved_index) = if let Some(index_name) = index {
+            let index_ptr = self.tmp();
+            self.entry_allocas.push(format!("  {index_ptr} = alloca i64"));
+            self.body.push(format!("  store i64 0, ptr {index_ptr}"));
+            let saved = self.vars.insert(
+                index_name.to_string(),
+                VarInfo {
+                    ptr: index_ptr.clone(),
+                    ty: LlType::I64,
+                    data_type: DataType::I64,
+                    owns_heap_string: false,
+                    struct_name: None,
+                },
+            );
+            (Some(index_ptr), saved)
+        } else {
+            (None, None)
+        };
 
         let cond_label = self.label("for_cond");
         let body_label = self.label("for_body");
@@ -5030,6 +5066,16 @@ impl LlvmIrGen {
         ));
         self.body
             .push(format!("  store i64 {}, ptr {}", next_value, iter_ptr));
+        if let Some(index_ptr) = &index_ptr {
+            let index_value = self.tmp();
+            let next_index = self.tmp();
+            self.body
+                .push(format!("  {index_value} = load i64, ptr {index_ptr}"));
+            self.body
+                .push(format!("  {next_index} = add i64 {index_value}, 1"));
+            self.body
+                .push(format!("  store i64 {next_index}, ptr {index_ptr}"));
+        }
         self.body.push(format!("  br label %{cond_label}"));
         self.body.push(format!("{end_label}:"));
 
@@ -5037,6 +5083,13 @@ impl LlvmIrGen {
             self.vars.insert(variable.to_string(), saved);
         } else {
             self.vars.remove(variable);
+        }
+        if let Some(index_name) = index {
+            if let Some(saved_index) = saved_index {
+                self.vars.insert(index_name.to_string(), saved_index);
+            } else {
+                self.vars.remove(index_name);
+            }
         }
 
         Ok(())
@@ -5208,8 +5261,10 @@ impl LlvmIrGen {
     fn expression_data_type(&self, expr: &Expression) -> DataType {
         match expr {
             Expression::Literal(Literal::Str(_)) => DataType::Str,
+            Expression::Literal(Literal::Char(_)) => DataType::Char,
             Expression::Literal(Literal::Bool(_)) => DataType::Bool,
             Expression::Literal(Literal::Int(_)) => DataType::I64,
+            Expression::Literal(Literal::Float(_)) => DataType::F64,
             Expression::Literal(Literal::List(_)) => DataType::Vector {
                 element_type: Box::new(DataType::Unknown),
                 dynamic: false,
@@ -5292,7 +5347,9 @@ impl LlvmIrGen {
             DataType::I64 | DataType::Unknown | DataType::Anything => Ok(LlType::I64),
             DataType::I32 => Ok(LlType::I64),
             DataType::I8 | DataType::I16 => Ok(LlType::I64),
-            DataType::U8 | DataType::U16 | DataType::U32 | DataType::U64 => Ok(LlType::I64),
+            DataType::U8 | DataType::U16 | DataType::U32 | DataType::U64 | DataType::Char => {
+                Ok(LlType::I64)
+            }
             DataType::F32 | DataType::F64 => Ok(LlType::F64),
             DataType::Bool => Ok(LlType::I1),
             DataType::Str => Ok(LlType::Ptr),
@@ -5511,7 +5568,7 @@ impl LlvmIrGen {
         op: &str,
         lhs: LlValue,
         rhs: LlValue,
-        _data_type: &DataType,
+        data_type: &DataType,
     ) -> Result<LlValue> {
         let left_repr = lhs.repr.clone();
         let right_repr = rhs.repr.clone();
@@ -5551,6 +5608,94 @@ impl LlvmIrGen {
                 repr: result,
                 owned: false,
             });
+        }
+
+        let should_use_float = lhs.ty == LlType::F64
+            || rhs.ty == LlType::F64
+            || matches!(data_type, DataType::F64 | DataType::F32);
+        if should_use_float {
+            let left_f64 = self.cast_to_f64(lhs.clone())?;
+            let right_f64 = self.cast_to_f64(rhs.clone())?;
+            match op {
+                "+" => {
+                    self.body.push(format!(
+                        "  {result} = fadd double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                "-" => {
+                    self.body.push(format!(
+                        "  {result} = fsub double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                "*" => {
+                    self.body.push(format!(
+                        "  {result} = fmul double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                "/" => {
+                    self.emit_nonzero_check_f64(&right_f64.repr, "division by zero");
+                    self.body.push(format!(
+                        "  {result} = fdiv double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                "%" => {
+                    self.emit_nonzero_check_f64(&right_f64.repr, "division by zero");
+                    self.body.push(format!(
+                        "  {result} = frem double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                "==" | "!=" | "<" | ">" | "<=" | ">=" => {
+                    let cmp = match op {
+                        "==" => "oeq",
+                        "!=" => "one",
+                        "<" => "olt",
+                        ">" => "ogt",
+                        "<=" => "ole",
+                        ">=" => "oge",
+                        _ => unreachable!(),
+                    };
+                    self.body.push(format!(
+                        "  {result} = fcmp {cmp} double {}, {}",
+                        left_f64.repr, right_f64.repr
+                    ));
+                    return Ok(LlValue {
+                        ty: LlType::I1,
+                        repr: result,
+                        owned: false,
+                    });
+                }
+                _ => {}
+            }
         }
 
         match op {
@@ -5783,13 +5928,24 @@ impl LlvmIrGen {
         let result = self.tmp();
         match op {
             "-" => {
-                self.body
-                    .push(format!("  {result} = sub i64 0, {}", value.repr));
-                Ok(LlValue {
-                    ty: LlType::I64,
-                    repr: result,
-                    owned: false,
-                })
+                if value.ty == LlType::F64 {
+                    let float_value = self.cast_to_f64(value)?;
+                    self.body
+                        .push(format!("  {result} = fsub double 0.0, {}", float_value.repr));
+                    Ok(LlValue {
+                        ty: LlType::F64,
+                        repr: result,
+                        owned: false,
+                    })
+                } else {
+                    self.body
+                        .push(format!("  {result} = sub i64 0, {}", value.repr));
+                    Ok(LlValue {
+                        ty: LlType::I64,
+                        repr: result,
+                        owned: false,
+                    })
+                }
             }
             "!" => {
                 let bool_val = self.cast_to_i1(value)?;
@@ -5939,7 +6095,7 @@ impl LlvmIrGen {
         match ty {
             LlType::I64 => self.cast_to_i64(value),
             LlType::I1 => self.cast_to_i1(value),
-            LlType::F64 => Ok(value),
+            LlType::F64 => self.cast_to_f64(value),
             LlType::Ptr if value.ty == LlType::Ptr => Ok(value),
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
                 message: "Avenys cannot cast non-pointer value to string".to_string(),
@@ -5951,7 +6107,7 @@ impl LlvmIrGen {
         let value = match ty {
             LlType::I64 => self.cast_to_i64(value)?,
             LlType::I1 => self.cast_to_i1(value)?,
-            LlType::F64 => value,
+            LlType::F64 => self.cast_to_f64(value)?,
             LlType::Ptr if value.ty == LlType::Ptr => value,
             LlType::Ptr => {
                 return Err(MireError::new(ErrorKind::Runtime {
@@ -5966,6 +6122,29 @@ impl LlvmIrGen {
             ptr
         ));
         Ok(())
+    }
+
+    fn cast_to_f64(&mut self, value: LlValue) -> Result<LlValue> {
+        match value.ty {
+            LlType::F64 => Ok(value),
+            LlType::I64 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = sitofp i64 {} to double", value.repr));
+                Ok(LlValue {
+                    ty: LlType::F64,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
+            LlType::I1 => {
+                let as_i64 = self.cast_to_i64(value)?;
+                self.cast_to_f64(as_i64)
+            }
+            LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys cannot cast pointer/struct to float".to_string(),
+            })),
+        }
     }
 
     fn store_variable(

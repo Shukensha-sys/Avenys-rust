@@ -308,9 +308,11 @@ while count < 10 {
 for i in range(10) {
     use dasu(i)
 }
-```
 
-Current compiler support is single-binding only. `for value, index in ...` is intentionally rejected until the second binding has real parser/typechecker/codegen semantics.
+for value, index in range(10) {
+    use dasu("{index}:{value}")
+}
+```
 
 ### Do-While
 
@@ -364,6 +366,18 @@ Specific imports:
 ```mire
 import strings: (split replace trim)
 ```
+
+### Extern / FFI
+
+```mire
+extern lib "c" "libc.so.6"
+extern fn puts: (msg :*const i8) :i32 lib "c"
+```
+
+Notas:
+- `extern lib` registra alias y ruta de librería.
+- `extern fn` registra firma para type checking.
+- Tipos puntero FFI (`*const T`, `*mut T`) se modelan como escalar `i64` en el frontend actual.
 
 ---
 
@@ -423,6 +437,19 @@ set result = a << b
 set result = a >> b
 ```
 
+### Inline Assembly
+
+```mire
+asm {
+    mov rax, rbx
+    add rax, rcx
+}
+```
+
+Nota:
+- El parser acepta bloques `asm` y los conserva en AST.
+- El lowering Avenys actual no emite IR específico para `asm` (no-op).
+
 ---
 
 ## 13. Ownership
@@ -478,9 +505,26 @@ unsafe {
 | `i8`, `i16`, `i32`, `i64` | Signed integers |
 | `u8`, `u16`, `u32`, `u64` | Unsigned integers |
 | `f32`, `f64` | Floating point |
+| `char` | Unicode scalar (`u32`) |
 | `str` | String |
 | `bool` | Boolean |
 | `none` | Unit type |
+
+### Literal Forms
+
+```mire
+set i = 42
+set f = 3.14
+set s = "hello"
+set c = 'a' :char
+set nl = '\n' :char
+set bin = 0b1010 :i64
+set oct = 0o12 :i64
+set hex = 0xFF :i64
+set raw1 = r"hello"
+set raw2 = r#"hello "world""#
+set raw3 = r##"hello "world" with ##"##
+```
 
 ### Collection Types
 

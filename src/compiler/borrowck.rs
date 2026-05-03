@@ -263,10 +263,20 @@ impl<'a> BorrowChecker<'a> {
             }
             Statement::For {
                 variable,
+                index,
                 iterable,
                 body,
+            } => {
+                self.check_expression(iterable)?;
+                self.push_scope();
+                self.insert_binding(variable.clone(), BindingState::default());
+                if let Some(index_name) = index {
+                    self.insert_binding(index_name.clone(), BindingState::default());
+                }
+                self.check_statements(body)?;
+                self.pop_scope();
             }
-            | Statement::Find {
+            Statement::Find {
                 variable,
                 iterable,
                 body,

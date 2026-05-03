@@ -17,8 +17,6 @@ Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
 
 | Sintaxis | Estado | Notas |
 |---------|--------|-------|
-| `class` | ⚠️ No implementado | Reservado |
-| `module` | ⚠️ No implementado | Reservado |
 | `unsafe` | ⚠️ No implementado | Reservado para FFI |
 | `asm` | ⚠️ No implementado | Reservado |
 | `extern lib` | ⚠️ No implementado | Planeado |
@@ -52,7 +50,7 @@ Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
 ### Estado Actual
 
 **Eliminado**: `add std`
-**Reservado**: `class`, `module`, `unsafe`, `asm`, `extern lib`, `extern fn`
+**Reservado**: `unsafe`, `asm`, `extern lib`, `extern fn`
 
 ---
 
@@ -61,7 +59,7 @@ Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
 ### Completado:
 1. ✅ Eliminado `add` - ahora treated as unknown identifier
 2. ✅ Angle brackets eliminado
-3. ✅ Documentado reservado para futuro: `class`, `module`, `unsafe`, `asm`, `extern`
+3. ✅ Documentado reservado para futuro: `unsafe`, `asm`, `extern`
 4. ✅ Parsing de bloque unificado en helpers compartidos del parser
 5. ✅ `MireError` compactado sin romper formato ni contexto
 6. ✅ Limpieza de warnings investigados en `parser`, `main` y `avens`

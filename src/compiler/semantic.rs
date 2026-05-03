@@ -291,11 +291,35 @@ impl SemanticModelBuilder {
             }
             Statement::For {
                 variable,
+                index,
                 iterable,
                 body,
                 ..
+            } => {
+                self.visit_expression(iterable);
+                self.with_scope(|builder| {
+                    builder.register_binding(
+                        variable.clone(),
+                        DataType::Anything,
+                        BindingKind::Value,
+                        None,
+                        false,
+                        false,
+                    );
+                    if let Some(index_name) = index {
+                        builder.register_binding(
+                            index_name.clone(),
+                            DataType::I64,
+                            BindingKind::Value,
+                            None,
+                            false,
+                            false,
+                        );
+                    }
+                    builder.visit_statements(body)
+                });
             }
-            | Statement::Find {
+            Statement::Find {
                 variable,
                 iterable,
                 body,

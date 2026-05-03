@@ -7,8 +7,7 @@ use crate::incremental::{
 use crate::parser::ast::Statement;
 use crate::parser::{Program, parse};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::Read;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn load_program_from_file(path: &Path) -> Result<Program> {
@@ -345,23 +344,11 @@ fn contains_local_import(statements: &[Statement]) -> bool {
 }
 
 fn read_source_file(path: &Path) -> Result<String> {
-    let mut file = File::open(path).map_err(|err| {
+    fs::read_to_string(path).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
             message: format!("Could not read '{}': {}", path.display(), err),
         })
-    })?;
-    let capacity = file
-        .metadata()
-        .ok()
-        .and_then(|metadata| usize::try_from(metadata.len()).ok())
-        .unwrap_or(0);
-    let mut source = String::with_capacity(capacity.saturating_add(1));
-    file.read_to_string(&mut source).map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Could not read '{}': {}", path.display(), err),
-        })
-    })?;
-    Ok(source)
+    })
 }
 
 struct ResolvedFile {
@@ -377,7 +364,8 @@ struct ExpandedStatement {
 }
 
 impl ResolvedFile {
-    fn from_cached(cached: CachedParsedFile, _source: String) -> Self {
+    fn from_cached(cached: CachedParsedFile, source: String) -> Self {
+        drop(source);
         Self {
             hash: cached.hash,
             program: cached.program,

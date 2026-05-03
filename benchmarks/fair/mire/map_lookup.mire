@@ -1,0 +1,22 @@
+import std
+
+pub fn main: () {
+    set stats = {} :map[str i64] mut
+    set stats = dicts.set(stats "alpha" 11)
+    set stats = dicts.set(stats "beta" 22)
+    set stats = dicts.set(stats "gamma" 33)
+    set stats = dicts.set(stats "delta" 44)
+
+    set i = 0 :i64 mut
+    set total = 0 :i64 mut
+
+    while i < 500000 {
+        set total += dicts.get(stats "alpha" 0)
+        set total += dicts.get(stats "beta" 0)
+        set total += dicts.get(stats "gamma" 0)
+        set total += dicts.get(stats "delta" 0)
+        set i += 1
+    }
+
+    use dasu(total)
+}

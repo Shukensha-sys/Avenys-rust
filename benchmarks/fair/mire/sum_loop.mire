@@ -1,0 +1,14 @@
+import std
+
+pub fn main: () {
+    set limit = 3000000 :i64
+    set i = 0 :i64 mut
+    set acc = 0 :i64 mut
+
+    while i < limit {
+        set acc += i
+        set i += 1
+    }
+
+    use dasu(acc)
+}

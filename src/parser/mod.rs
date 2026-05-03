@@ -226,6 +226,9 @@ impl Parser {
             TokenType::Impl => self.parse_impl_statement(),
             TokenType::Trait => self.parse_trait_statement(Visibility::Private),
             TokenType::Enum => self.parse_enum_statement(Visibility::Private),
+            TokenType::Extern => self.parse_extern_statement(),
+            TokenType::Unsafe => self.parse_unsafe_statement(),
+            TokenType::Asm => self.parse_asm_statement(),
             TokenType::If => self.parse_if_statement(),
             TokenType::While => self.parse_while_statement(),
             TokenType::For => self.parse_for_statement(),
@@ -480,8 +483,9 @@ impl Parser {
     fn parse_nominal_type_statement(
         &mut self,
         keyword: TokenType,
-        _visibility: Visibility,
+        visibility: Visibility,
     ) -> Result<Statement> {
+        let _ = visibility;
         self.expect(keyword)?;
         let name = self.expect_ident()?;
 
@@ -545,7 +549,8 @@ impl Parser {
         self.parse_nominal_type_statement(TokenType::Type, visibility)
     }
 
-    fn parse_skill_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
+    fn parse_skill_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        let _ = visibility;
         self.expect(TokenType::Skill)?;
         let name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -584,7 +589,8 @@ impl Parser {
         Ok(Statement::Skill { name, methods })
     }
 
-    fn parse_code_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
+    fn parse_code_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        let _ = visibility;
         self.expect(TokenType::Code)?;
         let trait_name = self.expect_ident()?;
 
@@ -616,7 +622,8 @@ impl Parser {
         })
     }
 
-    fn parse_trait_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
+    fn parse_trait_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        let _ = visibility;
         self.expect(TokenType::Trait)?;
         let name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -683,7 +690,8 @@ impl Parser {
         })
     }
 
-    fn parse_enum_statement(&mut self, _visibility: Visibility) -> Result<Statement> {
+    fn parse_enum_statement(&mut self, visibility: Visibility) -> Result<Statement> {
+        let _ = visibility;
         self.expect(TokenType::Enum)?;
         let enum_name = self.expect_ident()?;
         self.expect_block_open()?;
@@ -838,17 +846,160 @@ impl Parser {
         self.pop_scope();
         self.expect_block_close()?;
 
-        if second.is_some() {
-            return Err(self.error(
-                "Secondary for-loop bindings are not implemented yet; use a single loop variable",
-            ));
-        }
-
         Ok(Statement::For {
             variable: first,
+            index: second,
             iterable,
             body,
         })
+    }
+
+    fn parse_unsafe_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Unsafe)?;
+        self.expect_block_open()?;
+        self.push_scope();
+        let body = self.parse_block()?;
+        self.pop_scope();
+        self.expect_block_close()?;
+        Ok(Statement::Unsafe { body })
+    }
+
+    fn parse_extern_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Extern)?;
+        match self.peek().ttype {
+            TokenType::Lib => self.parse_extern_lib_statement(),
+            TokenType::Fn => self.parse_extern_fn_statement(),
+            _ => Err(self.error("Expected `lib` or `fn` after `extern`")),
+        }
+    }
+
+    fn parse_extern_lib_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Lib)?;
+        let name = self.expect_string_or_ident()?;
+        let path = self.expect_string_or_ident()?;
+        Ok(Statement::ExternLib { name, path })
+    }
+
+    fn parse_extern_fn_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Fn)?;
+        let name = self.expect_ident()?;
+        self.expect(TokenType::Colon)?;
+        self.expect(TokenType::Lparen)?;
+        let params = self.parse_extern_param_list()?;
+        self.expect(TokenType::Rparen)?;
+        let return_type = if self.check(TokenType::Colon) {
+            self.advance();
+            self.parse_ffi_type()?
+        } else {
+            DataType::None
+        };
+        self.expect(TokenType::Lib)?;
+        let lib_name = self.expect_string_or_ident()?;
+        Ok(Statement::ExternFunction {
+            name,
+            lib_name,
+            params,
+            return_type,
+        })
+    }
+
+    fn parse_extern_param_list(&mut self) -> Result<Vec<(String, DataType)>> {
+        let mut params = Vec::new();
+        while !self.check(TokenType::Rparen) && !self.is_at_end() {
+            if self.check(TokenType::Comma) {
+                self.advance();
+                continue;
+            }
+            let name = self.expect_ident()?;
+            let data_type = if self.check(TokenType::Colon) {
+                self.advance();
+                self.parse_ffi_type()?
+            } else {
+                DataType::Unknown
+            };
+            params.push((name, data_type));
+            if self.check(TokenType::Comma) {
+                self.advance();
+            }
+        }
+        Ok(params)
+    }
+
+    fn parse_ffi_type(&mut self) -> Result<DataType> {
+        if self.check(TokenType::Star) {
+            self.advance();
+            if self.check(TokenType::Const) {
+                self.advance();
+            }
+            if self.check(TokenType::Mut) {
+                self.advance();
+            }
+            if self.check(TokenType::Ident) {
+                self.advance();
+            }
+            return Ok(DataType::I64);
+        }
+        self.parse_type()
+    }
+
+    fn parse_asm_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Asm)?;
+        self.expect_block_open()?;
+        let mut instructions = Vec::new();
+
+        while !self.check_block_close() && !self.is_at_end() {
+            self.skip_newlines();
+            if self.check_block_close() {
+                break;
+            }
+            let opcode = self.expect_ident()?;
+            let mut operands = Vec::new();
+            while !self.check(TokenType::Newline) && !self.check_block_close() && !self.is_at_end() {
+                operands.push(self.advance());
+            }
+            if self.check(TokenType::Newline) {
+                self.advance();
+            }
+            let operand_text = operands
+                .iter()
+                .map(Self::token_to_asm_fragment)
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string();
+            instructions.push((opcode, Expression::Literal(Literal::Str(operand_text))));
+        }
+
+        self.expect_block_close()?;
+        Ok(Statement::Asm { instructions })
+    }
+
+    fn token_to_asm_fragment(token: &Token) -> String {
+        if let Some(value) = &token.value {
+            return value.clone();
+        }
+        match token.ttype {
+            TokenType::Comma => ",".to_string(),
+            TokenType::Colon => ":".to_string(),
+            TokenType::Dot => ".".to_string(),
+            TokenType::Lparen => "(".to_string(),
+            TokenType::Rparen => ")".to_string(),
+            TokenType::Lbracket => "[".to_string(),
+            TokenType::Rbracket => "]".to_string(),
+            TokenType::Plus => "+".to_string(),
+            TokenType::Minus => "-".to_string(),
+            TokenType::Star => "*".to_string(),
+            TokenType::Slash => "/".to_string(),
+            TokenType::Percent => "%".to_string(),
+            _ => format!("{:?}", token.ttype),
+        }
+    }
+
+    fn expect_string_or_ident(&mut self) -> Result<String> {
+        match self.peek().ttype {
+            TokenType::StrLit | TokenType::Ident => Ok(self.advance().value.unwrap_or_default()),
+            _ => Err(self.error("Expected string literal or identifier")),
+        }
     }
 
     fn parse_do_while_statement(&mut self) -> Result<Statement> {
@@ -1475,16 +1626,32 @@ impl Parser {
                 self.parse_match_expression()
             }
             TokenType::IntLit => {
-                let value = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Int(
-                    value.parse().unwrap_or(0),
-                )))
+                let token = self.advance();
+                let value = token.value.unwrap_or_default();
+                let parsed = value.parse().map_err(|_| {
+                    self.error_at(token.line, token.column, &format!("Invalid integer literal '{}'", value))
+                })?;
+                Ok(Expression::Literal(Literal::Int(parsed)))
             }
             TokenType::FloatLit => {
-                let value = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Float(
-                    value.parse().unwrap_or(0.0),
-                )))
+                let token = self.advance();
+                let value = token.value.unwrap_or_default();
+                let parsed = value.parse().map_err(|_| {
+                    self.error_at(token.line, token.column, &format!("Invalid float literal '{}'", value))
+                })?;
+                Ok(Expression::Literal(Literal::Float(parsed)))
+            }
+            TokenType::CharLit => {
+                let token = self.advance();
+                let value = token.value.unwrap_or_default();
+                let parsed = value.parse::<u32>().map_err(|_| {
+                    self.error_at(
+                        token.line,
+                        token.column,
+                        &format!("Invalid char literal '{}'", value),
+                    )
+                })?;
+                Ok(Expression::Literal(Literal::Char(parsed)))
             }
             TokenType::StrLit => {
                 let value = self.advance().value.unwrap_or_default();
@@ -1889,14 +2056,32 @@ impl Parser {
                 Ok(identifier_expr_with_pos(&name, token.line, token.column))
             }
             TokenType::IntLit => {
-                let val = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Int(val.parse().unwrap_or(0))))
+                let token = self.advance();
+                let val = token.value.unwrap_or_default();
+                let parsed = val.parse().map_err(|_| {
+                    self.error_at(token.line, token.column, &format!("Invalid integer literal '{}'", val))
+                })?;
+                Ok(Expression::Literal(Literal::Int(parsed)))
             }
             TokenType::FloatLit => {
-                let val = self.advance().value.unwrap_or_default();
-                Ok(Expression::Literal(Literal::Float(
-                    val.parse().unwrap_or(0.0),
-                )))
+                let token = self.advance();
+                let val = token.value.unwrap_or_default();
+                let parsed = val.parse().map_err(|_| {
+                    self.error_at(token.line, token.column, &format!("Invalid float literal '{}'", val))
+                })?;
+                Ok(Expression::Literal(Literal::Float(parsed)))
+            }
+            TokenType::CharLit => {
+                let token = self.advance();
+                let val = token.value.unwrap_or_default();
+                let parsed = val.parse::<u32>().map_err(|_| {
+                    self.error_at(
+                        token.line,
+                        token.column,
+                        &format!("Invalid char literal '{}'", val),
+                    )
+                })?;
+                Ok(Expression::Literal(Literal::Char(parsed)))
             }
             TokenType::StrLit => {
                 let val = self.advance().value.unwrap_or_default();
@@ -2243,13 +2428,22 @@ impl Parser {
                 "u64" => Ok(DataType::U64),
                 "f32" => Ok(DataType::F32),
                 "f64" => Ok(DataType::F64),
+                "char" => Ok(DataType::Char),
                 "str" => Ok(DataType::Str),
                 "bool" => Ok(DataType::Bool),
                 "none" | "mu" => Ok(DataType::None),
                 "arr" => {
                     self.expect(TokenType::Lbracket)?;
                     let element_type = Box::new(self.parse_type()?);
-                    let size = self.expect_int_literal()?.parse().unwrap_or(0);
+                    let size_token = self.peek();
+                    let size_text = self.expect_int_literal()?;
+                    let size = size_text.parse().map_err(|_| {
+                        self.error_at(
+                            size_token.line,
+                            size_token.column,
+                            &format!("Invalid array size literal '{}'", size_text),
+                        )
+                    })?;
                     self.expect(TokenType::Rbracket)?;
                     Ok(DataType::Array { element_type, size })
                 }
@@ -2550,6 +2744,7 @@ impl Parser {
             TokenType::Ident
                 | TokenType::IntLit
                 | TokenType::FloatLit
+                | TokenType::CharLit
                 | TokenType::StrLit
                 | TokenType::BoolLit
                 | TokenType::NoneLit
@@ -2610,6 +2805,7 @@ impl Parser {
                 // Also return true for literals that can start a pattern
                 TokenType::IntLit
                 | TokenType::FloatLit
+                | TokenType::CharLit
                 | TokenType::StrLit
                 | TokenType::BoolLit
                 | TokenType::NoneLit
@@ -2713,6 +2909,7 @@ impl Parser {
             TokenType::Ident
             | TokenType::IntLit
             | TokenType::FloatLit
+            | TokenType::CharLit
             | TokenType::StrLit
             | TokenType::BoolLit => token.value.unwrap_or_default(),
             TokenType::NoneLit => "none".to_string(),
@@ -3446,11 +3643,114 @@ mod tests {
     }
 
     #[test]
-    fn rejects_secondary_for_loop_binding_until_semantics_exist() {
+    fn parses_secondary_for_loop_binding() {
         let source = "pub fn main: () {\nfor item, index in [1 2 3] {\n    use dasu(item)\n}\n}\n";
-        let err = parse(source).expect_err("parse should reject incomplete two-binding for loop");
-        let rendered = format!("{err}");
-        assert!(rendered.contains("Secondary for-loop bindings are not implemented yet"));
+        let program = parse(source).expect("parse should accept two-binding for loop");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::For { variable, index, .. } = &body[0] else {
+            panic!("expected for");
+        };
+        assert_eq!(variable, "item");
+        assert_eq!(index.as_deref(), Some("index"));
+    }
+
+    #[test]
+    fn parses_prefixed_integer_literals() {
+        let source =
+            "pub fn main: () {\nset b = 0b1010 :i64\nset o = 0o12 :i64\nset h = 0xFF :i64\n}\n";
+        let program = parse(source).expect("parse should accept based integer literals");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Int(b))), .. } = &body[0] else {
+            panic!("expected first int literal");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Int(o))), .. } = &body[1] else {
+            panic!("expected second int literal");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Int(h))), .. } = &body[2] else {
+            panic!("expected third int literal");
+        };
+        assert_eq!((*b, *o, *h), (10, 10, 255));
+    }
+
+    #[test]
+    fn parses_raw_strings_with_hash_delimiters() {
+        let source = "pub fn main: () {\nset a = r\"hello\"\nset b = r#\"hello \"world\"\"#\nset c = r##\"hello \"world\" with ##\"##\n}\n";
+        let program = parse(source).expect("parse should accept raw strings");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Str(a))), .. } = &body[0] else {
+            panic!("expected first raw string");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Str(b))), .. } = &body[1] else {
+            panic!("expected second raw string");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Str(c))), .. } = &body[2] else {
+            panic!("expected third raw string");
+        };
+        assert_eq!(a, "hello");
+        assert_eq!(b, "hello \"world\"");
+        assert_eq!(c, "hello \"world\" with ##");
+    }
+
+    #[test]
+    fn parses_char_literals_as_unicode_scalar_u32() {
+        let source = "pub fn main: () {\nset a = 'a' :char\nset n = '\\n' :char\nset u = 'ñ' :char\n}\n";
+        let program = parse(source).expect("parse should accept char literals");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Char(a))), .. } = &body[0] else {
+            panic!("expected first char");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Char(n))), .. } = &body[1] else {
+            panic!("expected second char");
+        };
+        let Statement::Let { value: Some(Expression::Literal(Literal::Char(u))), .. } = &body[2] else {
+            panic!("expected third char");
+        };
+        assert_eq!((*a, *n, *u), ('a' as u32, '\n' as u32, 'ñ' as u32));
+    }
+
+    #[test]
+    fn parses_unsafe_block_statement() {
+        let source = "pub fn main: () {\nunsafe {\nset x = 2 :i64\n}\n}\n";
+        let program = parse(source).expect("parse should accept unsafe blocks");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        assert!(matches!(body[0], Statement::Unsafe { .. }));
+    }
+
+    #[test]
+    fn parses_extern_lib_and_fn_statements() {
+        let source = "extern lib \"c\" \"libc.so.6\"\nextern fn puts: (msg :*const i8) :i32 lib \"c\"\n";
+        let program = parse(source).expect("parse should accept extern lib/fn");
+        assert!(matches!(program.statements[0], Statement::ExternLib { .. }));
+        let Statement::ExternFunction { name, lib_name, .. } = &program.statements[1] else {
+            panic!("expected extern fn");
+        };
+        assert_eq!(name, "puts");
+        assert_eq!(lib_name, "c");
+    }
+
+    #[test]
+    fn parses_inline_asm_block() {
+        let source = "pub fn main: () {\nasm {\nmov rax, rbx\nadd rax, rcx\n}\n}\n";
+        let program = parse(source).expect("parse should accept asm block");
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Asm { instructions } = &body[0] else {
+            panic!("expected asm");
+        };
+        assert_eq!(instructions.len(), 2);
+        assert_eq!(instructions[0].0, "mov");
+        assert_eq!(instructions[1].0, "add");
     }
 
     #[test]

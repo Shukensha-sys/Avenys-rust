@@ -1010,6 +1010,197 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
 }
 
 #[test]
+fn float_arithmetic_with_typed_float_variable_executes() {
+    let root = make_temp_project_root("mire_float_arithmetic_typed_var");
+    let source_path = root.join("float_arithmetic_typed_var.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"float-arithmetic-typed-var\"\nversion = \"0.1.0\"\nentry = \"float_arithmetic_typed_var.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set x = 2.0 :f64\n    set y = x + 1.5\n    set z = y * 2.0\n    use dasu(z > 6.9 && z < 7.1)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("float arithmetic should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("true"), "{stdout}");
+}
+
+#[test]
+fn nested_vector_type_is_preserved_for_lists_push() {
+    let err = expect_analysis_error(
+        "import std\n\npub fn main: () {\n    set nested = [[1 2] [3 4]] :vec[vec[i64]]\n    set bad = lists.push(nested, [\"x\"])\n    use dasu(bad)\n}\n",
+    );
+
+    assert!(
+        err.contains("Cannot unify incompatible types")
+            || err.contains("Type mismatch")
+            || err.contains("expects vec"),
+        "{err}"
+    );
+}
+
+#[test]
+fn secondary_for_loop_binding_compiles_and_uses_index() {
+    let root = make_temp_project_root("mire_for_secondary_binding");
+    let source_path = root.join("for_secondary_binding.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"for-secondary-binding\"\nversion = \"0.1.0\"\nentry = \"for_secondary_binding.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set acc = 0 :i64 mut\n    for item, index in range(4) {\n        set acc = acc + item + index\n    }\n    use dasu(acc)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("two-binding for loop should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("12"), "{stdout}");
+}
+
+#[test]
+fn advanced_literals_compile_and_run() {
+    let root = make_temp_project_root("mire_advanced_literals");
+    let source_path = root.join("advanced_literals.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"advanced-literals\"\nversion = \"0.1.0\"\nentry = \"advanced_literals.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set bin = 0b1010 :i64\n    set oct = 0o12 :i64\n    set hex = 0xFF :i64\n    set c = 'a' :char\n    set newline = '\\n' :char\n    set raw = r##\"hello \"world\" with ##\"## :str\n    use dasu(bin == oct && hex == 255)\n    use dasu(c == 97 && newline == 10)\n    use dasu(raw)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("advanced literals should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("true"), "{stdout}");
+    assert!(stdout.contains("hello \"world\" with ##"), "{stdout}");
+}
+
+#[test]
+fn unsafe_block_compiles_and_runs() {
+    let root = make_temp_project_root("mire_unsafe_block");
+    let source_path = root.join("unsafe_block.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"unsafe-block\"\nversion = \"0.1.0\"\nentry = \"unsafe_block.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\n\npub fn main: () {\n    set sum = 0 :i64 mut\n    unsafe {\n        set sum = sum + 2\n    }\n    use dasu(sum)\n}\n",
+    )
+    .expect("write source");
+
+    let build = compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("unsafe block should compile");
+
+    let output = Command::new(&build.binary_path)
+        .output()
+        .expect("run binary");
+    assert!(output.status.success(), "binary should run successfully");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("2"), "{stdout}");
+}
+
+#[test]
+fn extern_and_inline_asm_declarations_parse_and_compile() {
+    let root = make_temp_project_root("mire_extern_asm_parse_compile");
+    let source_path = root.join("extern_asm_parse_compile.mire");
+    fs::write(
+        root.join("project.toml"),
+        "[project]\nname = \"extern-asm-parse-compile\"\nversion = \"0.1.0\"\nentry = \"extern_asm_parse_compile.mire\"\n",
+    )
+    .expect("write project");
+    fs::write(
+        &source_path,
+        "import std\nextern lib \"c\" \"libc.so.6\"\nextern fn puts: (msg :*const i8) :i32 lib \"c\"\n\npub fn main: () {\n    asm {\n        mov rax, rbx\n        add rax, rcx\n    }\n    use dasu(\"ok\")\n}\n",
+    )
+    .expect("write source");
+
+    compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: false,
+            cache: Default::default(),
+        },
+    )
+    .expect("extern/asm declarations should compile");
+}
+
+#[test]
 fn runtime_out_of_bounds_exits_with_error() {
     let root = make_temp_project_root("mire_runtime_out_of_bounds");
     let source_path = root.join("runtime_out_of_bounds.mire");

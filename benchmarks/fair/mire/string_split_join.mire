@@ -1,0 +1,15 @@
+import std
+
+pub fn main: () {
+    set i = 0 :i64 mut
+    set acc = 0 :i64 mut
+
+    while i < 200000 {
+        set parts = strings.split("alpha--beta--gamma--delta" "--")
+        set joined = strings.join(parts "|")
+        set acc += strings.len(joined)
+        set i += 1
+    }
+
+    use dasu(acc)
+}

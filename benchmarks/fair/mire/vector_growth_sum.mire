@@ -1,0 +1,21 @@
+import std
+
+pub fn main: () {
+    set values = [] :vec![i64] mut
+    set i = 0 :i64 mut
+
+    while i < 250000 {
+        set values = lists.push(values i)
+        set i += 1
+    }
+
+    set idx = 0 :i64 mut
+    set total = 0 :i64 mut
+    set n = lists.len(values)
+    while idx < n {
+        set total += lists.get(values idx)
+        set idx += 1
+    }
+
+    use dasu(total)
+}

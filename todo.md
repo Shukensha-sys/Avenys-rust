@@ -114,6 +114,7 @@ Infiere tipo del target expression.
 12. ✅ B3 return-safety scope alignment verificado con test de regresión (Mayo 2026)
 13. ✅ M1 hash estructural directo del AST (sin serialización) (Mayo 2026)
 14. ✅ M2 contexto explícito de fuente en type checker validado con regresiones (Mayo 2026)
+15. ✅ Literales Avanzados (bin/oct/hex, raw strings, char) (Mayo 2026)
 
 ---
 
@@ -123,3 +124,102 @@ Infiere tipo del target expression.
 - Limitaciones: `docs/issues.md`
 - Síntaxis: `syntax-V2.0.0.md`
 - Roadmap: `docs/avenys-roadmap.md`
+
+---
+
+## ✅ Literales Avanzados (v2.5.x)
+
+Implementación completada bajo tus reglas, con respaldo previo creado.
+
+**Commit de respaldo (antes de tocar esta fase):**
+- `1eced89` (backup: estado previo antes de implementar literales numericos avanzados, raw strings y char)
+
+**Cambios realizados:**
+
+- Literales bin/oct/hex:
+  - Soporte en lexer para 0b, 0o, 0x con validación y conversión segura.
+  - Archivo: `src/lexer/mod.rs`
+
+- Raw strings con delimitadores:
+  - Soporte `r"..."`, `r#"..."#`, `r##"..."##` en lexer.
+  - Se preserva contenido literal sin escapes procesados.
+  - Archivo: `src/lexer/mod.rs`
+
+- Character literals + tipo char:
+  - Nuevo token `CharLit`.
+  - Nuevo `Literal::Char(u32)` y `DataType::Char`.
+  - Parseo de `'a'`, `'\n'`, Unicode directo como escalar u32.
+  - Type checking actualizado para char.
+  - Lowering Avenys actualizado (char mapeado a escalar entero en backend).
+  - Archivos:
+    - `src/lexer/mod.rs`
+    - `src/parser/ast.rs`
+    - `src/parser/mod.rs`
+    - `src/compiler/typeck.rs`
+    - `src/avens/mod.rs`
+    - `src/incremental.rs`
+
+**Tests agregados/actualizados:**
+
+- Parser:
+  - `parses_prefixed_integer_literals`
+  - `parses_raw_strings_with_hash_delimiters`
+  - `parses_char_literals_as_unicode_scalar_u32`
+  - Archivo: `src/parser/mod.rs`
+
+- Integración:
+  - `advanced_literals_compile_and_run` (bin/oct/hex + raw + char)
+  - Archivo: `tests/language_regressions.rs`
+
+**Documentación actualizada:**
+
+- Sintaxis oficial ampliada:
+  - for con segundo binding, tipo char, formas literales nuevas.
+  - Archivo: `SYNTAX.md`
+- Roadmap actualizado con estado real de sintaxis implementada:
+  - Archivo: `docs/avenys-roadmap.md`
+- Changelog actualizado con los tres features:
+  - Archivo: `CHANGELOG.md`
+
+**Validación final:**
+- `cargo test` completo ejecutado: **78 passed; 0 failed**
+
+---
+
+## 🔜 Pendiente: Nuevas Features de Sintaxis
+
+### 5. Uniform Call Syntax (Piping) |>
+```
+set doubled = [1 2 3]
+    |> lists.map((x) => x * 2)
+    |> lists.filter((x) => x > 2)
+```
+- **Nota:** Diferente al pipeline `=>` existente
+- **Propósito:** Encadenar funciones de libs de forma legible
+- **Falta:** Nuevo token + parsing
+
+### 6. Unsafe Blocks
+```
+unsafe {
+    set x = 2 :i64
+}
+```
+- **Estado:** ✅ Implementado (lexer + parsing + typecheck/borrowck + lowering Avenys)
+
+### 7. Extern / FFI
+```
+extern lib "c" "libc.so.6"
+extern fn printf: (fmt :*const i8) :i32 lib "c"
+```
+- **Estado:** ✅ Implementado (lexer + parsing + integración en firmas de typecheck)
+- **Nota actual:** Parámetros puntero `*const/*mut` se normalizan como escalar `i64` en frontend.
+
+### 8. Inline Assembly
+```
+asm {
+    mov rax, rbx
+    add rax, rcx
+}
+```
+- **Estado:** ✅ Implementado (lexer + parsing de bloque asm)
+- **Nota actual:** En backend Avenys, `asm` se acepta pero se trata como no-op de lowering (sin emisión IR específica todavía).

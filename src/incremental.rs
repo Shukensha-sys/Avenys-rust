@@ -896,12 +896,11 @@ impl IncrementalCache {
             if start >= end {
                 continue;
             }
-            if let Some((last_start, last_end)) = unique_live_ranges.last_mut() {
+            if let Some((_, last_end)) = unique_live_ranges.last_mut() {
                 if start <= *last_end {
                     *last_end = (*last_end).max(end);
                     continue;
                 }
-                let _ = last_start;
             }
             unique_live_ranges.push((start, end));
         }
@@ -2259,11 +2258,13 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         }
         Statement::For {
             variable,
+            index,
             iterable,
             body,
         } => {
             hasher.write_u8(6);
             variable.hash(hasher);
+            index.hash(hasher);
             hash_expression(iterable, hasher);
             hash_statements(body, hasher);
         }
@@ -2660,21 +2661,25 @@ fn hash_literal(lit: &Literal, hasher: &mut FxHasher) {
             hasher.write_u8(1);
             value.to_bits().hash(hasher);
         }
-        Literal::Str(value) => {
+        Literal::Char(value) => {
             hasher.write_u8(2);
             value.hash(hasher);
         }
-        Literal::Bool(value) => {
+        Literal::Str(value) => {
             hasher.write_u8(3);
             value.hash(hasher);
         }
-        Literal::None => hasher.write_u8(4),
+        Literal::Bool(value) => {
+            hasher.write_u8(4);
+            value.hash(hasher);
+        }
+        Literal::None => hasher.write_u8(5),
         Literal::List(values) => {
-            hasher.write_u8(5);
+            hasher.write_u8(6);
             hash_expressions(values, hasher);
         }
         Literal::Dict(values) => {
-            hasher.write_u8(6);
+            hasher.write_u8(7);
             values.len().hash(hasher);
             for ((k, v), dt) in values {
                 hash_expression(k, hasher);
@@ -2683,7 +2688,7 @@ fn hash_literal(lit: &Literal, hasher: &mut FxHasher) {
             }
         }
         Literal::Tuple(values) => {
-            hasher.write_u8(7);
+            hasher.write_u8(8);
             hash_expressions(values, hasher);
         }
     }
@@ -2701,6 +2706,7 @@ fn hash_data_type(data_type: &DataType, hasher: &mut FxHasher) {
         DataType::U64 => hasher.write_u8(7),
         DataType::F32 => hasher.write_u8(8),
         DataType::F64 => hasher.write_u8(9),
+        DataType::Char => hasher.write_u8(41),
         DataType::Str => hasher.write_u8(10),
         DataType::Bool => hasher.write_u8(11),
         DataType::None => hasher.write_u8(12),

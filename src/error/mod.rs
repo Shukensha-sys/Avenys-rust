@@ -42,10 +42,6 @@ impl ErrorKind {
         ErrorKind::Runtime { message }
     }
 
-    pub fn runtime_at(_line: usize, _column: usize, message: String) -> Self {
-        ErrorKind::Runtime { message }
-    }
-
     pub fn type_error(message: String) -> Self {
         ErrorKind::Type {
             line: 0,

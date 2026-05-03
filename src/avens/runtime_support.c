@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -294,35 +295,40 @@ void mire_runtime_panic(const char *message) {
 }
 
 static double mire_cpu_mhz(void) {
-    static int initialized = 0;
-    static double cached = 0.0;
+    static atomic_int initialized = 0;
+    static _Atomic(double) cached = 0.0;
 
-    if (initialized) {
-        return cached;
+    if (atomic_load_explicit(&initialized, memory_order_acquire)) {
+        return atomic_load_explicit(&cached, memory_order_relaxed);
     }
-    initialized = 1;
 
+    double local_cached = 0.0;
     FILE *fh = fopen("/proc/cpuinfo", "r");
-    if (fh == NULL) {
-        return 0.0;
-    }
-
-    char line[256];
-    while (fgets(line, sizeof(line), fh) != NULL) {
-        for (char *p = line; *p != '\0'; ++p) {
-            *p = (char)tolower((unsigned char)*p);
-        }
-        if (strncmp(line, "cpu mhz", 7) == 0) {
-            char *colon = strchr(line, ':');
-            if (colon != NULL) {
-                cached = strtod(colon + 1, NULL);
+    if (fh != NULL) {
+        char line[256];
+        while (fgets(line, sizeof(line), fh) != NULL) {
+            for (char *p = line; *p != '\0'; ++p) {
+                *p = (char)tolower((unsigned char)*p);
             }
-            break;
+            if (strncmp(line, "cpu mhz", 7) == 0) {
+                char *colon = strchr(line, ':');
+                if (colon != NULL) {
+                    local_cached = strtod(colon + 1, NULL);
+                }
+                break;
+            }
         }
+        fclose(fh);
     }
 
-    fclose(fh);
-    return cached;
+    int expected = 0;
+    if (atomic_compare_exchange_strong_explicit(
+            &initialized, &expected, 1, memory_order_acq_rel, memory_order_acquire)) {
+        atomic_store_explicit(&cached, local_cached, memory_order_release);
+        return local_cached;
+    }
+
+    return atomic_load_explicit(&cached, memory_order_relaxed);
 }
 
 static uint64_t mire_hash_string(const char *src) {

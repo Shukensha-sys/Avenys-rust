@@ -8,6 +8,7 @@ pub enum TokenType {
     IntLit,
     FloatLit,
     StrLit,
+    CharLit,
     BoolLit,
     NoneLit,
     Import,
@@ -29,6 +30,10 @@ pub enum TokenType {
     Impl,
     Trait,
     Enum,
+    Extern,
+    Lib,
+    Unsafe,
+    Asm,
     Extends,
     Match,
     Pub,
@@ -91,6 +96,7 @@ impl fmt::Display for TokenType {
             TokenType::IntLit => write!(f, "integer"),
             TokenType::FloatLit => write!(f, "float"),
             TokenType::StrLit => write!(f, "string"),
+            TokenType::CharLit => write!(f, "char"),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -218,6 +224,52 @@ impl Lexer {
         result
     }
 
+    fn read_based_integer(&mut self) -> Result<String> {
+        let start_line = self.line;
+        let start_col = self.column;
+        self.advance();
+        let base_marker = self.advance().unwrap_or_default();
+        let (base, kind) = match base_marker {
+            'b' | 'B' => (2, "binary"),
+            'o' | 'O' => (8, "octal"),
+            'x' | 'X' => (16, "hexadecimal"),
+            _ => {
+                return Err(MireError::new(ErrorKind::Lexer {
+                    line: start_line,
+                    column: start_col,
+                    message: "Invalid integer base prefix".to_string(),
+                }));
+            }
+        };
+
+        let mut digits = String::new();
+        while let Some(c) = self.peek(0) {
+            if c.is_ascii_alphanumeric() {
+                digits.push(self.advance().unwrap());
+            } else {
+                break;
+            }
+        }
+
+        if digits.is_empty() {
+            return Err(MireError::new(ErrorKind::Lexer {
+                line: start_line,
+                column: start_col,
+                message: format!("Expected digits after {} prefix", kind),
+            }));
+        }
+
+        i64::from_str_radix(&digits, base)
+            .map(|value| value.to_string())
+            .map_err(|_| {
+                MireError::new(ErrorKind::Lexer {
+                    line: start_line,
+                    column: start_col,
+                    message: format!("Invalid {} literal '{}'", kind, digits),
+                })
+            })
+    }
+
     fn read_string(&mut self) -> Result<String> {
         let quote = self.advance().unwrap();
         let mut result = String::new();
@@ -286,6 +338,128 @@ impl Lexer {
         }))
     }
 
+    fn read_raw_string(&mut self) -> Result<String> {
+        let start_line = self.line;
+        let start_col = self.column;
+        self.advance();
+
+        let mut hashes = 0usize;
+        while self.peek(0) == Some('#') {
+            hashes += 1;
+            self.advance();
+        }
+
+        if self.peek(0) != Some('"') {
+            return Err(MireError::new(ErrorKind::Lexer {
+                line: start_line,
+                column: start_col,
+                message: "Invalid raw string prefix".to_string(),
+            }));
+        }
+        self.advance();
+
+        let mut result = String::new();
+        while let Some(c) = self.peek(0) {
+            if c == '"' {
+                let mut matches = true;
+                for i in 0..hashes {
+                    if self.peek(i + 1) != Some('#') {
+                        matches = false;
+                        break;
+                    }
+                }
+                if matches {
+                    self.advance();
+                    for _ in 0..hashes {
+                        self.advance();
+                    }
+                    return Ok(result);
+                }
+            }
+
+            result.push(self.advance().unwrap());
+        }
+
+        Err(MireError::new(ErrorKind::Lexer {
+            line: start_line,
+            column: start_col,
+            message: "Unterminated raw string".to_string(),
+        }))
+    }
+
+    fn read_char_literal(&mut self) -> Result<char> {
+        let start_line = self.line;
+        let start_col = self.column;
+        self.advance();
+
+        let ch = match self.peek(0) {
+            Some('\\') => {
+                self.advance();
+                match self.peek(0) {
+                    Some('n') => {
+                        self.advance();
+                        '\n'
+                    }
+                    Some('t') => {
+                        self.advance();
+                        '\t'
+                    }
+                    Some('r') => {
+                        self.advance();
+                        '\r'
+                    }
+                    Some('\\') => {
+                        self.advance();
+                        '\\'
+                    }
+                    Some('\'') => {
+                        self.advance();
+                        '\''
+                    }
+                    Some('"') => {
+                        self.advance();
+                        '"'
+                    }
+                    Some(other) => {
+                        return Err(MireError::new(ErrorKind::Lexer {
+                            line: start_line,
+                            column: start_col,
+                            message: format!("Invalid char escape '\\{}'", other),
+                        }));
+                    }
+                    None => {
+                        return Err(MireError::new(ErrorKind::Lexer {
+                            line: start_line,
+                            column: start_col,
+                            message: "Unterminated char literal".to_string(),
+                        }));
+                    }
+                }
+            }
+            Some('\n') | None => {
+                return Err(MireError::new(ErrorKind::Lexer {
+                    line: start_line,
+                    column: start_col,
+                    message: "Unterminated char literal".to_string(),
+                }));
+            }
+            Some(value) => {
+                self.advance();
+                value
+            }
+        };
+
+        if self.peek(0) != Some('\'') {
+            return Err(MireError::new(ErrorKind::Lexer {
+                line: start_line,
+                column: start_col,
+                message: "Char literal must contain exactly one Unicode scalar".to_string(),
+            }));
+        }
+        self.advance();
+        Ok(ch)
+    }
+
     pub fn tokenize(mut self) -> Result<Vec<Token>> {
         while self.pos < self.len {
             self.skip_whitespace();
@@ -309,6 +483,14 @@ impl Lexer {
                 Some(c) => c,
                 None => break,
             };
+
+            if c == 'r' && (self.peek(1) == Some('"') || self.peek(1) == Some('#')) {
+                let value = self.read_raw_string()?;
+                self.tokens.push(
+                    Token::new(TokenType::StrLit, self.line, self.column).with_value(value),
+                );
+                continue;
+            }
 
             if c.is_alphabetic() || c == '_' {
                 let start_line = self.line;
@@ -334,6 +516,10 @@ impl Lexer {
                     "impl" => Token::new(TokenType::Impl, self.line, self.column),
                     "trait" => Token::new(TokenType::Trait, self.line, self.column),
                     "enum" => Token::new(TokenType::Enum, self.line, self.column),
+                    "extern" => Token::new(TokenType::Extern, self.line, self.column),
+                    "lib" => Token::new(TokenType::Lib, self.line, self.column),
+                    "unsafe" => Token::new(TokenType::Unsafe, self.line, self.column),
+                    "asm" => Token::new(TokenType::Asm, self.line, self.column),
                     "extends" => Token::new(TokenType::Extends, self.line, self.column),
                     "mu" => Token::new(TokenType::NoneLit, self.line, self.column),
                     "match" => Token::new(TokenType::Match, self.line, self.column),
@@ -360,7 +546,13 @@ impl Lexer {
             }
 
             if c.is_ascii_digit() {
-                let num = self.read_number();
+                let num = if c == '0'
+                    && matches!(self.peek(1), Some('b' | 'B' | 'o' | 'O' | 'x' | 'X'))
+                {
+                    self.read_based_integer()?
+                } else {
+                    self.read_number()
+                };
                 let token = if num.contains('.') {
                     Token::new(TokenType::FloatLit, self.line, self.column - num.len())
                 } else {
@@ -371,13 +563,24 @@ impl Lexer {
                 continue;
             }
 
-            if c == '"' || c == '\'' {
+            if c == '"' {
                 let value = self.read_string()?;
                 self.tokens
                     .push(Token::new(TokenType::StrLit, self.line, self.column).with_value(value));
                 continue;
             }
 
+            if c == '\'' {
+                let value = self.read_char_literal()?;
+                self.tokens.push(
+                    Token::new(TokenType::CharLit, self.line, self.column)
+                        .with_value((value as u32).to_string()),
+                );
+                continue;
+            }
+
+            let start_line = self.line;
+            let start_col = self.column;
             let token = match c {
                 '=' => {
                     self.advance();
@@ -385,160 +588,160 @@ impl Lexer {
                         self.advance();
                         if self.peek(0) == Some('?') {
                             self.advance();
-                            Token::new(TokenType::PipelineSafe, self.line, self.column)
+                            Token::new(TokenType::PipelineSafe, start_line, start_col)
                         } else {
-                            Token::new(TokenType::Pipeline, self.line, self.column)
+                            Token::new(TokenType::Pipeline, start_line, start_col)
                         }
                     } else if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::Eq, self.line, self.column)
+                        Token::new(TokenType::Eq, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Assign, self.line, self.column)
+                        Token::new(TokenType::Assign, start_line, start_col)
                     }
                 }
                 '+' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::PlusAssign, self.line, self.column)
+                        Token::new(TokenType::PlusAssign, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Plus, self.line, self.column)
+                        Token::new(TokenType::Plus, start_line, start_col)
                     }
                 }
                 '-' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::MinusAssign, self.line, self.column)
+                        Token::new(TokenType::MinusAssign, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Minus, self.line, self.column)
+                        Token::new(TokenType::Minus, start_line, start_col)
                     }
                 }
                 '*' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::StarAssign, self.line, self.column)
+                        Token::new(TokenType::StarAssign, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Star, self.line, self.column)
+                        Token::new(TokenType::Star, start_line, start_col)
                     }
                 }
                 '/' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::SlashAssign, self.line, self.column)
+                        Token::new(TokenType::SlashAssign, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Slash, self.line, self.column)
+                        Token::new(TokenType::Slash, start_line, start_col)
                     }
                 }
                 '%' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::PercentAssign, self.line, self.column)
+                        Token::new(TokenType::PercentAssign, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Percent, self.line, self.column)
+                        Token::new(TokenType::Percent, start_line, start_col)
                     }
                 }
                 '!' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::Neq, self.line, self.column)
+                        Token::new(TokenType::Neq, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Bang, self.line, self.column)
+                        Token::new(TokenType::Bang, start_line, start_col)
                     }
                 }
                 '>' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::Gte, self.line, self.column)
+                        Token::new(TokenType::Gte, start_line, start_col)
                     } else if self.peek(0) == Some('>') {
                         self.advance();
-                        Token::new(TokenType::RShift, self.line, self.column)
+                        Token::new(TokenType::RShift, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Gt, self.line, self.column)
+                        Token::new(TokenType::Gt, start_line, start_col)
                     }
                 }
                 '<' => {
                     self.advance();
                     if self.peek(0) == Some('=') {
                         self.advance();
-                        Token::new(TokenType::Lte, self.line, self.column)
+                        Token::new(TokenType::Lte, start_line, start_col)
                     } else if self.peek(0) == Some('<') {
                         self.advance();
-                        Token::new(TokenType::LShift, self.line, self.column)
+                        Token::new(TokenType::LShift, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Lt, self.line, self.column)
+                        Token::new(TokenType::Lt, start_line, start_col)
                     }
                 }
                 '&' => {
                     self.advance();
                     if self.peek(0) == Some('&') {
                         self.advance();
-                        Token::new(TokenType::AmpAmp, self.line, self.column)
+                        Token::new(TokenType::AmpAmp, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Amp, self.line, self.column)
+                        Token::new(TokenType::Amp, start_line, start_col)
                     }
                 }
                 '|' => {
                     self.advance();
                     if self.peek(0) == Some('|') {
                         self.advance();
-                        Token::new(TokenType::PipePipe, self.line, self.column)
+                        Token::new(TokenType::PipePipe, start_line, start_col)
                     } else {
-                        Token::new(TokenType::Pipe, self.line, self.column)
+                        Token::new(TokenType::Pipe, start_line, start_col)
                     }
                 }
                 '^' => {
                     self.advance();
-                    Token::new(TokenType::Xor, self.line, self.column)
+                    Token::new(TokenType::Xor, start_line, start_col)
                 }
                 '(' => {
                     self.advance();
-                    Token::new(TokenType::Lparen, self.line, self.column)
+                    Token::new(TokenType::Lparen, start_line, start_col)
                 }
                 ')' => {
                     self.advance();
-                    Token::new(TokenType::Rparen, self.line, self.column)
+                    Token::new(TokenType::Rparen, start_line, start_col)
                 }
                 '[' => {
                     self.advance();
-                    Token::new(TokenType::Lbracket, self.line, self.column)
+                    Token::new(TokenType::Lbracket, start_line, start_col)
                 }
                 ']' => {
                     self.advance();
-                    Token::new(TokenType::Rbracket, self.line, self.column)
+                    Token::new(TokenType::Rbracket, start_line, start_col)
                 }
                 '{' => {
                     self.advance();
-                    Token::new(TokenType::Lbrace, self.line, self.column)
+                    Token::new(TokenType::Lbrace, start_line, start_col)
                 }
                 '}' => {
                     self.advance();
-                    Token::new(TokenType::Rbrace, self.line, self.column)
+                    Token::new(TokenType::Rbrace, start_line, start_col)
                 }
                 ':' => {
                     self.advance();
-                    Token::new(TokenType::Colon, self.line, self.column)
+                    Token::new(TokenType::Colon, start_line, start_col)
                 }
                 ',' => {
                     self.advance();
-                    Token::new(TokenType::Comma, self.line, self.column)
+                    Token::new(TokenType::Comma, start_line, start_col)
                 }
                 '.' => {
                     self.advance();
-                    Token::new(TokenType::Dot, self.line, self.column)
+                    Token::new(TokenType::Dot, start_line, start_col)
                 }
                 '@' => {
                     self.advance();
-                    Token::new(TokenType::At, self.line, self.column).with_value("@".to_string())
+                    Token::new(TokenType::At, start_line, start_col).with_value("@".to_string())
                 }
                 '?' => {
                     self.advance();
-                    Token::new(TokenType::Question, self.line, self.column)
+                    Token::new(TokenType::Question, start_line, start_col)
                         .with_value("?".to_string())
                 }
                 _ => {

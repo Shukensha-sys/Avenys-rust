@@ -592,6 +592,20 @@ impl TypeChecker {
                         },
                     );
                 }
+                Statement::ExternFunction {
+                    name,
+                    params,
+                    return_type,
+                    ..
+                } => {
+                    self.functions.insert(
+                        name.clone(),
+                        FunctionSig {
+                            params: params.iter().map(|(_, t)| t.clone()).collect(),
+                            return_type: return_type.clone(),
+                        },
+                    );
+                }
                 Statement::Impl {
                     type_name, methods, ..
                 } => {
@@ -973,10 +987,35 @@ impl TypeChecker {
             }
             Statement::For {
                 variable,
+                index,
                 iterable,
                 body,
+            } => {
+                let iter_type = self.check_expression(iterable)?;
+                self.push_scope();
+
+                let item_type = match iterable {
+                    Expression::Call { name, .. } if name == "range" => DataType::I64,
+                    _ => match iter_type {
+                        DataType::Array { element_type, .. } | DataType::Slice { element_type } => {
+                            *element_type
+                        }
+                        DataType::Tuple => DataType::Anything,
+                        DataType::List => DataType::Anything,
+                        DataType::Vector { element_type, .. } => *element_type,
+                        DataType::Str => DataType::Str,
+                        _ => DataType::Anything,
+                    },
+                };
+                self.insert_var(variable.clone(), item_type, true);
+                if let Some(index_name) = index {
+                    self.insert_var(index_name.clone(), DataType::I64, true);
+                }
+
+                self.check_statements(body)?;
+                self.pop_scope();
             }
-            | Statement::Find {
+            Statement::Find {
                 variable,
                 iterable,
                 body,
@@ -1342,10 +1381,7 @@ impl TypeChecker {
                             value_type: existing_value,
                         } => DataType::Map {
                             key_type,
-                            value_type: Box::new(
-                                Self::unify_types(&existing_value, &value_type)
-                                    .unwrap_or(value_type.clone()),
-                            ),
+                            value_type: Box::new(Self::unify_types(&existing_value, &value_type)?),
                         },
                         _ => DataType::Map {
                             key_type: Box::new(key_type),
@@ -1380,20 +1416,14 @@ impl TypeChecker {
                             element_type,
                             dynamic: true,
                         } => DataType::Vector {
-                            element_type: Box::new(
-                                Self::unify_types(&element_type, &value_type)
-                                    .unwrap_or(value_type.clone()),
-                            ),
+                            element_type: Box::new(Self::unify_types(&element_type, &value_type)?),
                             dynamic: true,
                         },
                         DataType::Vector {
                             dynamic: false,
                             element_type,
                         } => DataType::Vector {
-                            element_type: Box::new(
-                                Self::unify_types(&element_type, &value_type)
-                                    .unwrap_or(value_type.clone()),
-                            ),
+                            element_type: Box::new(Self::unify_types(&element_type, &value_type)?),
                             dynamic: true,
                         },
                         DataType::List => DataType::Vector {
@@ -2022,6 +2052,7 @@ impl TypeChecker {
         match lit {
             Literal::Int(_) => DataType::I64,
             Literal::Float(_) => DataType::F64,
+            Literal::Char(_) => DataType::Char,
             Literal::Str(_) => DataType::Str,
             Literal::Bool(_) => DataType::Bool,
             Literal::None => DataType::None,
@@ -2379,18 +2410,37 @@ impl TypeChecker {
             return true;
         }
 
-        match expected {
-            DataType::Array { .. } | DataType::Slice { .. } => {
-                return matches!(actual, DataType::Vector { .. } | DataType::List);
+        match (expected, actual) {
+            (
+                DataType::Array {
+                    element_type: expected_elem,
+                    ..
+                }
+                | DataType::Slice {
+                    element_type: expected_elem,
+                },
+                DataType::Vector {
+                    element_type: actual_elem,
+                    ..
+                },
+            ) => {
+                return self.is_assignable(expected_elem, actual_elem);
             }
+            (DataType::Array { .. } | DataType::Slice { .. }, DataType::List) => return true,
+            (
+                DataType::Vector {
+                    element_type: expected_elem,
+                    ..
+                },
+                DataType::Vector {
+                    element_type: actual_elem,
+                    ..
+                },
+            ) => {
+                return self.is_assignable(expected_elem, actual_elem);
+            }
+            (DataType::Vector { .. }, DataType::List) => return true,
             _ => {}
-        }
-
-        if let DataType::Vector { .. } = expected {
-            match actual {
-                DataType::List | DataType::Vector { .. } => return true,
-                _ => {}
-            }
         }
 
         Self::is_numeric(expected) && Self::is_numeric(actual)
@@ -3221,6 +3271,7 @@ impl TypeChecker {
             | Expression::EnumVariant { data_type, .. } => data_type.clone(),
             Expression::Literal(Literal::Int(_)) => DataType::I64,
             Expression::Literal(Literal::Float(_)) => DataType::F64,
+            Expression::Literal(Literal::Char(_)) => DataType::Char,
             Expression::Literal(Literal::Str(_)) => DataType::Str,
             Expression::Literal(Literal::Bool(_)) => DataType::Bool,
             Expression::Literal(Literal::None) => DataType::None,
