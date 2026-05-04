@@ -25,11 +25,38 @@
 
 ---
 
+## 📝 Bug Conocido: Recursión (Mayo 4, 2026)
+
+### REC-1: Funciones Recursivas Retornan 0
+
+** Severidad:** Alta
+**Estado:** Investigado
+**Archivo:** `docs/issues/recursion_bug_investigation.md`
+
+Las funciones recursivas siempre retornan 0 en lugar del valor calculado.
+
+** 示例:**
+```mire
+fn fibonacci: (n :i64) :i64 {
+    if n <= 1 { return n }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+pub fn main: () {
+    set f = fibonacci(10)  // Retorna 0, esperado 55
+}
+```
+
+**Workaround actual:** Usar funciones iterativas en lugar de recursivas.
+
+---
+
 **Feedback (Mayo 4, 2026):**
 - Todas las deuda técnica completada
-- Tests de stress ejecutados: 10000+ iteraciones en loops
+- Tests de stress ejecutados: 10M+ vectores
 - Unicode basic working, Latin-1 parcialmente working
 - Compilador estable: 0 failures
+- Bug de recursión identificado, investigación documentada
 
 ---
 
