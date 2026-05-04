@@ -48,6 +48,7 @@ All notable changes to Mire are documented in this file.
 - Added frontend support for `asm { ... }` blocks and AST preservation; current Avenys backend accepts them as no-op (no target-specific IR emission yet).
 - Extended Unicode case conversion: `to_upper`/`to_lower` now handle full Latin-1 supplement range (0xC0-0xFF).
 - Fixed memory leak in dict format: nested map values now properly copied instead of returning managed pointer directly.
+- Reference mutability semantics: `&x` now infers mutability from original binding (`mut` → mutable ref, otherwise shared), explicit `&mut x` rejected for immutable bindings.
 
 ## [2.2.0]
 
