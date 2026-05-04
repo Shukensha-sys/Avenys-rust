@@ -4,6 +4,35 @@
 
 ---
 
+## ✅ Deuda Técnica Completa (Mayo 2026)
+
+### D2: Blob Store Compactation
+- **Estado:** ✅ Completado
+- **Descripción:** Compactación automática cuando ratio < 0.7
+
+### D3: Unicode Case Conversion
+- **Estado:** ✅ Completado (Mayo 4, 2026)
+- **Descripción:** Extendido to_upper/to_lower para Latin-1 Supplement (0xC0-0xFF)
+- **Tests:** 167 passed (87 unit + 80 integration), 0 failed
+
+### D4: Memory Leak Dict Format
+- **Estado:** ✅ Completado (Mayo 4, 2026)
+- **Descripción:** Arreglada doble asignación en mire_dict_format_value para nested maps
+
+### D5: Reference Mutability Semantics
+- **Estado:** ✅ Completado (Mayo 4, 2026)
+- **Descripción:** &x infiere mutabilidad del binding, &mut x rechazado si inmutable
+
+---
+
+**Feedback (Mayo 4, 2026):**
+- Todas las deuda técnica completada
+- Tests de stress ejecutados: 10000+ iteraciones en loops
+- Unicode basic working, Latin-1 parcialmente working
+- Compilador estable: 0 failures
+
+---
+
 ## ✅ Features Implementadas (v2.1.x)
 
 ### Clippy Clean (0 warnings)
