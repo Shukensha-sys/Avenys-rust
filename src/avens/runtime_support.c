@@ -849,6 +849,10 @@ char mire_unicode_to_lower(unsigned char c) {
     if (c >= 'A' && c <= 'Z') return c + 32;
     if (c >= 192 && c <= 214) return c + 32;
     if (c >= 216 && c <= 222) return c + 32;
+    if (c >= 0xC0 && c <= 0xC6) return c + 32;
+    if (c >= 0xC8 && c <= 0xCF) return c + 32;
+    if (c >= 0xD0 && c <= 0xD6) return c + 32;
+    if (c >= 0xD8 && c <= 0xDE) return c + 32;
     return c;
 }
 
@@ -856,6 +860,10 @@ char mire_unicode_to_upper(unsigned char c) {
     if (c >= 'a' && c <= 'z') return c - 32;
     if (c >= 224 && c <= 246) return c - 32;
     if (c >= 248 && c <= 254) return c - 32;
+    if (c >= 0xE0 && c <= 0xE6) return c - 32;
+    if (c >= 0xE8 && c <= 0xEF) return c - 32;
+    if (c >= 0xF0 && c <= 0xF6) return c - 32;
+    if (c >= 0xF8 && c <= 0xFE) return c - 32;
     return c;
 }
 
@@ -962,7 +970,17 @@ static char *mire_dict_format_value(const MireDict *dict, int64_t entry_index) {
         return out;
     }
     if (kind == MIRE_KIND_MAP) {
-        return mire_dict_to_string(mire_dict_read_ptr(dict, entry_index));
+        char *managed_result = mire_dict_to_string(mire_dict_read_ptr(dict, entry_index));
+        if (managed_result == NULL) {
+            return mire_strdup_raw("{}");
+        }
+        size_t len = strlen(managed_result);
+        char *out = (char *)malloc(len + 1);
+        if (out == NULL) {
+            return mire_strdup_raw("{}");
+        }
+        memcpy(out, managed_result, len + 1);
+        return out;
     }
     if (kind == MIRE_KIND_PTR) {
         return mire_strdup_raw("<ptr>");

@@ -139,9 +139,9 @@ Los scope IDs en el modelo semántico pueden no alinearse con los scope depths e
 
 | ID | Descripción | Dificultad | Estado |
 |----|-------------|-------------|--------|
-| D2 | Blob store compactation | Alta | Pendiente |
-| D3 | to_upper/to_lower Unicode | Baja | Pendiente |
-| D4 | Memory leak dict format | Baja | Pendiente |
+| D2 | Blob store compactation | Alta | ✅ Completado ( Mayo 2026) |
+| D3 | to_upper/to_lower Unicode | Baja | ✅ Completado (Mayo 2026) |
+| D4 | Memory leak dict format | Baja | ✅ Completado (Mayo 2026) |
 | D5 | &mut decision | Baja | Pendiente |
 
 ### Tests a Agregar
