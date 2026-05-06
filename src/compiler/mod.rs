@@ -1,6 +1,7 @@
 pub mod borrowck;
 pub mod semantic;
 pub mod typeck;
+pub mod warnings;
 
 use crate::error::Result;
 use crate::parser::Program;
@@ -11,6 +12,7 @@ pub use semantic::{
     BindingInfo, BindingKind, BorrowFact, BorrowKind, MoveFact, ScopeInfo, SemanticModel,
 };
 pub use typeck::check_program_types;
+pub use warnings::{Warning, WarningSeverity, check_warnings};
 
 #[derive(Debug, Clone, Default)]
 pub struct AnalysisSelection {

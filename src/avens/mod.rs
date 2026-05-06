@@ -607,7 +607,10 @@ fn compile_binary_from_ir(
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = Some(start);
     while let Some(path) = current {
-        if project_manifest_path(path).exists() || path.join("Mire.toml").exists() {
+        if path.join("owl.toml").exists()
+            || path.join("project.toml").exists()
+            || path.join("Mire.toml").exists()
+        {
             return Some(path.to_path_buf());
         }
         current = path.parent();
@@ -616,11 +619,23 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 }
 
 pub fn project_manifest_path(cwd: &Path) -> PathBuf {
-    cwd.join("project.toml")
+    if cwd.join("owl.toml").exists() {
+        return cwd.join("owl.toml");
+    }
+    if cwd.join("project.toml").exists() {
+        return cwd.join("project.toml");
+    }
+    cwd.join("Mire.toml")
 }
 
 pub fn project_lock_path(cwd: &Path) -> PathBuf {
-    cwd.join("project.lock")
+    if cwd.join("owl.lock").exists() {
+        return cwd.join("owl.lock");
+    }
+    if cwd.join("project.lock").exists() {
+        return cwd.join("project.lock");
+    }
+    cwd.join("Mire.lock")
 }
 
 fn llvm_version() -> Result<String> {
@@ -988,6 +1003,9 @@ impl LlvmIrGen {
             "@.fmt_prompt = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string(),
             "@.scanf_str = private unnamed_addr constant [3 x i8] c\"%s\\00\"".to_string(),
             "@.scanf_i64 = private unnamed_addr constant [4 x i8] c\"%ld\\00\"".to_string(),
+            "@.argc = global i32 0".to_string(),
+            "@.argv = global ptr null".to_string(),
+            "declare ptr @mire_get_args(i32, ptr)".to_string(),
         ];
         out.extend(self.strings);
         out.push(String::new());
@@ -996,8 +1014,10 @@ impl LlvmIrGen {
         if has_functions {
             out.push(String::new());
         }
-        out.push("define i32 @main() {".to_string());
+        out.push("define i32 @main(i32 %argc, i8** %argv) {".to_string());
         out.push("entry:".to_string());
+        out.push("  store i32 %argc, ptr @.argc".to_string());
+        out.push("  store i8** %argv, ptr @.argv".to_string());
         out.extend(self.entry_allocas);
         out.extend(self.body);
         out.push("}".to_string());
@@ -1510,6 +1530,7 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "range" => self.compile_range(args),
             Expression::Call { name, args, .. } if name == "sleep" => self.compile_sleep(args),
             Expression::Call { name, args, .. } if name == "exit" => self.compile_exit(args),
+            Expression::Call { name, args, .. } if name == "env_args" => self.compile_env_args(),
             Expression::Call { name, args, .. } if name == "time.mark" => {
                 self.compile_time_mark(args)
             }
@@ -3564,6 +3585,22 @@ impl LlvmIrGen {
         Ok(LlValue {
             ty: LlType::I64,
             repr: code.repr,
+            owned: false,
+        })
+    }
+
+    fn compile_env_args(&mut self) -> Result<LlValue> {
+        let tmp = self.tmp();
+        let argc_val = self.tmp();
+        let argv_val = self.tmp();
+        self.body.push(format!("  {argc_val} = load i32, ptr @.argc"));
+        self.body.push(format!("  {argv_val} = load ptr, ptr @.argv"));
+        self.body.push(format!(
+            "  {tmp} = call ptr @mire_get_args(i32 {argc_val}, ptr {argv_val})"
+        ));
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: tmp,
             owned: false,
         })
     }

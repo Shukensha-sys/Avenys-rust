@@ -1495,3 +1495,21 @@ void *mire_dict_values(void *dict_ptr) {
     
     return list_ptr;
 }
+
+// Get command line arguments as a list of strings
+void *mire_get_args(int argc, char **argv) {
+    void *list_ptr = mire_list_create(argc, sizeof(int64_t));
+    if (!list_ptr) return NULL;
+    
+    for (int i = 0; i < argc; i++) {
+        char *arg = argv[i];
+        int64_t len = strlen(arg);
+        int64_t *str_ptr = (int64_t *)malloc(8 + len + 1);
+        if (!str_ptr) continue;
+        str_ptr[0] = len;
+        memcpy(str_ptr + 1, arg, len + 1);
+        list_ptr = mire_list_push_ptr(list_ptr, str_ptr);
+    }
+    
+    return list_ptr;
+}

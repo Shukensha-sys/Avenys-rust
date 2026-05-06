@@ -1393,10 +1393,12 @@ impl TypeChecker {
                 }
 
                 if name == "lists.get" {
-                    let resolved = match arg_types.first().cloned().unwrap_or(DataType::Unknown) {
+                    let arg_type = arg_types.first().cloned().unwrap_or(DataType::Unknown);
+                    let resolved = match arg_type {
                         DataType::Vector { element_type, .. } => *element_type,
                         DataType::List => DataType::Anything,
                         DataType::Unknown => DataType::Anything,
+                        DataType::Anything => DataType::Anything,
                         other => {
                             return Err(type_error(format!(
                                 "lists.get expects vec/vec! input, got {:?}",

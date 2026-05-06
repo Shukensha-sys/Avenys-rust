@@ -166,7 +166,11 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         println!("[AVENYS] ir: <memory>");
         println!("[AVENYS] opt-ir: <memory>");
     }
-    let stats = run_process_with_stats(Command::new(&build.binary_path))?;
+    let mut cmd = Command::new(&build.binary_path);
+    for arg in args.iter().skip(1) {
+        cmd.arg(arg);
+    }
+    let stats = run_process_with_stats(cmd)?;
     print_run_stats(&stats_options, &stats);
     Ok(stats.status_code.unwrap_or(0))
 }
