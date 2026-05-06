@@ -7,23 +7,72 @@ pub struct Warning {
     pub code: String,
     pub message: String,
     pub severity: WarningSeverity,
+    pub category: WarningCategory,
     pub line: usize,
     pub column: usize,
+    pub source_file: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WarningSeverity {
     Hint,
+    Info,
     Warning,
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WarningCategory {
+    Unused,
+    Type,
+    Performance,
+    Security,
+    Style,
+    Complexity,
+    BestPractice,
+    Deprecated,
+    NullSafety,
+    Concurrency,
+    Memory,
+}
+
+impl WarningSeverity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WarningSeverity::Hint => "hint",
+            WarningSeverity::Info => "info",
+            WarningSeverity::Warning => "warning",
+            WarningSeverity::Error => "error",
+        }
+    }
+}
+
+impl WarningCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WarningCategory::Unused => "unused",
+            WarningCategory::Type => "type",
+            WarningCategory::Performance => "performance",
+            WarningCategory::Security => "security",
+            WarningCategory::Style => "style",
+            WarningCategory::Complexity => "complexity",
+            WarningCategory::BestPractice => "best-practice",
+            WarningCategory::Deprecated => "deprecated",
+            WarningCategory::NullSafety => "null-safety",
+            WarningCategory::Concurrency => "concurrency",
+            WarningCategory::Memory => "memory",
+        }
+    }
+}
+
 pub struct Warnings {
     pub warnings: Vec<Warning>,
-    pub defined_variables: HashSet<String>,
-    pub defined_functions: HashSet<String>,
-    pub used_variables: HashSet<String>,
-    pub used_functions: HashSet<String>,
+    defined_variables: HashSet<String>,
+    defined_functions: HashSet<String>,
+    used_variables: HashSet<String>,
+    used_functions: HashSet<String>,
+    loop_depth: usize,
+    max_loop_depth: usize,
 }
 
 impl Default for Warnings {
@@ -40,76 +89,362 @@ impl Warnings {
             defined_functions: HashSet::new(),
             used_variables: HashSet::new(),
             used_functions: HashSet::new(),
+            loop_depth: 0,
+            max_loop_depth: 0,
         }
     }
 
     pub fn analyze(program: &Program) -> Vec<Warning> {
         let mut warnings = Warnings::new();
         warnings.collect_definitions(program);
-        warnings.check_program(program);
+        warnings.analyze_program(program);
         warnings.warnings
     }
 
     fn collect_definitions(&mut self, program: &Program) {
         for stmt in &program.statements {
             match stmt {
-                Statement::Let { name, .. } => {
+                Statement::Let { name, data_type, .. } => {
                     self.defined_variables.insert(name.clone());
+                    if *data_type == DataType::Unknown {
+                        self.add_warning("W003", "Implicit type annotation", 
+                            WarningSeverity::Hint, WarningCategory::Type, 0, 0);
+                    }
                 }
-                Statement::Function { name, .. } => {
+                Statement::Function { name, params, return_type, .. } => {
                     self.defined_functions.insert(name.clone());
+                    if *return_type == DataType::Unknown {
+                        self.add_warning("W005", &format!("Function '{}' has implicit return type", name),
+                            WarningSeverity::Hint, WarningCategory::Type, 0, 0);
+                    }
+                    if params.len() > 5 {
+                        self.add_warning("W011", &format!("Function '{}' has many parameters", name),
+                            WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                    }
                 }
                 _ => {}
             }
         }
     }
 
-    fn check_program(&mut self, program: &Program) {
+    fn analyze_program(&mut self, program: &Program) {
         self.analyze_statements(&program.statements);
-
+        
         for stmt in &program.statements {
-            match stmt {
-                Statement::Let { name, data_type, .. } => {
-                    if !self.used_variables.contains(name) && !name.starts_with('_') {
-                        self.warnings.push(Warning {
-                            code: "W002".to_string(),
-                            message: format!("Unused variable: '{}'", name),
-                            severity: WarningSeverity::Hint,
-                            line: 0,
-                            column: 0,
-                        });
-                    }
-                    if *data_type == DataType::Unknown {
-                        self.warnings.push(Warning {
-                            code: "W003".to_string(),
-                            message: format!("Variable '{}' has implicit type", name),
-                            severity: WarningSeverity::Hint,
-                            line: 0,
-                            column: 0,
-                        });
+            self.check_statement_warnings(stmt);
+        }
+        
+        self.check_unused_definitions();
+    }
+
+    fn check_statement_warnings(&mut self, stmt: &Statement) {
+        match stmt {
+            Statement::Let { name, value, .. } => {
+                if !self.used_variables.contains(name) && !name.starts_with('_') {
+                    self.add_warning("W002", &format!("Unused variable: '{}'", name),
+                        WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
+                }
+                
+                if let Some(expr) = value {
+                    self.check_expression_warnings(expr);
+                }
+            }
+            Statement::Function { name, body, .. } => {
+                if body.len() > 50 {
+                    self.add_warning("W012", &format!("Function '{}' is too long ({} lines)", name, body.len()),
+                        WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+                }
+            }
+            Statement::While { condition, body, .. } => {
+                self.loop_depth += 1;
+                self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
+                
+                self.check_loop_warnings(condition);
+                self.analyze_statements(body);
+                
+                self.loop_depth -= 1;
+            }
+            Statement::For { body, .. } => {
+                self.loop_depth += 1;
+                self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
+                self.analyze_statements(body);
+                self.loop_depth -= 1;
+            }
+            Statement::If { condition, then_branch, else_branch, .. } => {
+                self.check_condition_warnings(condition);
+                self.analyze_statements(then_branch);
+                if let Some(else_br) = else_branch {
+                    self.analyze_statements(else_br);
+                }
+            }
+            Statement::Match { value, .. } => {
+                self.check_expression_warnings(value);
+            }
+            Statement::Expression(expr) => {
+                self.check_expression_warnings(expr);
+            }
+            Statement::Return(expr) => {
+                if let Some(e) = expr {
+                    self.check_return_warnings(e);
+                }
+            }
+            Statement::Break | Statement::Continue => {
+                if self.loop_depth == 0 {
+                    self.add_warning("W052", "Break/continue outside of loop",
+                        WarningSeverity::Error, WarningCategory::Concurrency, 0, 0);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn check_expression_warnings(&mut self, expr: &Expression) {
+        match expr {
+            Expression::Identifier(id) => {
+                if self.defined_variables.contains(&id.name) || self.defined_functions.contains(&id.name) {
+                    self.used_variables.insert(id.name.clone());
+                }
+                
+                if id.name.len() > 30 {
+                    self.add_warning("W014", &format!("Variable name '{}' is too long", id.name),
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+            }
+            Expression::Call { name, args, .. } => {
+                self.used_functions.insert(name.clone());
+                
+                if name == "clone" {
+                    self.add_warning("W015", "Unnecessary clone call",
+                        WarningSeverity::Info, WarningCategory::Performance, 0, 0);
+                }
+                
+                if name == "println" || name == "print" {
+                    self.add_warning("W016", "Consider using dasu() for output",
+                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
+                }
+                
+                if args.is_empty() && !self.defined_functions.contains(name) {
+                    self.add_warning("W017", &format!("Call to undefined function: '{}'", name),
+                        WarningSeverity::Error, WarningCategory::Type, 0, 0);
+                }
+                
+                for arg in args {
+                    self.check_expression_warnings(arg);
+                }
+            }
+            Expression::BinaryOp { operator, left, right, .. } => {
+                self.check_binary_op_warnings(operator, left, right);
+                self.check_expression_warnings(left);
+                self.check_expression_warnings(right);
+            }
+            Expression::UnaryOp { operator, operand, .. } => {
+                if *operator == "*" {
+                    if let Expression::Identifier(id) = operand.as_ref() {
+                        if !self.used_variables.contains(&id.name) {
+                            self.add_warning("W018", &format!("Dereferencing unused variable: '{}'", id.name),
+                                WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
+                        }
                     }
                 }
-                Statement::Function { name, return_type, .. } => {
-                    if !self.used_functions.contains(name) && name != "main" {
-                        self.warnings.push(Warning {
-                            code: "W004".to_string(),
-                            message: format!("Unused function: '{}'", name),
-                            severity: WarningSeverity::Hint,
-                            line: 0,
-                            column: 0,
-                        });
-                    }
-                    if *return_type == DataType::Unknown {
-                        self.warnings.push(Warning {
-                            code: "W005".to_string(),
-                            message: format!("Function '{}' has implicit return type", name),
-                            severity: WarningSeverity::Hint,
-                            line: 0,
-                            column: 0,
-                        });
+                self.check_expression_warnings(operand);
+            }
+            Expression::List { elements, .. } => {
+                if elements.is_empty() {
+                    self.add_warning("W019", "Empty list literal",
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+                for elem in elements {
+                    self.check_expression_warnings(elem);
+                }
+            }
+            Expression::Dict { entries, .. } => {
+                if entries.is_empty() {
+                    self.add_warning("W020", "Empty dict literal",
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+                for (key, value) in entries {
+                    self.check_expression_warnings(key);
+                    self.check_expression_warnings(value);
+                }
+            }
+            Expression::Index { target, index, .. } => {
+                if let Expression::Literal(Literal::Int(n)) = index.as_ref() {
+                    if *n < 0 {
+                        self.add_warning("W021", "Negative index access",
+                            WarningSeverity::Error, WarningCategory::Type, 0, 0);
                     }
                 }
-                _ => {}
+                self.check_expression_warnings(target);
+                self.check_expression_warnings(index);
+            }
+            Expression::Closure { params, body, .. } => {
+                if params.len() > 3 {
+                    self.add_warning("W022", "Closure has many parameters",
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+                self.analyze_statements(body);
+            }
+            Expression::Literal(lit) => {
+                self.check_literal_warnings(lit);
+            }
+            Expression::Match { value, cases, .. } => {
+                self.check_expression_warnings(value);
+                for (case_expr, case_body) in cases {
+                    self.check_expression_warnings(case_expr);
+                    if let Expression::List { elements, .. } = case_body {
+                        for elem in elements {
+                            self.check_expression_warnings(elem);
+                        }
+                    }
+                }
+            }
+            Expression::Reference { expr, .. } => {
+                self.check_expression_warnings(expr);
+            }
+            Expression::Dereference { expr, .. } => {
+                self.check_expression_warnings(expr);
+            }
+            _ => {}
+        }
+    }
+
+    fn check_binary_op_warnings(&mut self, operator: &String, left: &Expression, right: &Expression) {
+        if operator == "&&" {
+            if let Expression::Literal(Literal::Bool(false)) = left {
+                self.add_warning("W007", "Left side of '&&' is always false (short-circuit)",
+                    WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+            }
+            self.check_condition_warnings(left);
+        } else if operator == "||" {
+            if let Expression::Literal(Literal::Bool(true)) = left {
+                self.add_warning("W008", "Left side of '||' is always true (short-circuit)",
+                    WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+            }
+            self.check_condition_warnings(left);
+        } else if operator == "+" {
+            if let Expression::Literal(Literal::Str(s)) = left {
+                if s.is_empty() {
+                    self.add_warning("W023", "Adding empty string",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+            if let Expression::Literal(Literal::Str(s)) = right {
+                if s.is_empty() {
+                    self.add_warning("W024", "Adding empty string",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+        } else if operator == "*" {
+            if let Expression::Literal(Literal::Int(n)) = left {
+                if *n == 0 {
+                    self.add_warning("W025", "Multiplication by zero",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+            if let Expression::Literal(Literal::Int(n)) = right {
+                if *n == 0 {
+                    self.add_warning("W026", "Multiplication by zero",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+                if *n == 1 {
+                    self.add_warning("W027", "Multiplication by 1 is redundant",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+        } else if operator == "/" {
+            if let Expression::Literal(Literal::Int(n)) = right {
+                if *n == 0 {
+                    self.add_warning("W028", "Division by zero",
+                        WarningSeverity::Error, WarningCategory::Security, 0, 0);
+                }
+                if *n == 1 {
+                    self.add_warning("W029", "Division by 1 is redundant",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+        } else if operator == "%" {
+            if let Expression::Literal(Literal::Int(n)) = right {
+                if *n == 0 {
+                    self.add_warning("W030", "Modulo by zero",
+                        WarningSeverity::Error, WarningCategory::Security, 0, 0);
+                }
+                if *n == 1 {
+                    self.add_warning("W031", "Modulo by 1 is always 0",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
+            }
+        }
+    }
+
+    fn check_condition_warnings(&mut self, condition: &Expression) {
+        if let Expression::Literal(Literal::Bool(false)) = condition {
+            self.add_warning("W009", "Condition is always false",
+                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
+        }
+        if let Expression::Literal(Literal::Bool(true)) = condition {
+            self.add_warning("W032", "Condition is always true",
+                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
+        }
+    }
+
+    fn check_loop_warnings(&mut self, condition: &Expression) {
+        if let Expression::Literal(Literal::Bool(true)) = condition {
+            self.add_warning("W033", "Infinite loop detected (while true)",
+                WarningSeverity::Warning, WarningCategory::Performance, 0, 0);
+        }
+        
+        if self.loop_depth > 3 {
+            self.add_warning("W035", &format!("Nested loops (depth: {})", self.loop_depth),
+                WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+        }
+    }
+
+    fn check_return_warnings(&mut self, expr: &Expression) {
+        if let Expression::Literal(Literal::Int(_)) = expr {
+            self.add_warning("W038", "Returning literal number, consider using a constant",
+                WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
+        }
+    }
+
+    fn check_literal_warnings(&mut self, lit: &Literal) {
+        match lit {
+            Literal::Str(s) => {
+                if s.len() > 100 {
+                    self.add_warning("W040", "Very long string literal",
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+                
+                if s.is_empty() {
+                    self.add_warning("W041", "Empty string literal",
+                        WarningSeverity::Hint, WarningCategory::Style, 0, 0);
+                }
+            }
+            Literal::Int(n) => {
+                if *n == 0 || *n == 1 {
+                    self.add_warning("W042", "Using magic number, consider using a named constant",
+                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn check_unused_definitions(&mut self) {
+        // Check unused variables
+        let defined: Vec<String> = self.defined_variables.iter().cloned().collect();
+        for var in defined {
+            if !self.used_variables.contains(&var) && !var.starts_with('_') {
+                self.add_warning("W002", &format!("Unused variable: '{}'", var),
+                    WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
+            }
+        }
+        
+        // Check unused functions
+        let funcs: Vec<String> = self.defined_functions.iter().cloned().collect();
+        for func in funcs {
+            if !self.used_functions.contains(&func) && func != "main" && !func.starts_with('_') {
+                self.add_warning("W004", &format!("Unused function: '{}'", func),
+                    WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
             }
         }
     }
@@ -119,181 +454,70 @@ impl Warnings {
             match stmt {
                 Statement::Let { name, value, .. } => {
                     if let Some(expr) = value {
-                        self.analyze_expression(expr);
+                        self.check_expression_warnings(expr);
                     }
                     self.used_variables.insert(name.clone());
                 }
-                Statement::Assignment { target, value, .. } => {
-                    self.analyze_assignment_target(target);
-                    self.analyze_expression(value);
+                Statement::Assignment { target: _, value, .. } => {
+                    self.check_expression_warnings(value);
                 }
                 Statement::Return(expr) => {
                     if let Some(e) = expr {
-                        self.analyze_expression(e);
+                        self.check_expression_warnings(e);
                     }
                 }
                 Statement::If { condition, then_branch, else_branch, .. } => {
-                    self.analyze_expression(condition);
+                    self.check_expression_warnings(condition);
                     self.analyze_statements(then_branch);
                     if let Some(else_br) = else_branch {
                         self.analyze_statements(else_br);
                     }
                 }
                 Statement::While { condition, body, .. } => {
-                    self.check_condition_always(condition, "while");
-                    self.analyze_expression(condition);
+                    self.check_expression_warnings(condition);
                     self.analyze_statements(body);
                 }
                 Statement::For { variable, iterable, body, .. } => {
                     self.used_variables.insert(variable.clone());
-                    self.analyze_expression(iterable);
+                    self.check_expression_warnings(iterable);
                     self.analyze_statements(body);
                 }
                 Statement::Function { name, body, .. } => {
                     self.used_functions.insert(name.clone());
                     self.analyze_statements(body);
                 }
-                Statement::Match { value, cases, .. } => {
-                    self.analyze_expression(value);
+                Statement::Match { value, .. } => {
+                    self.check_expression_warnings(value);
                 }
                 Statement::Expression(expr) => {
-                    self.analyze_expression(expr);
+                    self.check_expression_warnings(expr);
                 }
                 _ => {}
             }
         }
     }
 
-    fn analyze_expression(&mut self, expr: &Expression) {
-        match expr {
-            Expression::Identifier(id) => {
-                if self.defined_variables.contains(&id.name) || self.defined_functions.contains(&id.name) {
-                    self.used_variables.insert(id.name.clone());
-                }
-            }
-            Expression::Call { name, args, .. } => {
-                self.used_functions.insert(name.clone());
-                for arg in args {
-                    self.analyze_expression(arg);
-                }
-            }
-            Expression::BinaryOp { operator, left, right, .. } => {
-                if *operator == "&&" {
-                    self.check_short_circuit_left(left);
-                } else if *operator == "||" {
-                    self.check_short_circuit_right(left);
-                }
-                self.analyze_expression(left);
-                self.analyze_expression(right);
-            }
-            Expression::UnaryOp { operand, .. } => {
-                self.analyze_expression(operand);
-            }
-            Expression::List { elements, .. } => {
-                for elem in elements {
-                    self.analyze_expression(elem);
-                }
-            }
-            Expression::Dict { entries, .. } => {
-                for (key, value) in entries {
-                    self.analyze_expression(key);
-                    self.analyze_expression(value);
-                }
-            }
-            Expression::Tuple { elements, .. } => {
-                for elem in elements {
-                    self.analyze_expression(elem);
-                }
-            }
-            Expression::Index { target, index, .. } => {
-                self.analyze_expression(target);
-                self.analyze_expression(index);
-            }
-            Expression::MemberAccess { target, .. } => {
-                self.analyze_expression(target);
-            }
-            Expression::Closure { body, .. } => {
-                self.analyze_statements(body);
-            }
-            Expression::Pipeline { input, stage, .. } => {
-                self.analyze_expression(input);
-                self.analyze_expression(stage);
-            }
-            Expression::Match { value, cases, .. } => {
-                self.analyze_expression(value);
-            }
-            Expression::Reference { expr, .. } => {
-                self.analyze_expression(expr);
-            }
-            Expression::Dereference { expr, .. } => {
-                self.analyze_expression(expr);
-            }
-            Expression::Box { value, .. } => {
-                self.analyze_expression(value);
-            }
-            Expression::EnumVariant { payloads, .. } => {
-                for payload in payloads {
-                    self.analyze_expression(payload);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn analyze_assignment_target(&mut self, target: &crate::parser::ast::AssignmentTarget) {
-        match target {
-            crate::parser::ast::AssignmentTarget::Variable(name) => {
-                self.used_variables.insert(name.clone());
-            }
-            crate::parser::ast::AssignmentTarget::Field(path) => {
-                if let Some(root) = path.split('.').next() {
-                    self.used_variables.insert(root.to_string());
-                }
-            }
-            crate::parser::ast::AssignmentTarget::Index { target, index, .. } => {
-                self.analyze_expression(target);
-                self.analyze_expression(index);
-            }
-        }
-    }
-
-    fn check_short_circuit_left(&mut self, expr: &Expression) {
-        if let Expression::Literal(Literal::Bool(false)) = expr {
-            self.warnings.push(Warning {
-                code: "W007".to_string(),
-                message: "Left side of '&&' is always false (short-circuit)".to_string(),
-                severity: WarningSeverity::Hint,
-                line: 0,
-                column: 0,
-            });
-        }
-    }
-
-    fn check_short_circuit_right(&mut self, expr: &Expression) {
-        if let Expression::Literal(Literal::Bool(true)) = expr {
-            self.warnings.push(Warning {
-                code: "W008".to_string(),
-                message: "Left side of '||' is always true (short-circuit)".to_string(),
-                severity: WarningSeverity::Hint,
-                line: 0,
-                column: 0,
-            });
-        }
-    }
-
-    fn check_condition_always(&mut self, condition: &Expression, context: &str) {
-        if let Expression::Literal(Literal::Bool(false)) = condition {
-            self.warnings.push(Warning {
-                code: "W009".to_string(),
-                message: format!("Dead code: {} will never execute", context),
-                severity: WarningSeverity::Warning,
-                line: 0,
-                column: 0,
-            });
-        }
+    fn add_warning(&mut self, code: &str, message: &str, severity: WarningSeverity, category: WarningCategory, line: usize, column: usize) {
+        self.warnings.push(Warning {
+            code: code.to_string(),
+            message: message.to_string(),
+            severity,
+            category,
+            line,
+            column,
+            source_file: None,
+        });
     }
 }
 
 pub fn check_warnings(program: &Program) -> Vec<Warning> {
     Warnings::analyze(program)
+}
+
+pub fn format_warning(w: &Warning) -> String {
+    format!("{} [{}] {}: {}", 
+        w.category.as_str(), 
+        w.code, 
+        w.severity.as_str(), 
+        w.message)
 }
