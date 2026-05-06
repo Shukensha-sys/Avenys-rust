@@ -398,14 +398,7 @@ impl TypeChecker {
         }
 
         // ── Builtins that return list ─────────────────────────────────────────
-        for name in [
-            "fs_list",
-            "env_args",
-            "lists.keys",
-            "lists.values",
-            "lists.slice",
-            "range",
-        ] {
+        for name in ["fs_list", "lists.keys", "lists.values", "lists.slice", "range"] {
             builtins.insert(
                 name.to_string(),
                 DataType::Vector {
@@ -414,6 +407,15 @@ impl TypeChecker {
                 },
             );
         }
+
+        // env_args returns list of strings
+        builtins.insert(
+            "env_args".to_string(),
+            DataType::Vector {
+                element_type: Box::new(DataType::Str),
+                dynamic: true,
+            },
+        );
 
         // ── Builtins that return dict ─────────────────────────────────────────
         for name in [

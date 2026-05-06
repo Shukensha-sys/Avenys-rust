@@ -1497,18 +1497,29 @@ void *mire_dict_values(void *dict_ptr) {
 }
 
 // Get command line arguments as a list of strings
+// Returns a list of Mire-managed strings (each arg as proper MireManagedString)
 void *mire_get_args(int argc, char **argv) {
-    void *list_ptr = mire_list_create(argc, sizeof(int64_t));
+    void *list_ptr = mire_list_create(argc, sizeof(void *));
     if (!list_ptr) return NULL;
     
     for (int i = 0; i < argc; i++) {
         char *arg = argv[i];
-        int64_t len = strlen(arg);
-        int64_t *str_ptr = (int64_t *)malloc(8 + len + 1);
-        if (!str_ptr) continue;
-        str_ptr[0] = len;
-        memcpy(str_ptr + 1, arg, len + 1);
-        list_ptr = mire_list_push_ptr(list_ptr, str_ptr);
+        size_t len = strlen(arg);
+        
+        // Allocate MireManagedString format: [len, cap, data...]
+        size_t total_size = sizeof(size_t) * 2 + len + 1;
+        MireManagedString *str = (MireManagedString *)malloc(total_size);
+        if (!str) continue;
+        
+        str->len = len;
+        str->cap = len + 1;
+        memcpy(str->data, arg, len + 1);
+        
+        // Register for garbage collection
+        mire_managed_register(str->data);
+        
+        // Push string pointer (not the string data) to list
+        list_ptr = mire_list_push_ptr(list_ptr, str->data);
     }
     
     return list_ptr;
