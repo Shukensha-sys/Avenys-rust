@@ -352,6 +352,7 @@ impl TypeChecker {
             "strings.trim",
             "strings.concat",
             "strings.to_string",
+            "strings.replace_first",
             "mem.format",
             "gpu.snapshot",
             "time.elapsed_ms",
@@ -361,8 +362,14 @@ impl TypeChecker {
             builtins.insert(name.to_string(), DataType::Str);
         }
 
-        // Builtins that return List<str>
-        builtins.insert("strings.split".to_string(), DataType::List);
+        // Builtins that return Vector<str>
+        builtins.insert(
+            "strings.split".to_string(),
+            DataType::Vector {
+                element_type: Box::new(DataType::Str),
+                dynamic: true,
+            },
+        );
 
         // ── Builtins that return str ──────────────────────────────────────────
         for name in [
@@ -379,6 +386,8 @@ impl TypeChecker {
             "env_get",
             "env_cwd",
             // Proc output helpers
+            "proc_run",
+            "proc_exec",
             "proc_shell",
             "proc_exec_pipe",
             "proc_pipe",
@@ -393,12 +402,12 @@ impl TypeChecker {
         }
 
         // ── Builtins that return bool ─────────────────────────────────────────
-        for name in ["fs_exists", "proc_exists", "gpu_available"] {
+        for name in ["fs_exists", "fs_is_dir", "proc_exists", "gpu_available", "strings.starts_with", "strings.ends_with"] {
             builtins.insert(name.to_string(), DataType::Bool);
         }
 
         // ── Builtins that return list ─────────────────────────────────────────
-        for name in ["fs_list", "lists.keys", "lists.values", "lists.slice", "range"] {
+        for name in ["lists.keys", "lists.values", "lists.slice", "range"] {
             builtins.insert(
                 name.to_string(),
                 DataType::Vector {
@@ -407,6 +416,15 @@ impl TypeChecker {
                 },
             );
         }
+
+        // fs_list returns Vector<str>
+        builtins.insert(
+            "fs_list".to_string(),
+            DataType::Vector {
+                element_type: Box::new(DataType::Str),
+                dynamic: true,
+            },
+        );
 
         // env_args returns list of strings
         builtins.insert(
@@ -426,8 +444,6 @@ impl TypeChecker {
             "cpu_snapshot",
             "cpu.snapshot",
             "gpu_snapshot",
-            "proc_exec",
-            "proc_run",
             "dicts.set",
             "dicts.keys",
             "dicts.values",

@@ -1,0 +1,79 @@
+{
+  "comments": {
+    "lineComment": "//",
+    "blockComment": [
+      "/*",
+      "*/"
+    ]
+  },
+  "brackets": [
+    [
+      "{",
+      "}"
+    ],
+    [
+      "[",
+      "]"
+    ],
+    [
+      "(",
+      ")"
+    ]
+  ],
+  "autoClosingPairs": [
+    {
+      "open": "{",
+      "close": "}"
+    },
+    {
+      "open": "[",
+      "close": "]"
+    },
+    {
+      "open": "(",
+      "close": ")"
+    },
+    {
+      "open": "\"",
+      "close": "\""
+    },
+    {
+      "open": "'",
+      "close": "'"
+    }
+  ],
+  "surroundingPairs": [
+    [
+      "{",
+      "}"
+    ],
+    [
+      "[",
+      "]"
+    ],
+    [
+      "(",
+      ")"
+    ],
+    [
+      "\"",
+      "\""
+    ],
+    [
+      "'",
+      "'"
+    ]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^(\\s)*(fn|pub|struct|enum|impl|skill|match|if|elif|else|while|for|do|unsafe|asm)\\s.*(|{)$",
+    "decreaseIndentPattern": "^\\s*\\}"
+  },
+  "folding": {
+    "markers": {
+      "start": "^\\s*#\\s*region",
+      "end": "^\\s*#\\s*endregion"
+    },
+    "offSide": true
+  },
+  "wordPattern": "[a-zA-Z_][a-zA-Z0-9_]*"
+}

@@ -96,35 +96,8 @@ impl Warnings {
 
     pub fn analyze(program: &Program) -> Vec<Warning> {
         let mut warnings = Warnings::new();
-        warnings.collect_definitions(program);
         warnings.analyze_program(program);
         warnings.warnings
-    }
-
-    fn collect_definitions(&mut self, program: &Program) {
-        for stmt in &program.statements {
-            match stmt {
-                Statement::Let { name, data_type, .. } => {
-                    self.defined_variables.insert(name.clone());
-                    if *data_type == DataType::Unknown {
-                        self.add_warning("W003", "Implicit type annotation", 
-                            WarningSeverity::Hint, WarningCategory::Type, 0, 0);
-                    }
-                }
-                Statement::Function { name, params, return_type, .. } => {
-                    self.defined_functions.insert(name.clone());
-                    if *return_type == DataType::Unknown {
-                        self.add_warning("W005", &format!("Function '{}' has implicit return type", name),
-                            WarningSeverity::Hint, WarningCategory::Type, 0, 0);
-                    }
-                    if params.len() > 5 {
-                        self.add_warning("W011", &format!("Function '{}' has many parameters", name),
-                            WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                    }
-                }
-                _ => {}
-            }
-        }
     }
 
     fn analyze_program(&mut self, program: &Program) {
@@ -139,20 +112,13 @@ impl Warnings {
 
     fn check_statement_warnings(&mut self, stmt: &Statement) {
         match stmt {
-            Statement::Let { name, value, .. } => {
-                if !self.used_variables.contains(name) && !name.starts_with('_') {
-                    self.add_warning("W002", &format!("Unused variable: '{}'", name),
-                        WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
-                }
-                
-                if let Some(expr) = value {
-                    self.check_expression_warnings(expr);
-                }
-            }
             Statement::Function { name, body, .. } => {
                 if body.len() > 50 {
                     self.add_warning("W012", &format!("Function '{}' is too long ({} lines)", name, body.len()),
                         WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+                }
+                for s in body {
+                    self.check_statement_warnings(s);
                 }
             }
             Statement::While { condition, body, .. } => {
@@ -160,25 +126,41 @@ impl Warnings {
                 self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
                 
                 self.check_loop_warnings(condition);
-                self.analyze_statements(body);
+                for s in body {
+                    self.check_statement_warnings(s);
+                }
                 
                 self.loop_depth -= 1;
             }
             Statement::For { body, .. } => {
                 self.loop_depth += 1;
                 self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
-                self.analyze_statements(body);
+                for s in body {
+                    self.check_statement_warnings(s);
+                }
                 self.loop_depth -= 1;
             }
             Statement::If { condition, then_branch, else_branch, .. } => {
                 self.check_condition_warnings(condition);
-                self.analyze_statements(then_branch);
+                for s in then_branch {
+                    self.check_statement_warnings(s);
+                }
                 if let Some(else_br) = else_branch {
-                    self.analyze_statements(else_br);
+                    for s in else_br {
+                        self.check_statement_warnings(s);
+                    }
                 }
             }
-            Statement::Match { value, .. } => {
+            Statement::Match { value, cases, default, .. } => {
                 self.check_expression_warnings(value);
+                for (_, body) in cases {
+                    for s in body {
+                        self.check_statement_warnings(s);
+                    }
+                }
+                for s in default {
+                    self.check_statement_warnings(s);
+                }
             }
             Statement::Expression(expr) => {
                 self.check_expression_warnings(expr);
@@ -451,49 +433,84 @@ impl Warnings {
 
     fn analyze_statements(&mut self, statements: &[Statement]) {
         for stmt in statements {
-            match stmt {
-                Statement::Let { name, value, .. } => {
-                    if let Some(expr) = value {
-                        self.check_expression_warnings(expr);
-                    }
-                    self.used_variables.insert(name.clone());
+            self.analyze_statement_defs_and_uses(stmt);
+        }
+    }
+
+    fn analyze_statement_defs_and_uses(&mut self, stmt: &Statement) {
+        match stmt {
+            Statement::Let { name, data_type, value, .. } => {
+                self.defined_variables.insert(name.clone());
+                if *data_type == DataType::Unknown {
+                    self.add_warning("W003", "Implicit type annotation",
+                        WarningSeverity::Hint, WarningCategory::Type, 0, 0);
                 }
-                Statement::Assignment { target: _, value, .. } => {
-                    self.check_expression_warnings(value);
-                }
-                Statement::Return(expr) => {
-                    if let Some(e) = expr {
-                        self.check_expression_warnings(e);
-                    }
-                }
-                Statement::If { condition, then_branch, else_branch, .. } => {
-                    self.check_expression_warnings(condition);
-                    self.analyze_statements(then_branch);
-                    if let Some(else_br) = else_branch {
-                        self.analyze_statements(else_br);
-                    }
-                }
-                Statement::While { condition, body, .. } => {
-                    self.check_expression_warnings(condition);
-                    self.analyze_statements(body);
-                }
-                Statement::For { variable, iterable, body, .. } => {
-                    self.used_variables.insert(variable.clone());
-                    self.check_expression_warnings(iterable);
-                    self.analyze_statements(body);
-                }
-                Statement::Function { name, body, .. } => {
-                    self.used_functions.insert(name.clone());
-                    self.analyze_statements(body);
-                }
-                Statement::Match { value, .. } => {
-                    self.check_expression_warnings(value);
-                }
-                Statement::Expression(expr) => {
+                if let Some(expr) = value {
                     self.check_expression_warnings(expr);
                 }
-                _ => {}
             }
+            Statement::Assignment { target: _, value, .. } => {
+                self.check_expression_warnings(value);
+            }
+            Statement::Return(expr) => {
+                if let Some(e) = expr {
+                    self.check_expression_warnings(e);
+                }
+            }
+            Statement::If { condition, then_branch, else_branch, .. } => {
+                self.check_expression_warnings(condition);
+                self.analyze_statements(then_branch);
+                if let Some(else_br) = else_branch {
+                    self.analyze_statements(else_br);
+                }
+            }
+            Statement::While { condition, body, .. } => {
+                self.check_expression_warnings(condition);
+                self.analyze_statements(body);
+            }
+            Statement::For { variable, iterable, body, .. } => {
+                self.used_variables.insert(variable.clone());
+                self.check_expression_warnings(iterable);
+                self.analyze_statements(body);
+            }
+            Statement::Function { name, params, return_type, body, .. } => {
+                self.defined_functions.insert(name.clone());
+                if *return_type == DataType::Unknown {
+                    self.add_warning("W005", &format!("Function '{}' has implicit return type", name),
+                        WarningSeverity::Hint, WarningCategory::Type, 0, 0);
+                }
+                if params.len() > 5 {
+                    self.add_warning("W011", &format!("Function '{}' has many parameters", name),
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
+                self.analyze_statements(body);
+            }
+            Statement::Match { value, cases, default, .. } => {
+                self.check_expression_warnings(value);
+                for (pat, body) in cases {
+                    self.check_expression_warnings(pat);
+                    self.analyze_statements(body);
+                }
+                self.analyze_statements(default);
+            }
+            Statement::Find { variable, iterable, body, .. } => {
+                self.used_variables.insert(variable.clone());
+                self.check_expression_warnings(iterable);
+                self.analyze_statements(body);
+            }
+            Statement::Type { fields, .. } => {
+                self.analyze_statements(fields);
+            }
+            Statement::Code { methods, .. } => {
+                self.analyze_statements(methods);
+            }
+            Statement::Class { methods, .. } => {
+                self.analyze_statements(methods);
+            }
+            Statement::Expression(expr) => {
+                self.check_expression_warnings(expr);
+            }
+            _ => {}
         }
     }
 
@@ -515,9 +532,20 @@ pub fn check_warnings(program: &Program) -> Vec<Warning> {
 }
 
 pub fn format_warning(w: &Warning) -> String {
-    format!("{} [{}] {}: {}", 
-        w.category.as_str(), 
-        w.code, 
-        w.severity.as_str(), 
-        w.message)
+    let severity_color = match w.severity {
+        WarningSeverity::Error => "\x1b[1;31m",   // bold red
+        WarningSeverity::Warning => "\x1b[1;33m", // bold yellow
+        WarningSeverity::Info => "\x1b[1;34m",    // bold blue
+        WarningSeverity::Hint => "\x1b[1;32m",    // bold green
+    };
+    let reset = "\x1b[0m";
+    format!(
+        "{severity_color}warning[{code}]{reset} {category_color}{category}{reset}: {message}",
+        severity_color = severity_color,
+        code = w.code,
+        reset = reset,
+        category_color = "\x1b[90m",
+        category = w.category.as_str(),
+        message = w.message,
+    )
 }

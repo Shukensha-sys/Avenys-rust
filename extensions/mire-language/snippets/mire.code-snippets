@@ -1,0 +1,378 @@
+{
+  "Hello World": {
+    "prefix": "main",
+    "body": [
+      "import std",
+      "",
+      "pub fn main: () {",
+      "    use dasu(\"Hello, World!\")",
+      "}"
+    ],
+    "description": "Basic Hello World program"
+  },
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:function_name}: ($2) :$3 {",
+      "    $0",
+      "}"
+    ],
+    "description": "Function declaration"
+  },
+  "Public Function": {
+    "prefix": "pubfn",
+    "body": [
+      "pub fn ${1:function_name}: ($2) :$3 {",
+      "    $0",
+      "}"
+    ],
+    "description": "Public function declaration"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "    ${2:field} :${3:i64}",
+      "}"
+    ],
+    "description": "Struct declaration"
+  },
+  "Enum": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name} {",
+      "    ${2:Variant}",
+      "}"
+    ],
+    "description": "Enum declaration"
+  },
+  "Enum with Payload": {
+    "prefix": "enump",
+    "body": [
+      "enum ${1:Name} {",
+      "    ${2:Variant}(${3:value} :${4:i64})",
+      "}"
+    ],
+    "description": "Enum with payload variant"
+  },
+  "Impl": {
+    "prefix": "impl",
+    "body": [
+      "impl ${1:Type} {",
+      "    $0",
+      "}"
+    ],
+    "description": "Impl block"
+  },
+  "Impl with Method": {
+    "prefix": "implm",
+    "body": [
+      "impl ${1:Type} {",
+      "    fn ${2:method_name}: (self) :${3:i64} {",
+      "        $0",
+      "    }",
+      "}"
+    ],
+    "description": "Impl block with method"
+  },
+  "Skill (Trait)": {
+    "prefix": "skill",
+    "body": [
+      "pub skill ${1:Name} {",
+      "    fn ${2:method_name}: (self) :${3:str}",
+      "}"
+    ],
+    "description": "Skill (trait) declaration"
+  },
+  "Impl Skill": {
+    "prefix": "impls",
+    "body": [
+      "impl ${1:SkillName} for ${2:Type} {",
+      "    fn ${3:method_name}: (self) :${4:str} {",
+      "        $0",
+      "    }",
+      "}"
+    ],
+    "description": "Impl a skill for a type"
+  },
+  "Match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:expr} {",
+      "    ${2:Pattern} { $0 }",
+      "    _ { }",
+      "}"
+    ],
+    "description": "Match expression"
+  },
+  "Match with Bool": {
+    "prefix": "matchb",
+    "body": [
+      "match ${1:expr} :bool {",
+      "    true { ${2:expr_true} }",
+      "    false { ${3:expr_false} }",
+      "}"
+    ],
+    "description": "Match boolean expression"
+  },
+  "If-Else": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} {",
+      "    $0",
+      "} else {",
+      "    ",
+      "}"
+    ],
+    "description": "If-else statement"
+  },
+  "If-Elif-Else": {
+    "prefix": "ifelif",
+    "body": [
+      "if ${1:condition} {",
+      "    $0",
+      "} elif ${2:condition2} {",
+      "    ",
+      "} else {",
+      "    ",
+      "}"
+    ],
+    "description": "If-elif-else statement"
+  },
+  "While": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} {",
+      "    $0",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:i} in range(${2:10}) {",
+      "    use dasu(\"${1:i}\")",
+      "}"
+    ],
+    "description": "For loop with range"
+  },
+  "For with Index": {
+    "prefix": "fori",
+    "body": [
+      "for ${1:value}, ${2:index} in range(${3:10}) {",
+      "    use dasu(\"${2:index}:${1:value}\")",
+      "}"
+    ],
+    "description": "For loop with value and index"
+  },
+  "Do-While": {
+    "prefix": "do",
+    "body": [
+      "do {",
+      "    $0",
+      "} while ${1:condition}"
+    ],
+    "description": "Do-while loop"
+  },
+  "Variable": {
+    "prefix": "set",
+    "body": "set ${1:name} = ${2:value} :${3:type}",
+    "description": "Variable binding"
+  },
+  "Mutable Variable": {
+    "prefix": "setm",
+    "body": "set ${1:name} = ${2:value} :${3:type} mut",
+    "description": "Mutable variable binding"
+  },
+  "Vector": {
+    "prefix": "vec",
+    "body": [
+      "set ${1:name} = [] :vec![${2:i64}] mut"
+    ],
+    "description": "Empty vector declaration"
+  },
+  "Vector with Values": {
+    "prefix": "vecv",
+    "body": "set ${1:name} = [${2:1} ${3:2} ${4:3}] :vec![${5:i64}]",
+    "description": "Vector with initial values"
+  },
+  "Map": {
+    "prefix": "map",
+    "body": "set ${1:name} = {} :map[str ${2:i64}] mut",
+    "description": "Empty map declaration"
+  },
+  "Map with Values": {
+    "prefix": "mapv",
+    "body": "set ${1:name} = {${2:key}: ${3:value}} :map[str ${4:i64}]",
+    "description": "Map with initial values"
+  },
+  "Array": {
+    "prefix": "arr",
+    "body": "set ${1:name} = [${2:1} ${3:2} ${4:3}] :arr[${5:i64} ${6:3}]",
+    "description": "Fixed-size array declaration"
+  },
+  "Reference": {
+    "prefix": "ref",
+    "body": "set ${1:name} = &${2:value}",
+    "description": "Reference binding"
+  },
+  "Mutable Reference": {
+    "prefix": "refm",
+    "body": "set ${1:name} = &mut ${2:value}",
+    "description": "Mutable reference binding"
+  },
+  "Box": {
+    "prefix": "box",
+    "body": "set ${1:name} = box[${2:i64}]",
+    "description": "Boxed value"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": "import ${1:std}",
+    "description": "Import statement"
+  },
+  "Import Specific": {
+    "prefix": "imps",
+    "body": "import ${1:strings}: (${2:split} ${3:replace})",
+    "description": "Import specific items"
+  },
+  "Import Local": {
+    "prefix": "imploc",
+    "body": "import ./${1:utils}",
+    "description": "Import local module"
+  },
+  "Extern Library": {
+    "prefix": "externlib",
+    "body": [
+      "extern lib \"${1:c}\" \"${2:libc.so.6}\""
+    ],
+    "description": "Extern library declaration"
+  },
+  "Extern Function": {
+    "prefix": "externfn",
+    "body": [
+      "extern fn ${1:function_name}: (${2:arg} :${3:i64}) :${4:i64} lib \"${5:c}\""
+    ],
+    "description": "Extern function declaration"
+  },
+  "Unsafe Block": {
+    "prefix": "unsafe",
+    "body": [
+      "unsafe {",
+      "    $0",
+      "}"
+    ],
+    "description": "Unsafe block"
+  },
+  "Asm Block": {
+    "prefix": "asm",
+    "body": [
+      "asm {",
+      "    $0",
+      "}"
+    ],
+    "description": "Inline assembly block"
+  },
+  "Range": {
+    "prefix": "range",
+    "body": "range(${1:10})",
+    "description": "Range function"
+  },
+  "Lists Push/Pop": {
+    "prefix": "lists",
+    "body": [
+      "set ${1:list} = lists.${2:push}(${3:list} ${4:value})",
+      "set ${1:list} = lists.${5:pop}(${3:list})"
+    ],
+    "description": "Lists operations push/pop"
+  },
+  "Strings Operations": {
+    "prefix": "str",
+    "body": [
+      "set ${1:result} = strings.${2:upper}(${3:str})",
+      "set ${1:result} = strings.${4:lower}(${3:str})"
+    ],
+    "description": "Strings operations"
+  },
+  "Dicts Operations": {
+    "prefix": "dicts",
+    "body": [
+      "set ${1:result} = dicts.${2:get}(${3:map} ${4:key})",
+      "set ${1:result} = dicts.${5:has}(${3:map} ${4:key})"
+    ],
+    "description": "Dicts operations"
+  },
+  "Time Operations": {
+    "prefix": "time",
+    "body": [
+      "set ${1:start} = time.mark() :i64",
+      "set ${2:elapsed} = time.elapsed_ms(${1:start})"
+    ],
+    "description": "Time operations"
+  },
+  "FS Read": {
+    "prefix": "fsr",
+    "body": "set ${1:content} = fs.read(\"${2:file.txt}\")",
+    "description": "Read file with fs module"
+  },
+  "FS Write": {
+    "prefix": "fsw",
+    "body": "fs.write(\"${1:file.txt}\" \"${2:content}\")",
+    "description": "Write file with fs module"
+  },
+  "Struct Constructor": {
+    "prefix": "new",
+    "body": "(${1:Type} ${2:field}: ${3:value})",
+    "description": "Struct constructor"
+  },
+  "Field Access": {
+    "prefix": "field",
+    "body": "${1:instance}.${2:field}",
+    "description": "Field access"
+  },
+  "Method Call": {
+    "prefix": "method",
+    "body": "${1:instance}.${2:method}()",
+    "description": "Method call"
+  },
+  "Static Method Call": {
+    "prefix": "static",
+    "body": "${1:Type}::${2:method}(${3:args})",
+    "description": "Static method call"
+  },
+  "Closure": {
+    "prefix": "closure",
+    "body": "(${1:arg}) => ${2:expr}",
+    "description": "Closure (lambda)"
+  },
+  "List Map": {
+    "prefix": "lmap",
+    "body": "lists.map((${1:x}) => ${2:x * 2}, ${3:list})",
+    "description": "Lists map higher-order function"
+  },
+  "List Filter": {
+    "prefix": "lfilter",
+    "body": "lists.filter((${1:x}) => ${2:x > 0}, ${3:list})",
+    "description": "Lists filter higher-order function"
+  },
+  "List Fold": {
+    "prefix": "lfold",
+    "body": "lists.fold(${1:acc}, (${2:acc} ${3:elem}) => ${4:acc + elem}, ${5:list})",
+    "description": "Lists fold higher-order function"
+  },
+  "Assert": {
+    "prefix": "assert",
+    "body": "assert(${1:condition})",
+    "description": "Assertion"
+  },
+  "Comment Block": {
+    "prefix": "comment",
+    "body": [
+      "// ============================================",
+      "// ${1:Title}",
+      "// ============================================"
+    ],
+    "description": "Section comment"
+  }
+}

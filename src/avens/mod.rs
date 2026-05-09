@@ -977,6 +977,9 @@ impl LlvmIrGen {
             "declare ptr @mire_strings_split_list(ptr, ptr)".to_string(),
             "declare ptr @mire_strings_join(ptr, i64, ptr)".to_string(),
             "declare ptr @mire_strings_trim(ptr)".to_string(),
+            "declare ptr @mire_strings_replace_first(ptr, ptr, ptr)".to_string(),
+            "declare i64 @mire_strings_starts_with(ptr, ptr)".to_string(),
+            "declare i64 @mire_strings_ends_with(ptr, ptr)".to_string(),
             "declare ptr @mire_list_create(i64, i64)".to_string(),
             "declare ptr @mire_list_push_i64(ptr, i64)".to_string(),
             "declare ptr @mire_list_new()".to_string(),
@@ -1006,6 +1009,36 @@ impl LlvmIrGen {
             "@.argc = global i32 0".to_string(),
             "@.argv = global ptr null".to_string(),
             "declare ptr @mire_get_args(i32, ptr)".to_string(),
+            // FS functions
+            "declare i32 @mire_fs_write(ptr, ptr)".to_string(),
+            "declare i32 @mire_fs_append(ptr, ptr)".to_string(),
+            "declare ptr @mire_fs_read(ptr)".to_string(),
+            "declare i32 @mire_fs_copy(ptr, ptr)".to_string(),
+            "declare i32 @mire_fs_move(ptr, ptr)".to_string(),
+            "declare i32 @mire_fs_drop(ptr)".to_string(),
+            "declare i32 @mire_fs_mkdir(ptr)".to_string(),
+            "declare i32 @mire_fs_rmdir(ptr)".to_string(),
+            "declare i64 @mire_fs_exists(ptr)".to_string(),
+            "declare i64 @mire_fs_is_dir(ptr)".to_string(),
+            "declare i64 @mire_fs_size(ptr)".to_string(),
+            "declare ptr @mire_fs_list(ptr)".to_string(),
+            "declare ptr @mire_fs_join(ptr, ptr)".to_string(),
+            "declare ptr @mire_fs_dir(ptr)".to_string(),
+            "declare ptr @mire_fs_name(ptr)".to_string(),
+            "declare ptr @mire_fs_ext(ptr)".to_string(),
+            // PROC functions
+            "declare ptr @mire_proc_run(ptr)".to_string(),
+            "declare ptr @mire_proc_exec(ptr)".to_string(),
+            "declare i64 @mire_proc_wait(i32)".to_string(),
+            "declare i32 @mire_proc_kill(i32)".to_string(),
+            "declare void @mire_proc_exit(i32)".to_string(),
+            "declare ptr @mire_proc_shell(ptr)".to_string(),
+            "declare i32 @mire_proc_exists(i32)".to_string(),
+            // ENV functions
+            "declare ptr @mire_env_get(ptr)".to_string(),
+            "declare i32 @mire_env_set(ptr, ptr)".to_string(),
+            "declare ptr @mire_env_cwd()".to_string(),
+            "declare ptr @mire_env_all()".to_string(),
         ];
         out.extend(self.strings);
         out.push(String::new());
@@ -1519,6 +1552,15 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "strings.to_string" => {
                 self.compile_to_string(args)
             }
+            Expression::Call { name, args, .. } if name == "strings.replace_first" => {
+                self.compile_replace_first(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.starts_with" => {
+                self.compile_starts_with(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.ends_with" => {
+                self.compile_ends_with(args)
+            }
             Expression::Call { name, args, .. } if name == "abs" => self.compile_abs(args),
             Expression::Call { name, args, .. } if name == "sqrt" => self.compile_sqrt(args),
             Expression::Call { name, args, .. } if name == "pow" => self.compile_pow(args),
@@ -1531,6 +1573,36 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "sleep" => self.compile_sleep(args),
             Expression::Call { name, args, .. } if name == "exit" => self.compile_exit(args),
             Expression::Call { name, args, .. } if name == "env_args" => self.compile_env_args(),
+            // FS functions
+            Expression::Call { name, args, .. } if name == "fs_write" => self.compile_fs_write(args),
+            Expression::Call { name, args, .. } if name == "fs_append" => self.compile_fs_append(args),
+            Expression::Call { name, args, .. } if name == "fs_read" => self.compile_fs_read(args),
+            Expression::Call { name, args, .. } if name == "fs_copy" => self.compile_fs_copy(args),
+            Expression::Call { name, args, .. } if name == "fs_move" => self.compile_fs_move(args),
+            Expression::Call { name, args, .. } if name == "fs_drop" => self.compile_fs_drop(args),
+            Expression::Call { name, args, .. } if name == "fs_mkdir" => self.compile_fs_mkdir(args),
+            Expression::Call { name, args, .. } if name == "fs_rmdir" => self.compile_fs_rmdir(args),
+            Expression::Call { name, args, .. } if name == "fs_exists" => self.compile_fs_exists(args),
+            Expression::Call { name, args, .. } if name == "fs_is_dir" => self.compile_fs_is_dir(args),
+            Expression::Call { name, args, .. } if name == "fs_size" => self.compile_fs_size(args),
+            Expression::Call { name, args, .. } if name == "fs_list" => self.compile_fs_list(args),
+            Expression::Call { name, args, .. } if name == "fs_join" => self.compile_fs_join(args),
+            Expression::Call { name, args, .. } if name == "fs_dir" => self.compile_fs_dir(args),
+            Expression::Call { name, args, .. } if name == "fs_name" => self.compile_fs_name(args),
+            Expression::Call { name, args, .. } if name == "fs_ext" => self.compile_fs_ext(args),
+            // PROC functions
+            Expression::Call { name, args, .. } if name == "proc_run" => self.compile_proc_run(args),
+            Expression::Call { name, args, .. } if name == "proc_exec" => self.compile_proc_exec(args),
+            Expression::Call { name, args, .. } if name == "proc_wait" => self.compile_proc_wait(args),
+            Expression::Call { name, args, .. } if name == "proc_kill" => self.compile_proc_kill(args),
+            Expression::Call { name, args, .. } if name == "proc_exit" => self.compile_proc_exit(args),
+            Expression::Call { name, args, .. } if name == "proc_shell" => self.compile_proc_shell(args),
+            Expression::Call { name, args, .. } if name == "proc_exists" => self.compile_proc_exists(args),
+            // ENV functions
+            Expression::Call { name, args, .. } if name == "env_get" => self.compile_env_get(args),
+            Expression::Call { name, args, .. } if name == "env_set" => self.compile_env_set(args),
+            Expression::Call { name, args, .. } if name == "env_cwd" => self.compile_env_cwd(),
+            Expression::Call { name, args, .. } if name == "env_all" => self.compile_env_all(),
             Expression::Call { name, args, .. } if name == "time.mark" => {
                 self.compile_time_mark(args)
             }
@@ -3436,6 +3508,111 @@ impl LlvmIrGen {
         })
     }
 
+    fn compile_replace_first(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 3 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.replace_first(...) expects 3 arguments".to_string(),
+            }));
+        }
+
+        if let (
+            Expression::Literal(Literal::Str(input)),
+            Expression::Literal(Literal::Str(from)),
+            Expression::Literal(Literal::Str(to)),
+        ) = (&args[0], &args[1], &args[2])
+        {
+            if let Some(pos) = input.find(from) {
+                let mut result = input[..pos].to_string();
+                result.push_str(to);
+                result.push_str(&input[pos + from.len()..]);
+                return Ok(self.string_value(&result));
+            }
+            return Ok(self.string_value(input));
+        }
+
+        let input = self.compile_expr(&args[0])?;
+        let from = self.compile_expr(&args[1])?;
+        let to = self.compile_expr(&args[2])?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call ptr @mire_strings_replace_first(ptr {}, ptr {}, ptr {})",
+            input.repr, from.repr, to.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: result,
+            owned: true,
+        })
+    }
+
+    fn compile_starts_with(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.starts_with(...) expects 2 arguments".to_string(),
+            }));
+        }
+
+        if let (
+            Expression::Literal(Literal::Str(input)),
+            Expression::Literal(Literal::Str(prefix)),
+        ) = (&args[0], &args[1])
+        {
+            let result = input.starts_with(prefix.as_str());
+            return Ok(LlValue {
+                ty: LlType::I64,
+                repr: if result { "1".to_string() } else { "0".to_string() },
+                owned: false,
+            });
+        }
+
+        let input = self.compile_expr(&args[0])?;
+        let prefix = self.compile_expr(&args[1])?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call i64 @mire_strings_starts_with(ptr {}, ptr {})",
+            input.repr, prefix.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: result,
+            owned: false,
+        })
+    }
+
+    fn compile_ends_with(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.ends_with(...) expects 2 arguments".to_string(),
+            }));
+        }
+
+        if let (
+            Expression::Literal(Literal::Str(input)),
+            Expression::Literal(Literal::Str(suffix)),
+        ) = (&args[0], &args[1])
+        {
+            let result = input.ends_with(suffix.as_str());
+            return Ok(LlValue {
+                ty: LlType::I64,
+                repr: if result { "1".to_string() } else { "0".to_string() },
+                owned: false,
+            });
+        }
+
+        let input = self.compile_expr(&args[0])?;
+        let suffix = self.compile_expr(&args[1])?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call i64 @mire_strings_ends_with(ptr {}, ptr {})",
+            input.repr, suffix.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: result,
+            owned: false,
+        })
+    }
+
     fn compile_abs(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
@@ -3603,6 +3780,333 @@ impl LlvmIrGen {
             repr: tmp,
             owned: false,
         })
+    }
+
+    // ==================== FS Functions ====================
+
+    fn compile_fs_write(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_write expects 2 arguments".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let content = self.compile_expr(&args[1])?;
+        self.body.push(format!("  call i32 @mire_fs_write(ptr {}, ptr {})", path.repr, content.repr));
+        Ok(LlValue { ty: LlType::I64, repr: "0".to_string(), owned: false })
+    }
+
+    fn compile_fs_append(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_append expects 2 arguments".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let content = self.compile_expr(&args[1])?;
+        self.body.push(format!("  call i32 @mire_fs_append(ptr {}, ptr {})", path.repr, content.repr));
+        Ok(LlValue { ty: LlType::I64, repr: "0".to_string(), owned: false })
+    }
+
+    fn compile_fs_read(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_read expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_read(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_fs_copy(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_copy expects 2 arguments".to_string(),
+            }));
+        }
+        let src = self.compile_expr(&args[0])?;
+        let dst = self.compile_expr(&args[1])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_fs_copy(ptr {}, ptr {})", src.repr, dst.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_move(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_move expects 2 arguments".to_string(),
+            }));
+        }
+        let src = self.compile_expr(&args[0])?;
+        let dst = self.compile_expr(&args[1])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_fs_move(ptr {}, ptr {})", src.repr, dst.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_drop(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_drop expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_fs_drop(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_mkdir(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_mkdir expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_fs_mkdir(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_rmdir(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_rmdir expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_fs_rmdir(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_exists(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_exists expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i64 @mire_fs_exists(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_is_dir(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_is_dir expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i64 @mire_fs_is_dir(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_size(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_size expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i64 @mire_fs_size(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_list(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_list expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_list(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: false })
+    }
+
+    fn compile_fs_join(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_join expects 2 arguments".to_string(),
+            }));
+        }
+        let a = self.compile_expr(&args[0])?;
+        let b = self.compile_expr(&args[1])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_join(ptr {}, ptr {})", a.repr, b.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_fs_dir(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_dir expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_dir(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_fs_name(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_name expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_name(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_fs_ext(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_ext expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_fs_ext(ptr {})", path.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    // ==================== PROC Functions ====================
+
+    fn compile_proc_run(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_run expects 1 argument".to_string(),
+            }));
+        }
+        let cmd = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_proc_run(ptr {})", cmd.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_proc_exec(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_exec expects 1 argument".to_string(),
+            }));
+        }
+        let cmd = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_proc_exec(ptr {})", cmd.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: false })
+    }
+
+    fn compile_proc_wait(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_wait expects 1 argument".to_string(),
+            }));
+        }
+        let pid = self.compile_expr(&args[0])?;
+        let pid_i32 = self.tmp();
+        self.body.push(format!("  {pid_i32} = trunc i64 {} to i32", pid.repr));
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i64 @mire_proc_wait(i32 {pid_i32})"));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    fn compile_proc_kill(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_kill expects 1 argument".to_string(),
+            }));
+        }
+        let pid = self.compile_expr(&args[0])?;
+        let pid_i32 = self.tmp();
+        self.body.push(format!("  {pid_i32} = trunc i64 {} to i32", pid.repr));
+        self.body.push(format!("  call i32 @mire_proc_kill(i32 {pid_i32})"));
+        Ok(LlValue { ty: LlType::I64, repr: "0".to_string(), owned: false })
+    }
+
+    fn compile_proc_exit(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_exit expects 1 argument".to_string(),
+            }));
+        }
+        let code = self.compile_expr(&args[0])?;
+        let code_i32 = self.tmp();
+        self.body.push(format!("  {code_i32} = trunc i64 {} to i32", code.repr));
+        self.body.push(format!("  call void @mire_proc_exit(i32 {code_i32})"));
+        Ok(LlValue { ty: LlType::I64, repr: "0".to_string(), owned: false })
+    }
+
+    fn compile_proc_shell(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_shell expects 1 argument".to_string(),
+            }));
+        }
+        let cmd = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_proc_shell(ptr {})", cmd.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_proc_exists(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "proc_exists expects 1 argument".to_string(),
+            }));
+        }
+        let pid = self.compile_expr(&args[0])?;
+        let pid_i32 = self.tmp();
+        self.body.push(format!("  {pid_i32} = trunc i64 {} to i32", pid.repr));
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call i32 @mire_proc_exists(i32 {pid_i32})"));
+        Ok(LlValue { ty: LlType::I64, repr: tmp, owned: false })
+    }
+
+    // ==================== ENV Functions ====================
+
+    fn compile_env_get(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "env_get expects 1 argument".to_string(),
+            }));
+        }
+        let name = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_env_get(ptr {})", name.repr));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_env_set(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "env_set expects 2 arguments".to_string(),
+            }));
+        }
+        let name = self.compile_expr(&args[0])?;
+        let value = self.compile_expr(&args[1])?;
+        self.body.push(format!("  call i32 @mire_env_set(ptr {}, ptr {})", name.repr, value.repr));
+        Ok(LlValue { ty: LlType::I64, repr: "0".to_string(), owned: false })
+    }
+
+    fn compile_env_cwd(&mut self) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_env_cwd()"));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: true })
+    }
+
+    fn compile_env_all(&mut self) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body.push(format!("  {tmp} = call ptr @mire_env_all()"));
+        Ok(LlValue { ty: LlType::Ptr, repr: tmp, owned: false })
     }
 
     fn compile_time_mark(&mut self, _args: &[Expression]) -> Result<LlValue> {

@@ -1,0 +1,19 @@
+{
+  "name": "Mire",
+  "patterns": [
+    {
+      "include": "#keyword"
+    }
+  ],
+  "repository": {
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.mire",
+          "match": "\\b(if|elif|else|while|for|do|match|return|fn|pub|struct|enum|impl|skill|set|mut|import|export|extern|unsafe|asm|true|false|none)\\b"
+        }
+      ]
+    }
+  },
+  "scopeName": "source.mire"
+}

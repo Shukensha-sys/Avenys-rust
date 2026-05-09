@@ -7,6 +7,11 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <dirent.h>
+#include <signal.h>
+#include <errno.h>
 
 // Fast list implementation - inline storage
 // Format: [capacity, length, data...]
@@ -1373,6 +1378,65 @@ char *mire_strings_split(const char *input, const char *delimiter) {
     return result;
 }
 
+char *mire_strings_replace_first(const char *input, const char *from, const char *to) {
+    if (input == NULL || from == NULL || to == NULL) {
+        return mire_managed_from_slice("", 0);
+    }
+
+    size_t input_len = strlen(input);
+    size_t from_len = strlen(from);
+    size_t to_len = strlen(to);
+    if (from_len == 0) {
+        return mire_managed_from_slice(input, input_len);
+    }
+
+    const char *match = strstr(input, from);
+    if (match == NULL) {
+        return mire_managed_from_slice(input, input_len);
+    }
+
+    size_t out_len = input_len - from_len + to_len;
+    char *out = mire_managed_alloc(out_len);
+    if (out == NULL) {
+        return mire_managed_from_slice(input, input_len);
+    }
+
+    size_t prefix_len = (size_t)(match - input);
+    if (prefix_len > 0) {
+        memcpy(out, input, prefix_len);
+    }
+    if (to_len > 0) {
+        memcpy(out + prefix_len, to, to_len);
+    }
+    const char *suffix_start = match + from_len;
+    size_t suffix_len = input_len - (size_t)(suffix_start - input);
+    if (suffix_len > 0) {
+        memcpy(out + prefix_len + to_len, suffix_start, suffix_len);
+    }
+    out[out_len] = '\0';
+    return out;
+}
+
+int64_t mire_strings_starts_with(const char *str, const char *prefix) {
+    if (str == NULL || prefix == NULL) {
+        return 0;
+    }
+    size_t prefix_len = strlen(prefix);
+    return strncmp(str, prefix, prefix_len) == 0 ? 1 : 0;
+}
+
+int64_t mire_strings_ends_with(const char *str, const char *suffix) {
+    if (str == NULL || suffix == NULL) {
+        return 0;
+    }
+    size_t str_len = strlen(str);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > str_len) {
+        return 0;
+    }
+    return strcmp(str + str_len - suffix_len, suffix) == 0 ? 1 : 0;
+}
+
 char *mire_strings_join(char **parts, size_t count, const char *delimiter) {
     if (parts == NULL || count == 0) {
         return mire_managed_from_slice("", 0);
@@ -1520,6 +1584,235 @@ void *mire_get_args(int argc, char **argv) {
         
         // Push string pointer (not the string data) to list
         list_ptr = mire_list_push_ptr(list_ptr, str->data);
+    }
+    
+    return list_ptr;
+}
+
+// ==================== File System Functions ====================
+
+int mire_fs_write(const char *path, const char *content) {
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+    fputs(content, f);
+    fclose(f);
+    return 1;
+}
+
+int mire_fs_append(const char *path, const char *content) {
+    FILE *f = fopen(path, "a");
+    if (!f) return 0;
+    fputs(content, f);
+    fclose(f);
+    return 1;
+}
+
+char *mire_fs_read(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) return mire_strdup_raw("");
+    
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    char *buf = (char *)malloc(size + 1);
+    fread(buf, 1, size, f);
+    buf[size] = '\0';
+    fclose(f);
+    
+    char *result = mire_strdup_raw(buf);
+    free(buf);
+    return result;
+}
+
+int mire_fs_copy(const char *src, const char *dst) {
+    FILE *in = fopen(src, "rb");
+    if (!in) return 0;
+    
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return 0; }
+    
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+        fwrite(buf, 1, n, out);
+    }
+    
+    fclose(in);
+    fclose(out);
+    return 1;
+}
+
+int mire_fs_move(const char *src, const char *dst) {
+    if (mire_fs_copy(src, dst)) {
+        remove(src);
+        return 1;
+    }
+    return 0;
+}
+
+int mire_fs_drop(const char *path) {
+    return remove(path) == 0 ? 1 : 0;
+}
+
+int mire_fs_mkdir(const char *path) {
+    return mkdir(path, 0755) == 0 ? 1 : 0;
+}
+
+int mire_fs_rmdir(const char *path) {
+    return rmdir(path) == 0 ? 1 : 0;
+}
+
+int64_t mire_fs_exists(const char *path) {
+    return access(path, F_OK) == 0 ? 1 : 0;
+}
+
+int64_t mire_fs_is_dir(const char *path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        return S_ISDIR(st.st_mode) ? 1 : 0;
+    }
+    return 0;
+}
+
+int64_t mire_fs_size(const char *path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        return st.st_size;
+    }
+    return 0;
+}
+
+void *mire_fs_list(const char *path) {
+    void *list_ptr = mire_list_create(16, sizeof(void *));
+    if (!list_ptr) return NULL;
+    
+    DIR *d = opendir(path);
+    if (!d) return list_ptr;
+    
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        
+        char *name = mire_strdup_raw(entry->d_name);
+        list_ptr = mire_list_push_ptr(list_ptr, name);
+    }
+    
+    closedir(d);
+    return list_ptr;
+}
+
+char *mire_fs_join(const char *a, const char *b) {
+    size_t len = strlen(a) + strlen(b) + 2;
+    char *result = (char *)malloc(len);
+    snprintf(result, len, "%s/%s", a, b);
+    char *managed = mire_strdup_raw(result);
+    free(result);
+    return managed;
+}
+
+char *mire_fs_dir(const char *path) {
+    char *copy = mire_strdup_raw(path);
+    char *last = strrchr(copy, '/');
+    if (last) {
+        *last = '\0';
+        return copy;
+    }
+    free(copy);
+    return mire_strdup_raw(".");
+}
+
+char *mire_fs_name(const char *path) {
+    const char *last = strrchr(path, '/');
+    if (last) {
+        return mire_strdup_raw(last + 1);
+    }
+    return mire_strdup_raw(path);
+}
+
+char *mire_fs_ext(const char *path) {
+    const char *last = strrchr(path, '.');
+    if (last && last != path) {
+        return mire_strdup_raw(last + 1);
+    }
+    return mire_strdup_raw("");
+}
+
+// ==================== Process Functions ====================
+
+char *mire_proc_run(const char *cmd) {
+    FILE *p = popen(cmd, "r");
+    if (!p) return mire_strdup_raw("");
+    
+    char buf[4096];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, p);
+    buf[n] = '\0';
+    pclose(p);
+    
+    return mire_strdup_raw(buf);
+}
+
+char *mire_proc_exec(const char *cmd) {
+    return mire_proc_run(cmd);
+}
+
+int64_t mire_proc_wait(int pid) {
+    int status;
+    waitpid(pid, &status, 0);
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+int mire_proc_kill(int pid) {
+    return kill(pid, SIGTERM) == 0 ? 1 : 0;
+}
+
+void mire_proc_exit(int code) {
+    exit(code);
+}
+
+char *mire_proc_shell(const char *cmd) {
+    FILE *p = popen(cmd, "r");
+    if (!p) return mire_strdup_raw("");
+    
+    char buf[4096];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, p);
+    buf[n] = '\0';
+    pclose(p);
+    
+    return mire_strdup_raw(buf);
+}
+
+int mire_proc_exists(int pid) {
+    return kill(pid, 0) == 0 ? 1 : 0;
+}
+
+// ==================== Environment Functions ====================
+
+char *mire_env_get(const char *name) {
+    char *val = getenv(name);
+    return val ? mire_strdup_raw(val) : mire_strdup_raw("");
+}
+
+int mire_env_set(const char *name, const char *value) {
+    return setenv(name, value, 1) == 0 ? 1 : 0;
+}
+
+char *mire_env_cwd(void) {
+    char buf[4096];
+    if (getcwd(buf, sizeof(buf))) {
+        return mire_strdup_raw(buf);
+    }
+    return mire_strdup_raw("");
+}
+
+void *mire_env_all(void) {
+    void *list_ptr = mire_list_create(32, sizeof(void *));
+    if (!list_ptr) return NULL;
+    
+    extern char **environ;
+    for (int i = 0; environ[i] != NULL; i++) {
+        char *env_str = mire_strdup_raw(environ[i]);
+        list_ptr = mire_list_push_ptr(list_ptr, env_str);
     }
     
     return list_ptr;

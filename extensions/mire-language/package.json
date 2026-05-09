@@ -1,0 +1,114 @@
+{
+  "name": "mire-language",
+  "displayName": "Mire Language",
+  "description": "Complete language support for Mire - compiled, statically typed programming language with ownership-oriented memory safety",
+  "version": "1.0.0",
+  "publisher": "mire",
+  "author": "Mire Team",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anomalyco/mire"
+  },
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "mire",
+    "language",
+    "compiler",
+    "ownership"
+  ],
+  "activationEvents": [
+    "onLanguage:mire",
+    "onCommand:mire.runFile"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mire",
+        "aliases": [
+          "Mire",
+          "mire"
+        ],
+        "extensions": [
+          ".mire"
+        ],
+        "filenames": [],
+        "firstLine": "^import std",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mire",
+        "scopeName": "source.mire",
+        "path": "./syntaxes/mire.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "mire",
+        "path": "./snippets/mire.code-snippets"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Mire",
+      "properties": {
+        "mire.runtimePath": {
+          "type": "string",
+          "default": "mire",
+          "description": "Path to Mire runtime binary"
+        },
+        "mire.autoRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run .mire files on save"
+        }
+      }
+    },
+    "tasks": [
+      {
+        "type": "mire",
+        "label": "Run Mire File",
+        "command": "${config:mire.runtimePath}",
+        "args": [
+          "${file}"
+        ],
+        "problemMatcher": [],
+        "group": {
+          "kind": "test",
+          "isDefault": true
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "mire.runFile",
+        "title": "Mire: Run File",
+        "category": "Mire"
+      },
+      {
+        "command": "mire.buildProject",
+        "title": "Mire: Build Project",
+        "category": "Mire"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {}
+}
