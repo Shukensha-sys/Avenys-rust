@@ -258,6 +258,25 @@ asm {
     mov rax, rbx
     add rax, rcx
 }
+
+---
+
+## 🦉 Owl (Gestor de Proyecto Mire) - Estado Mayo 2026
+
+### ✅ Completado reciente
+- Corrección de `owl test`:
+  - acumulación de imports en harness (sin overwrite)
+  - workaround para corrupción de strings en nombre de función del harness
+  - validación `--filter` sin valor
+- `mkdir_p` ahora soporta rutas absolutas.
+- `cmd_clean` con mensaje consistente.
+- Documentación de Owl actualizada a v0.3.1.
+
+### ⏳ Pendiente real
+1. Extracción robusta de paquetes para `owl install url:` (`.tar.gz`) sin edge-cases.
+2. `owl.lock` con metadata de dependencia.
+3. Parser de Semver y validación de rangos.
+4. Verificación de hashes SHA-256.
 ```
 - **Estado:** ✅ Implementado (lexer + parsing de bloque asm)
 - **Nota actual:** En backend Avenys, `asm` se acepta pero se trata como no-op de lowering (sin emisión IR específica todavía).
