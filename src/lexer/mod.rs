@@ -136,16 +136,17 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(source: String) -> Self {
+    pub fn new(source: &str) -> Self {
         let source_chars: Vec<char> = source.chars().collect();
         let len = source_chars.len();
+        let token_capacity = (len / 4).max(64);
         Self {
             source_chars,
             pos: 0,
             len,
             line: 1,
             column: 1,
-            tokens: Vec::new(),
+            tokens: Vec::with_capacity(token_capacity),
         }
     }
 
@@ -197,7 +198,7 @@ impl Lexer {
     }
 
     fn read_identifier(&mut self) -> String {
-        let mut result = String::new();
+        let mut result = String::with_capacity(16);
         while let Some(c) = self.peek(0) {
             if c.is_alphanumeric() || c == '_' {
                 result.push(self.advance().unwrap());
@@ -209,7 +210,7 @@ impl Lexer {
     }
 
     fn read_number(&mut self) -> String {
-        let mut result = String::new();
+        let mut result = String::with_capacity(16);
         let mut has_dot = false;
         while let Some(c) = self.peek(0) {
             if c.is_ascii_digit() {
@@ -762,5 +763,5 @@ impl Lexer {
 }
 
 pub fn tokenize(source: &str) -> Result<Vec<Token>> {
-    Lexer::new(source.to_string()).tokenize()
+    Lexer::new(source).tokenize()
 }

@@ -33,14 +33,8 @@ enum BlockBoundary {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        let enum_names = Self::collect_top_level_nominal_names(&tokens, TokenType::Enum);
-        let enum_variant_owners = Self::collect_unique_top_level_enum_variant_owners(&tokens);
-        let mut nominal_type_names =
-            Self::collect_top_level_nominal_names(&tokens, TokenType::Struct);
-        nominal_type_names.extend(Self::collect_top_level_nominal_names(
-            &tokens,
-            TokenType::Type,
-        ));
+        let (enum_names, enum_variant_owners, nominal_type_names) =
+            Self::collect_top_level_metadata(&tokens);
         Self {
             tokens,
             pos: 0,
@@ -52,8 +46,13 @@ impl Parser {
         }
     }
 
-    fn collect_top_level_nominal_names(tokens: &[Token], keyword: TokenType) -> HashSet<String> {
-        let mut names = HashSet::new();
+    fn collect_top_level_metadata(
+        tokens: &[Token],
+    ) -> (HashSet<String>, HashMap<String, String>, HashSet<String>) {
+        let mut enum_names = HashSet::new();
+        let mut nominal_type_names = HashSet::new();
+        let mut variant_counts = HashMap::new();
+        let mut enum_variant_owners = HashMap::new();
         let mut brace_depth = 0usize;
         let mut index = 0usize;
 
@@ -61,21 +60,66 @@ impl Parser {
             match tokens[index].ttype {
                 TokenType::Lbrace => brace_depth += 1,
                 TokenType::Rbrace => brace_depth = brace_depth.saturating_sub(1),
-                TokenType::Pub | TokenType::Priv if brace_depth == 0 => {
-                    if index + 2 < tokens.len()
-                        && tokens[index + 1].ttype == keyword
+                TokenType::Pub | TokenType::Priv
+                    if brace_depth == 0 && index + 2 < tokens.len() =>
+                {
+                    let keyword = tokens[index + 1].ttype;
+                    if matches!(keyword, TokenType::Enum | TokenType::Struct | TokenType::Type)
                         && tokens[index + 2].ttype == TokenType::Ident
                         && let Some(name) = tokens[index + 2].value.as_ref()
                     {
-                        names.insert(name.clone());
+                        match keyword {
+                            TokenType::Enum => {
+                                enum_names.insert(name.clone());
+                                if index + 3 < tokens.len()
+                                    && tokens[index + 3].ttype == TokenType::Lbrace
+                                {
+                                    index = Self::collect_enum_variants_into(
+                                        tokens,
+                                        index + 4,
+                                        name,
+                                        &mut variant_counts,
+                                        &mut enum_variant_owners,
+                                    );
+                                    continue;
+                                }
+                            }
+                            TokenType::Struct | TokenType::Type => {
+                                nominal_type_names.insert(name.clone());
+                            }
+                            _ => {}
+                        }
                     }
                 }
-                ttype if brace_depth == 0 && ttype == keyword => {
+                ttype
+                    if brace_depth == 0
+                        && matches!(ttype, TokenType::Enum | TokenType::Struct | TokenType::Type) =>
+                {
                     if index + 1 < tokens.len()
                         && tokens[index + 1].ttype == TokenType::Ident
                         && let Some(name) = tokens[index + 1].value.as_ref()
                     {
-                        names.insert(name.clone());
+                        match ttype {
+                            TokenType::Enum => {
+                                enum_names.insert(name.clone());
+                                if index + 2 < tokens.len()
+                                    && tokens[index + 2].ttype == TokenType::Lbrace
+                                {
+                                    index = Self::collect_enum_variants_into(
+                                        tokens,
+                                        index + 3,
+                                        name,
+                                        &mut variant_counts,
+                                        &mut enum_variant_owners,
+                                    );
+                                    continue;
+                                }
+                            }
+                            TokenType::Struct | TokenType::Type => {
+                                nominal_type_names.insert(name.clone());
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 _ => {}
@@ -83,68 +127,8 @@ impl Parser {
             index += 1;
         }
 
-        names
-    }
-
-    fn collect_unique_top_level_enum_variant_owners(tokens: &[Token]) -> HashMap<String, String> {
-        let mut variant_counts = HashMap::new();
-        let mut variant_owners = HashMap::new();
-        let mut brace_depth = 0usize;
-        let mut index = 0usize;
-
-        while index < tokens.len() {
-            match tokens[index].ttype {
-                TokenType::Lbrace => brace_depth += 1,
-                TokenType::Rbrace => brace_depth = brace_depth.saturating_sub(1),
-                ttype
-                    if brace_depth == 0
-                        && matches!(ttype, TokenType::Pub | TokenType::Priv)
-                        && index + 3 < tokens.len()
-                        && tokens[index + 1].ttype == TokenType::Enum
-                        && tokens[index + 2].ttype == TokenType::Ident
-                        && tokens[index + 3].ttype == TokenType::Lbrace =>
-                {
-                    let enum_name = tokens[index + 2]
-                        .value
-                        .as_deref()
-                        .unwrap_or_default()
-                        .to_owned();
-                    index = Self::collect_enum_variants_into(
-                        tokens,
-                        index + 4,
-                        &enum_name,
-                        &mut variant_counts,
-                        &mut variant_owners,
-                    );
-                    continue;
-                }
-                TokenType::Enum
-                    if brace_depth == 0
-                        && index + 2 < tokens.len()
-                        && tokens[index + 1].ttype == TokenType::Ident
-                        && tokens[index + 2].ttype == TokenType::Lbrace =>
-                {
-                    let enum_name = tokens[index + 1]
-                        .value
-                        .as_deref()
-                        .unwrap_or_default()
-                        .to_owned();
-                    index = Self::collect_enum_variants_into(
-                        tokens,
-                        index + 3,
-                        &enum_name,
-                        &mut variant_counts,
-                        &mut variant_owners,
-                    );
-                    continue;
-                }
-                _ => {}
-            }
-            index += 1;
-        }
-
-        variant_owners.retain(|variant, _| variant_counts.get(variant) == Some(&1));
-        variant_owners
+        enum_variant_owners.retain(|variant, _| variant_counts.get(variant) == Some(&1));
+        (enum_names, enum_variant_owners, nominal_type_names)
     }
 
     fn collect_enum_variants_into(
