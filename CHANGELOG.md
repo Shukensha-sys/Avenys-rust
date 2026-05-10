@@ -4,6 +4,38 @@ All notable changes to Mire are documented in this file.
 
 ## [Unreleased]
 
+## [2.5.5] - 2026-05-10
+
+### Added
+- Runtime string helpers in `src/avens/runtime_support.c`:
+  - `mire_strings_contains`
+  - `mire_strings_substr`
+  - `mire_strings_repeat`
+  - `mire_strings_pad_left`
+  - `mire_strings_pad_right`
+  - `mire_list_pop_i64`
+- Backend handlers in `src/avens/mod.rs` for:
+  - `list.pop`
+  - `contains` / `strings.contains`
+  - `strings.substr`
+  - `strings.pad_left`
+  - `strings.pad_right`
+  - `strings.repeat`
+
+### Changed
+- Hardened string memory operations (`concat`, `append_owned`, `replace`) with overflow guards and safer capacity math.
+- `for` lowering now supports list/vector/slice iteration in addition to `range(...)`.
+- `match` pointer comparisons now distinguish string vs non-string pointer semantics:
+  - strings -> `strcmp`
+  - struct/enum/pointer values -> pointer equality
+- Backend now accepts `extern fn` declarations by emitting LLVM `declare` signatures.
+- Backend now emits minimal inline `asm` via LLVM `asm sideeffect`.
+- Warning set expanded with missing warning codes (`W001`, `W006`, `W010`, `W013`, `W034`, `W036`, `W037`, `W039`, `W043`-`W051`).
+
+### Fixed
+- `sqrt(...)` lowering now calls `libm` `sqrt(double)`.
+- `Drop` and `Move` statements now lower with concrete backend behavior.
+
 ### Added
 - Created `std.mire` - Standard Library de Mire con todas las funciones estándar organizadas por categorías:
   - MATH: abs, min, max, sum, clamp, range, round, floor, ceil

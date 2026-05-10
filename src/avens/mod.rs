@@ -721,6 +721,7 @@ struct LlvmIrGen {
     user_functions: HashMap<String, FnInfo>,
     user_structs: HashMap<String, StructInfo>,
     user_enums: HashMap<String, EnumInfo>,
+    extern_decls: Vec<String>,
     loop_stack: Vec<LoopLabels>,
     current_return: LlType,
     next_tmp: usize,
@@ -738,6 +739,7 @@ impl LlvmIrGen {
             user_functions: HashMap::new(),
             user_structs: HashMap::new(),
             user_enums: HashMap::new(),
+            extern_decls: Vec::new(),
             loop_stack: Vec::new(),
             current_return: LlType::I64,
             next_tmp: 0,
@@ -816,6 +818,26 @@ impl LlvmIrGen {
 
         // Second pass: collect function signatures
         for stmt in &program.statements {
+            if let Statement::ExternFunction {
+                name,
+                params,
+                return_type,
+                ..
+            } = stmt
+            {
+                let ret = self.map_type(return_type)?;
+                let sig = params
+                    .iter()
+                    .map(|(_, ty)| self.ty(self.map_type(ty).unwrap_or(LlType::I64)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.extern_decls.push(format!(
+                    "declare {} @{}({})",
+                    self.ty(ret),
+                    sanitize_symbol(name),
+                    sig
+                ));
+            }
             if let Statement::Function {
                 name,
                 params,
@@ -1048,6 +1070,7 @@ impl LlvmIrGen {
             "declare ptr @mire_env_all()".to_string(),
         ];
         out.extend(self.strings);
+        out.extend(self.extern_decls);
         out.push(String::new());
         let has_functions = !self.functions.is_empty();
         out.extend(self.functions);
@@ -1238,15 +1261,19 @@ impl LlvmIrGen {
                 }
                 Ok(())
             }
-            Statement::ExternLib { .. } | Statement::ExternFunction { .. } => {
-                Err(MireError::new(ErrorKind::Backend {
-                    message: "Avenys extern/FFI declarations are not lowered yet in backend"
-                        .to_string(),
-                }))
+            Statement::ExternLib { .. } | Statement::ExternFunction { .. } => Ok(()),
+            Statement::Asm { instructions } => {
+                for (template, operand) in instructions {
+                    let operand_expr = self.compile_expr(operand)?;
+                    let operand_val = self.cast_to_i64(operand_expr)?;
+                    self.body.push(format!(
+                        "  call void asm sideeffect \"{}\", \"r\"(i64 {})",
+                        template.replace('"', "\\22"),
+                        operand_val.repr
+                    ));
+                }
+                Ok(())
             }
-            Statement::Asm { .. } => Err(MireError::new(ErrorKind::Backend {
-                message: "Avenys inline asm is not lowered yet in backend".to_string(),
-            })),
             // Frontend-only declarations/analysis statements: currently no direct IR emission.
             Statement::Type { .. }
             | Statement::Skill { .. }
@@ -1256,17 +1283,38 @@ impl LlvmIrGen {
             | Statement::Impl { .. }
             | Statement::Enum { .. }
             | Statement::AddLib { .. }
-            | Statement::Module { .. }
             | Statement::DmireTable { .. }
             | Statement::DmireColumn { .. }
             | Statement::DmireDlist { .. }
             | Statement::Query { .. }
-            | Statement::Find { .. }
-            | Statement::Drop { .. }
-            | Statement::Move { .. } => Err(MireError::new(ErrorKind::Backend {
+            | Statement::Find { .. } => Err(MireError::new(ErrorKind::Backend {
                 message: "Avenys statement is parsed/typechecked but not lowered in backend yet"
                     .to_string(),
             })),
+            Statement::Module { body, .. } => {
+                for stmt in body {
+                    self.compile_statement(stmt)?;
+                }
+                Ok(())
+            }
+            Statement::Drop { value } => {
+                let dropped = self.compile_expr(value)?;
+                if dropped.ty == LlType::Ptr {
+                    self.body
+                        .push(format!("  call void @mire_string_free(ptr {})", dropped.repr));
+                }
+                Ok(())
+            }
+            Statement::Move { target, value } => {
+                let var = self.vars.get(target).cloned().ok_or_else(|| {
+                    MireError::new(ErrorKind::Runtime {
+                        message: format!("Avenys does not know variable '{}'", target),
+                    })
+                })?;
+                let compiled = self.compile_expr(value)?;
+                self.store_variable(target, &var.ptr, var.ty, var.data_type, compiled)?;
+                Ok(())
+            }
         }
     }
 
@@ -1955,10 +2003,7 @@ impl LlvmIrGen {
             Expression::NamedArg { value, .. } => self.compile_expr(value),
             Expression::Tuple { elements, .. } => self.compile_list_literal(elements, &DataType::Unknown),
             Expression::Box { value, .. } => self.compile_expr(value),
-            Expression::Closure { .. } => Err(MireError::new(ErrorKind::Backend {
-                message: "Standalone closure values are not callable without a consuming builtin"
-                    .to_string(),
-            })),
+            Expression::Closure { .. } => Ok(self.string_value("<closure>")),
         }
     }
 
@@ -5171,6 +5216,7 @@ impl LlvmIrGen {
         default: &[Statement],
     ) -> Result<()> {
         let match_value = self.compile_expr(value)?;
+        let match_data_type = self.expression_data_type(value);
         let end_label = self.label("match_end");
         let default_label = self.label("match_default");
         let mut next_label = None;
@@ -5190,7 +5236,7 @@ impl LlvmIrGen {
                 self.body.push(format!("{check_label}:"));
             }
 
-            let cond = self.compile_match_case_condition(&match_value, pattern)?;
+            let cond = self.compile_match_case_condition(&match_value, &match_data_type, pattern)?;
             self.body.push(format!(
                 "  br i1 {}, label %{body_label}, label %{fallthrough_label}",
                 cond.repr
@@ -5224,6 +5270,7 @@ impl LlvmIrGen {
         data_type: &DataType,
     ) -> Result<LlValue> {
         let match_value = self.compile_expr(value)?;
+        let match_data_type = self.expression_data_type(value);
         let result_ty = self.map_type(data_type)?;
         let result_ptr = self.tmp();
         self.entry_allocas.push(format!(
@@ -5250,7 +5297,7 @@ impl LlvmIrGen {
                 self.body.push(format!("{check_label}:"));
             }
 
-            let cond = self.compile_match_case_condition(&match_value, pattern)?;
+            let cond = self.compile_match_case_condition(&match_value, &match_data_type, pattern)?;
             self.body.push(format!(
                 "  br i1 {}, label %{body_label}, label %{fallthrough_label}",
                 cond.repr
@@ -5307,6 +5354,7 @@ impl LlvmIrGen {
     fn compile_match_case_condition(
         &mut self,
         value: &LlValue,
+        value_data_type: &DataType,
         pattern: &Expression,
     ) -> Result<LlValue> {
         // Handle wildcard pattern - always matches (true)
@@ -5389,13 +5437,20 @@ impl LlvmIrGen {
 
         match (&value.ty, &pattern_value.ty) {
             (LlType::Ptr, LlType::Ptr) => {
-                let cmp_value = self.tmp();
-                self.body.push(format!(
-                    "  {cmp_value} = call i32 @strcmp(ptr {}, ptr {})",
-                    value.repr, pattern_value.repr
-                ));
-                self.body
-                    .push(format!("  {result} = icmp eq i32 {cmp_value}, 0"));
+                if matches!(value_data_type, DataType::Str) {
+                    let cmp_value = self.tmp();
+                    self.body.push(format!(
+                        "  {cmp_value} = call i32 @strcmp(ptr {}, ptr {})",
+                        value.repr, pattern_value.repr
+                    ));
+                    self.body
+                        .push(format!("  {result} = icmp eq i32 {cmp_value}, 0"));
+                } else {
+                    self.body.push(format!(
+                        "  {result} = icmp eq ptr {}, {}",
+                        value.repr, pattern_value.repr
+                    ));
+                }
             }
             (LlType::I1, LlType::I1) => {
                 self.body.push(format!(

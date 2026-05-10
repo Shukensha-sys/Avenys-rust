@@ -4,6 +4,29 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.5.5 (Mayo 2026)
+
+### Runtime + Backend Stability
+- `src/avens/runtime_support.c`:
+  - Endurecido `mire_string_concat`, `mire_string_append_owned`, `mire_strings_replace` contra overflow y corrupción de memoria.
+  - Nuevas primitivas: `mire_strings_contains`, `mire_strings_substr`, `mire_strings_repeat`, `mire_strings_pad_left`, `mire_strings_pad_right`, `mire_list_pop_i64`.
+- `src/avens/mod.rs`:
+  - Implementado lowering real para: `list.pop`, `contains`, `strings.contains`, `strings.substr`, `strings.pad_left`, `strings.pad_right`, `strings.repeat`, `sqrt`.
+  - `for` extendido para iterar sobre `list/vector/slice` además de `range(...)`.
+  - `match` mejorado para comparar punteros no-string con igualdad de puntero (structs/enums), manteniendo `strcmp` para strings.
+  - `extern fn` ahora genera `declare` LLVM.
+  - `asm` ahora emite inline asm mínimo (`asm sideeffect`).
+  - `Drop` y `Move` dejaron de ser backend-error y ahora bajan a IR.
+
+### Warnings
+- `src/compiler/warnings.rs` amplía cobertura con códigos faltantes:
+  - `W001`, `W006`, `W010`, `W013`, `W034`, `W036`, `W037`, `W039`, `W043`-`W051`.
+
+### Validación
+- `cargo build` ✅
+
+---
+
 ## v2.5.4 (Mayo 2026)
 
 ### Backend Lowering Coverage

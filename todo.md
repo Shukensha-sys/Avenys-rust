@@ -251,6 +251,8 @@ extern fn printf: (fmt :*const i8) :i32 lib "c"
 ```
 - **Estado:** ✅ Implementado (lexer + parsing + integración en firmas de typecheck)
 - **Nota actual:** Parámetros puntero `*const/*mut` se normalizan como escalar `i64` en frontend.
+- **Backend (v2.5.5):** `extern fn` emite `declare` LLVM.
+- **Pendiente:** Linking/ABI completo multi-plataforma.
 
 ### 8. Inline Assembly
 ```
@@ -258,15 +260,22 @@ asm {
     mov rax, rbx
     add rax, rcx
 }
+```
+- **Estado:** ✅ Implementado (lexer + parsing de bloque asm)
+- **Backend (v2.5.5):** emite inline asm mínimo con `asm sideeffect`.
+- **Pendiente:** modelado de constraints avanzadas y clobbers por target.
 
-### Backend Pass (v2.5.4) - Completado
+### Backend Pass (v2.5.5) - Estado actualizado
 - ✅ Cobertura ampliada en lowering de backend (`src/avens/mod.rs`)
-  - Statements frontend-only ya no disparan error genérico en codegen.
+  - `for` soporta `range(...)` y colección (`list/vector/slice`).
+  - `list.pop`, `contains/strings.contains`, `sqrt`, `strings.substr/pad_left/pad_right/repeat` con lowering real.
+  - `match` distingue `str` (strcmp) y punteros no-string (comparación de puntero).
+  - `Drop` y `Move` ya bajan a IR.
+  - `extern fn` y `asm` ya no son no-op.
   - Literales `List/Dict/Tuple` ahora se compilan.
-  - Builtins `strings.*` adicionales cableados en backend.
   - `map_type` ampliado para tipos antes no mapeados.
 - ⏳ Pendiente real (siguiente iteración):
-  - FFI real (ABI/link), asm real, `list.pop`, `contains` genérico, `sqrt`, `range` first-class, `for` no-range.
+  - FFI real (ABI/link completo), inline asm avanzada, `range` first-class completo.
 
 ---
 
@@ -286,6 +295,3 @@ asm {
 2. `owl.lock` con metadata de dependencia.
 3. Parser de Semver y validación de rangos.
 4. Verificación de hashes SHA-256.
-```
-- **Estado:** ✅ Implementado (lexer + parsing de bloque asm)
-- **Nota actual:** En backend Avenys, `asm` se acepta pero se trata como no-op de lowering (sin emisión IR específica todavía).

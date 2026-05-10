@@ -1,6 +1,6 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
-### Version: v2.5.4
+### Version: v2.5.5
 
 ### Nuevo: std.mire
 - Archivo de Standard Library disponible: `std.mire`
@@ -84,13 +84,14 @@ if a || expensive_check() { }
 - (Actualizado 2026-05-04) Sin pendientes abiertos en:
   - Float arithmetic `x + 1.5` con variables `:f32/:f64`
   - Conservacion de tipo interno en `vec[vec[T]]` durante inferencia/asignacion/push
-- (Actualizado 2026-05-10) Pendientes de backend aún abiertos:
-  - Lowering real de FFI (`extern`) con ABI/link (hoy es no-op en codegen).
-  - Emisión real de `asm` inline (hoy es no-op en codegen).
-  - Lowering seguro pendiente en builtins: `list.pop`, `contains` genérico, `sqrt`, `range` como valor de primera clase.
-  - `for` sobre iterables generales (hoy restringido a `range(...)`).
+- (Actualizado 2026-05-10) Estado backend:
+  - `extern fn` ahora emite `declare` LLVM (pendiente: linking ABI completo por plataforma).
+  - `asm` ya no es no-op: emite inline asm mínimo (`asm sideeffect`).
+  - Resueltos builtins críticos: `list.pop`, `contains/strings.contains`, `sqrt`, `strings.substr`, `strings.pad_left`, `strings.pad_right`, `strings.repeat`.
+  - `for` ya soporta `range(...)` y también `list/vector/slice`.
+  - Pendiente principal: `range` como valor de primera clase completo (hoy con representación placeholder).
 
-### ✅ Backend Coverage (v2.5.4)
+### ✅ Backend Coverage (v2.5.5)
 - `compile_statement` ya no falla con catch-all para declaraciones frontend-only:
   `Type`, `Skill`, `Code`, `Class`, `Trait`, `Impl`, `Enum`, `AddLib`, `Module`, `Dmire*`, `Query`, `Find`, `Drop`, `Move`.
 - `compile_expr` ahora baja literales compuestos:

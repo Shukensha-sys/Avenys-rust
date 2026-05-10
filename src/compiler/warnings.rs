@@ -112,6 +112,12 @@ impl Warnings {
 
     fn check_statement_warnings(&mut self, stmt: &Statement) {
         match stmt {
+            Statement::Use { path, items, .. } => {
+                if path.trim().is_empty() || matches!(items, Some(v) if v.is_empty()) {
+                    self.add_warning("W001", "Suspicious or empty import",
+                        WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
+                }
+            }
             Statement::Function { name, body, .. } => {
                 if body.len() > 50 {
                     self.add_warning("W012", &format!("Function '{}' is too long ({} lines)", name, body.len()),
@@ -119,6 +125,10 @@ impl Warnings {
                 }
                 for s in body {
                     self.check_statement_warnings(s);
+                }
+                if body.is_empty() {
+                    self.add_warning("W010", &format!("Function '{}' has empty body", name),
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
                 }
             }
             Statement::While { condition, body, .. } => {
@@ -135,6 +145,10 @@ impl Warnings {
             Statement::For { body, .. } => {
                 self.loop_depth += 1;
                 self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
+                if body.is_empty() {
+                    self.add_warning("W037", "Loop has empty body",
+                        WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+                }
                 for s in body {
                     self.check_statement_warnings(s);
                 }
@@ -142,6 +156,10 @@ impl Warnings {
             }
             Statement::If { condition, then_branch, else_branch, .. } => {
                 self.check_condition_warnings(condition);
+                if then_branch.is_empty() && else_branch.as_ref().map(|b| b.is_empty()).unwrap_or(true) {
+                    self.add_warning("W013", "If statement has empty branches",
+                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                }
                 for s in then_branch {
                     self.check_statement_warnings(s);
                 }
@@ -164,6 +182,10 @@ impl Warnings {
             }
             Statement::Expression(expr) => {
                 self.check_expression_warnings(expr);
+                if let Expression::Literal(_) = expr {
+                    self.add_warning("W006", "Useless literal expression statement",
+                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
+                }
             }
             Statement::Return(expr) => {
                 if let Some(e) = expr {
@@ -374,16 +396,28 @@ impl Warnings {
             self.add_warning("W033", "Infinite loop detected (while true)",
                 WarningSeverity::Warning, WarningCategory::Performance, 0, 0);
         }
+        if let Expression::Literal(Literal::Bool(false)) = condition {
+            self.add_warning("W034", "Loop body is unreachable (while false)",
+                WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+        }
         
         if self.loop_depth > 3 {
             self.add_warning("W035", &format!("Nested loops (depth: {})", self.loop_depth),
                 WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
+        }
+        if self.loop_depth > 5 {
+            self.add_warning("W036", &format!("Very deep loop nesting (depth: {})", self.loop_depth),
+                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
         }
     }
 
     fn check_return_warnings(&mut self, expr: &Expression) {
         if let Expression::Literal(Literal::Int(_)) = expr {
             self.add_warning("W038", "Returning literal number, consider using a constant",
+                WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
+        }
+        if let Expression::Literal(Literal::Str(_)) = expr {
+            self.add_warning("W039", "Returning literal string, consider using a constant",
                 WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
         }
     }
@@ -400,12 +434,48 @@ impl Warnings {
                     self.add_warning("W041", "Empty string literal",
                         WarningSeverity::Hint, WarningCategory::Style, 0, 0);
                 }
+                if s.chars().any(|c| c.is_control()) {
+                    self.add_warning("W050", "String literal contains control characters",
+                        WarningSeverity::Warning, WarningCategory::Security, 0, 0);
+                }
             }
             Literal::Int(n) => {
                 if *n == 0 || *n == 1 {
                     self.add_warning("W042", "Using magic number, consider using a named constant",
                         WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
                 }
+                if *n < 0 {
+                    self.add_warning("W051", "Negative literal used directly",
+                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
+                }
+            }
+            Literal::Float(_) => {
+                self.add_warning("W043", "Float literal may reduce deterministic behavior",
+                    WarningSeverity::Info, WarningCategory::BestPractice, 0, 0);
+            }
+            Literal::Bool(_) => {
+                self.add_warning("W044", "Boolean literal can hide hardcoded control flow",
+                    WarningSeverity::Hint, WarningCategory::Style, 0, 0);
+            }
+            Literal::Char(_) => {
+                self.add_warning("W045", "Character literal used directly",
+                    WarningSeverity::Hint, WarningCategory::Style, 0, 0);
+            }
+            Literal::None => {
+                self.add_warning("W046", "None literal used directly",
+                    WarningSeverity::Info, WarningCategory::NullSafety, 0, 0);
+            }
+            Literal::List(values) if values.len() > 128 => {
+                self.add_warning("W047", "Large list literal can impact compile/runtime memory",
+                    WarningSeverity::Info, WarningCategory::Memory, 0, 0);
+            }
+            Literal::Dict(values) if values.len() > 64 => {
+                self.add_warning("W048", "Large dict literal can impact compile/runtime memory",
+                    WarningSeverity::Info, WarningCategory::Memory, 0, 0);
+            }
+            Literal::Tuple(values) if values.len() > 16 => {
+                self.add_warning("W049", "Large tuple literal may hurt readability",
+                    WarningSeverity::Info, WarningCategory::Style, 0, 0);
             }
             _ => {}
         }
