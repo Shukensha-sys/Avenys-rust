@@ -12,6 +12,7 @@
 #include <dirent.h>
 #include <signal.h>
 #include <errno.h>
+#include <math.h>
 
 // Fast list implementation - inline storage
 // Format: [capacity, length, data...]
@@ -797,6 +798,9 @@ char *mire_string_concat(const char *left, const char *right) {
 
     size_t left_len = strlen(left);
     size_t right_len = strlen(right);
+    if (left_len > SIZE_MAX - right_len) {
+        return mire_managed_from_slice("", 0);
+    }
     size_t total_len = left_len + right_len;
     char *result = mire_managed_alloc(total_len);
     if (result == NULL) {
@@ -825,6 +829,9 @@ char *mire_string_append_owned(char *value, const char *suffix) {
 
     MireManagedString *header = mire_string_header(value);
     size_t suffix_len = strlen(suffix);
+    if (header->len > SIZE_MAX - suffix_len) {
+        return mire_managed_from_slice("", 0);
+    }
     size_t new_len = header->len + suffix_len;
     if (new_len > header->cap) {
         char *previous_data = header->data;
@@ -1181,9 +1188,14 @@ char *mire_strings_replace(const char *input, const char *from, const char *to) 
 
     size_t out_len = input_len;
     if (to_len >= from_len) {
-        out_len += matches * (to_len - from_len);
+        size_t delta = to_len - from_len;
+        if (matches > 0 && delta > 0 && matches > (SIZE_MAX - out_len) / delta) {
+            return mire_managed_from_slice(input, input_len);
+        }
+        out_len += matches * delta;
     } else {
-        out_len -= matches * (from_len - to_len);
+        size_t delta = from_len - to_len;
+        out_len -= matches * delta;
     }
     char *out = mire_managed_alloc(out_len);
     if (out == NULL) {
@@ -1203,6 +1215,115 @@ char *mire_strings_replace(const char *input, const char *from, const char *to) 
 
     strcpy(dst, src);
     return out;
+}
+
+int64_t mire_strings_contains(const char *input, const char *needle) {
+    if (input == NULL || needle == NULL) {
+        return 0;
+    }
+    return strstr(input, needle) != NULL ? 1 : 0;
+}
+
+char *mire_strings_substr(const char *input, int64_t start, int64_t length) {
+    if (input == NULL) {
+        return mire_managed_from_slice("", 0);
+    }
+    if (start < 0 || length <= 0) {
+        return mire_managed_from_slice("", 0);
+    }
+    size_t input_len = strlen(input);
+    size_t start_u = (size_t)start;
+    if (start_u >= input_len) {
+        return mire_managed_from_slice("", 0);
+    }
+    size_t len_u = (size_t)length;
+    if (len_u > input_len - start_u) {
+        len_u = input_len - start_u;
+    }
+    return mire_managed_from_slice(input + start_u, len_u);
+}
+
+char *mire_strings_repeat(const char *input, int64_t times) {
+    if (input == NULL || times <= 0) {
+        return mire_managed_from_slice("", 0);
+    }
+    size_t src_len = strlen(input);
+    size_t times_u = (size_t)times;
+    if (src_len == 0 || times_u == 0) {
+        return mire_managed_from_slice("", 0);
+    }
+    if (times_u > SIZE_MAX / src_len) {
+        return mire_managed_from_slice("", 0);
+    }
+    size_t out_len = src_len * times_u;
+    char *out = mire_managed_alloc(out_len);
+    if (out == NULL) {
+        return mire_managed_from_slice("", 0);
+    }
+    char *dst = out;
+    for (size_t i = 0; i < times_u; ++i) {
+        memcpy(dst, input, src_len);
+        dst += src_len;
+    }
+    out[out_len] = '\0';
+    return out;
+}
+
+static char *mire_strings_pad_core(const char *input, int64_t width, const char *pad, int left_pad) {
+    if (input == NULL) {
+        input = "";
+    }
+    if (pad == NULL || *pad == '\0') {
+        pad = " ";
+    }
+    size_t input_len = strlen(input);
+    if (width <= 0 || (size_t)width <= input_len) {
+        return mire_managed_from_slice(input, input_len);
+    }
+    size_t pad_len = strlen(pad);
+    size_t width_u = (size_t)width;
+    size_t fill_len = width_u - input_len;
+    char *out = mire_managed_alloc(width_u);
+    if (out == NULL) {
+        return mire_managed_from_slice(input, input_len);
+    }
+    size_t fill_written = 0;
+    while (fill_written < fill_len) {
+        size_t chunk = pad_len;
+        if (chunk > fill_len - fill_written) {
+            chunk = fill_len - fill_written;
+        }
+        if (left_pad) {
+            memcpy(out + fill_written, pad, chunk);
+        } else {
+            memcpy(out + input_len + fill_written, pad, chunk);
+        }
+        fill_written += chunk;
+    }
+    if (left_pad) {
+        memcpy(out + fill_len, input, input_len);
+    } else {
+        memcpy(out, input, input_len);
+    }
+    out[width_u] = '\0';
+    return out;
+}
+
+char *mire_strings_pad_left(const char *input, int64_t width, const char *pad) {
+    return mire_strings_pad_core(input, width, pad, 1);
+}
+
+char *mire_strings_pad_right(const char *input, int64_t width, const char *pad) {
+    return mire_strings_pad_core(input, width, pad, 0);
+}
+
+int64_t mire_list_pop_i64(void *list_ptr) {
+    if (!list_ptr) return 0;
+    int64_t len = mire_list_len(list_ptr);
+    if (len <= 0) return 0;
+    int64_t value = ((int64_t *)list_ptr)[len];
+    ((int64_t *)list_ptr)[0] = len - 1;
+    return value;
 }
 
 void *mire_list_concat(void *left_ptr, void *right_ptr) {

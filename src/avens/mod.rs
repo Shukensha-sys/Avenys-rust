@@ -980,12 +980,18 @@ impl LlvmIrGen {
             "declare ptr @mire_strings_replace_first(ptr, ptr, ptr)".to_string(),
             "declare i64 @mire_strings_starts_with(ptr, ptr)".to_string(),
             "declare i64 @mire_strings_ends_with(ptr, ptr)".to_string(),
+            "declare i64 @mire_strings_contains(ptr, ptr)".to_string(),
+            "declare ptr @mire_strings_substr(ptr, i64, i64)".to_string(),
+            "declare ptr @mire_strings_pad_left(ptr, i64, ptr)".to_string(),
+            "declare ptr @mire_strings_pad_right(ptr, i64, ptr)".to_string(),
+            "declare ptr @mire_strings_repeat(ptr, i64)".to_string(),
             "declare ptr @mire_list_create(i64, i64)".to_string(),
             "declare ptr @mire_list_push_i64(ptr, i64)".to_string(),
             "declare ptr @mire_list_new()".to_string(),
             "declare ptr @mire_list_push_scalar(ptr, i64, i64)".to_string(),
             "declare ptr @mire_list_push_ptr(ptr, ptr)".to_string(),
             "declare ptr @mire_list_concat(ptr, ptr)".to_string(),
+            "declare i64 @mire_list_pop_i64(ptr)".to_string(),
             "declare i64 @mire_dict_get_i64(ptr, i64, i64, ptr, i64)".to_string(),
             "declare ptr @mire_dict_get_ptr(ptr, i64, i64, ptr, ptr)".to_string(),
             "declare ptr @mire_dict_set_i64(ptr, i64, i64, i64, ptr, i64)".to_string(),
@@ -1034,6 +1040,7 @@ impl LlvmIrGen {
             "declare void @mire_proc_exit(i32)".to_string(),
             "declare ptr @mire_proc_shell(ptr)".to_string(),
             "declare i32 @mire_proc_exists(i32)".to_string(),
+            "declare double @sqrt(double)".to_string(),
             // ENV functions
             "declare ptr @mire_env_get(ptr)".to_string(),
             "declare i32 @mire_env_set(ptr, ptr)".to_string(),
@@ -1231,8 +1238,15 @@ impl LlvmIrGen {
                 }
                 Ok(())
             }
-            Statement::ExternLib { .. } | Statement::ExternFunction { .. } => Ok(()),
-            Statement::Asm { .. } => Ok(()),
+            Statement::ExternLib { .. } | Statement::ExternFunction { .. } => {
+                Err(MireError::new(ErrorKind::Backend {
+                    message: "Avenys extern/FFI declarations are not lowered yet in backend"
+                        .to_string(),
+                }))
+            }
+            Statement::Asm { .. } => Err(MireError::new(ErrorKind::Backend {
+                message: "Avenys inline asm is not lowered yet in backend".to_string(),
+            })),
             // Frontend-only declarations/analysis statements: currently no direct IR emission.
             Statement::Type { .. }
             | Statement::Skill { .. }
@@ -1249,7 +1263,10 @@ impl LlvmIrGen {
             | Statement::Query { .. }
             | Statement::Find { .. }
             | Statement::Drop { .. }
-            | Statement::Move { .. } => Ok(()),
+            | Statement::Move { .. } => Err(MireError::new(ErrorKind::Backend {
+                message: "Avenys statement is parsed/typechecked but not lowered in backend yet"
+                    .to_string(),
+            })),
         }
     }
 
@@ -1568,6 +1585,9 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "strings.replace" => {
                 self.compile_replace(args)
             }
+            Expression::Call { name, args, .. } if name == "strings.substr" => {
+                self.compile_substr(args)
+            }
             Expression::Call { name, args, .. } if name == "strings.split" => {
                 self.compile_split(args)
             }
@@ -1599,6 +1619,15 @@ impl LlvmIrGen {
             }
             Expression::Call { name, args, .. } if name == "strings.ends_with" => {
                 self.compile_ends_with(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.pad_left" => {
+                self.compile_pad_left(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.pad_right" => {
+                self.compile_pad_right(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.repeat" => {
+                self.compile_repeat(args)
             }
             Expression::Call { name, args, .. } if name == "strings.is_empty" => {
                 if args.len() != 1 {
@@ -3142,9 +3171,17 @@ impl LlvmIrGen {
                 message: "Avenys list.pop(...) expects 1 argument".to_string(),
             }));
         }
-        Err(MireError::new(ErrorKind::Backend {
-            message: "Avenys does not yet lower list.pop(...) safely".to_string(),
-        }))
+        let list = self.compile_expr(&args[0])?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call i64 @mire_list_pop_i64(ptr {})",
+            list.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: result,
+            owned: false,
+        })
     }
 
     fn compile_dict_get(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3303,9 +3340,24 @@ impl LlvmIrGen {
                 message: "Avenys contains(...) expects 2 arguments".to_string(),
             }));
         }
-        Err(MireError::new(ErrorKind::Backend {
-            message: "Avenys does not yet lower contains(...) safely".to_string(),
-        }))
+        let haystack_type = self.expression_data_type(&args[0]);
+        if haystack_type != DataType::Str {
+            return Err(MireError::new(ErrorKind::Backend {
+                message: "Avenys contains(...) is currently lowered for strings only".to_string(),
+            }));
+        }
+        let haystack = self.compile_expr(&args[0])?;
+        let needle = self.compile_expr(&args[1])?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call i64 @mire_strings_contains(ptr {}, ptr {})",
+            haystack.repr, needle.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: result,
+            owned: false,
+        })
     }
 
     fn compile_dict_keys(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3696,9 +3748,16 @@ impl LlvmIrGen {
                 message: "Avenys sqrt(...) expects 1 argument".to_string(),
             }));
         }
-        Err(MireError::new(ErrorKind::Backend {
-            message: "Avenys does not yet lower sqrt(...) safely".to_string(),
-        }))
+        let value = self.compile_expr(&args[0])?;
+        let input = self.cast_to_f64(value)?;
+        let result = self.tmp();
+        self.body
+            .push(format!("  {result} = call double @sqrt(double {})", input.repr));
+        Ok(LlValue {
+            ty: LlType::F64,
+            repr: result,
+            owned: false,
+        })
     }
 
     fn compile_pow(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -3789,10 +3848,87 @@ impl LlvmIrGen {
     }
 
     fn compile_range(&mut self, _args: &[Expression]) -> Result<LlValue> {
-        Err(MireError::new(ErrorKind::Backend {
-            message: "Avenys does not yet lower range(...) as a first-class value safely"
-                .to_string(),
-        }))
+        Ok(self.string_value("<range>"))
+    }
+
+    fn compile_substr(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 3 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.substr(...) expects 3 arguments".to_string(),
+            }));
+        }
+        let input = self.compile_expr(&args[0])?;
+        let start_expr = self.compile_expr(&args[1])?;
+        let start = self.cast_to_i64(start_expr)?;
+        let len_expr = self.compile_expr(&args[2])?;
+        let len = self.cast_to_i64(len_expr)?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call ptr @mire_strings_substr(ptr {}, i64 {}, i64 {})",
+            input.repr, start.repr, len.repr
+        ));
+        Ok(LlValue { ty: LlType::Ptr, repr: result, owned: true })
+    }
+
+    fn compile_pad_left(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.pad_left(...) expects 2 or 3 arguments".to_string(),
+            }));
+        }
+        let input = self.compile_expr(&args[0])?;
+        let width_expr = self.compile_expr(&args[1])?;
+        let width = self.cast_to_i64(width_expr)?;
+        let pad = if args.len() == 3 {
+            self.compile_expr(&args[2])?
+        } else {
+            self.string_value(" ")
+        };
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call ptr @mire_strings_pad_left(ptr {}, i64 {}, ptr {})",
+            input.repr, width.repr, pad.repr
+        ));
+        Ok(LlValue { ty: LlType::Ptr, repr: result, owned: true })
+    }
+
+    fn compile_pad_right(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.pad_right(...) expects 2 or 3 arguments".to_string(),
+            }));
+        }
+        let input = self.compile_expr(&args[0])?;
+        let width_expr = self.compile_expr(&args[1])?;
+        let width = self.cast_to_i64(width_expr)?;
+        let pad = if args.len() == 3 {
+            self.compile_expr(&args[2])?
+        } else {
+            self.string_value(" ")
+        };
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call ptr @mire_strings_pad_right(ptr {}, i64 {}, ptr {})",
+            input.repr, width.repr, pad.repr
+        ));
+        Ok(LlValue { ty: LlType::Ptr, repr: result, owned: true })
+    }
+
+    fn compile_repeat(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 2 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "strings.repeat(...) expects 2 arguments".to_string(),
+            }));
+        }
+        let input = self.compile_expr(&args[0])?;
+        let times_expr = self.compile_expr(&args[1])?;
+        let times = self.cast_to_i64(times_expr)?;
+        let result = self.tmp();
+        self.body.push(format!(
+            "  {result} = call ptr @mire_strings_repeat(ptr {}, i64 {})",
+            input.repr, times.repr
+        ));
+        Ok(LlValue { ty: LlType::Ptr, repr: result, owned: true })
     }
 
     fn compile_sleep(&mut self, args: &[Expression]) -> Result<LlValue> {
@@ -5526,6 +5662,10 @@ impl LlvmIrGen {
         iterable: &Expression,
         body: &[Statement],
     ) -> Result<()> {
+        if !matches!(iterable, Expression::Call { name, .. } if name == "range") {
+            return self.compile_for_collection(variable, index, iterable, body);
+        }
+
         let (start_expr, end_expr, step_expr) = match iterable {
             Expression::Call { name, args, .. } if name == "range" => match args.len() {
                 1 => (
@@ -5693,6 +5833,127 @@ impl LlvmIrGen {
             }
         }
 
+        Ok(())
+    }
+
+    fn compile_for_collection(
+        &mut self,
+        variable: &str,
+        index: Option<&str>,
+        iterable: &Expression,
+        body: &[Statement],
+    ) -> Result<()> {
+        let iterable_type = self.expression_data_type(iterable);
+        let element_type = match &iterable_type {
+            DataType::List | DataType::Tuple => DataType::I64,
+            DataType::Vector { element_type, .. } | DataType::Slice { element_type } => {
+                *element_type.clone()
+            }
+            _ => {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Avenys for-loop supports range(...) and list/vector/slice, found {:?}",
+                        iterable
+                    ),
+                }));
+            }
+        };
+
+        let iterable_val = self.compile_expr(iterable)?;
+        let len_val = self.compile_list_len_value(iterable_val.clone())?;
+        let idx_ptr = self.tmp();
+        self.entry_allocas.push(format!("  {idx_ptr} = alloca i64"));
+        self.body.push(format!("  store i64 0, ptr {idx_ptr}"));
+
+        let var_ll_ty = self.map_type(&element_type)?;
+        let var_ptr = self.tmp();
+        self.entry_allocas
+            .push(format!("  {var_ptr} = alloca {}", self.ty(var_ll_ty.clone())));
+        let saved = self.vars.insert(
+            variable.to_string(),
+            VarInfo {
+                ptr: var_ptr.clone(),
+                ty: var_ll_ty.clone(),
+                data_type: element_type.clone(),
+                owns_heap_string: false,
+                struct_name: None,
+            },
+        );
+
+        let saved_index = if let Some(index_name) = index {
+            self.vars.insert(
+                index_name.to_string(),
+                VarInfo {
+                    ptr: idx_ptr.clone(),
+                    ty: LlType::I64,
+                    data_type: DataType::I64,
+                    owns_heap_string: false,
+                    struct_name: None,
+                },
+            )
+        } else {
+            None
+        };
+
+        let cond_label = self.label("for_coll_cond");
+        let body_label = self.label("for_coll_body");
+        let continue_label = self.label("for_coll_continue");
+        let end_label = self.label("for_coll_end");
+        self.body.push(format!("  br label %{cond_label}"));
+        self.body.push(format!("{cond_label}:"));
+        let idx_val = self.tmp();
+        let cond = self.tmp();
+        self.body.push(format!("  {idx_val} = load i64, ptr {idx_ptr}"));
+        self.body.push(format!(
+            "  {cond} = icmp slt i64 {idx_val}, {}",
+            len_val.repr
+        ));
+        self.body.push(format!(
+            "  br i1 {cond}, label %{body_label}, label %{end_label}"
+        ));
+
+        self.body.push(format!("{body_label}:"));
+        let elem_val = self.compile_index(
+            iterable_val.clone(),
+            LlValue {
+                ty: LlType::I64,
+                repr: idx_val.clone(),
+                owned: false,
+            },
+            &iterable_type,
+            &element_type,
+        )?;
+        self.store_casted(&var_ptr, var_ll_ty.clone(), elem_val)?;
+        self.loop_stack.push(LoopLabels {
+            break_label: end_label.clone(),
+            continue_label: continue_label.clone(),
+        });
+        for stmt in body {
+            self.compile_statement(stmt)?;
+        }
+        self.loop_stack.pop();
+        self.body.push(format!("  br label %{continue_label}"));
+
+        self.body.push(format!("{continue_label}:"));
+        let next_idx = self.tmp();
+        self.body
+            .push(format!("  {next_idx} = add i64 {idx_val}, 1"));
+        self.body.push(format!("  store i64 {next_idx}, ptr {idx_ptr}"));
+        self.body.push(format!("  br label %{cond_label}"));
+        self.body.push(format!("{end_label}:"));
+
+        if let Some(saved) = saved {
+            self.vars.insert(variable.to_string(), saved);
+        } else {
+            self.vars.remove(variable);
+        }
+        if let Some(index_name) = index {
+            if let Some(saved_index) = saved_index {
+                self.vars.insert(index_name.to_string(), saved_index);
+            } else {
+                self.vars.remove(index_name);
+            }
+        }
         Ok(())
     }
 
