@@ -1182,7 +1182,7 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
     .expect("write project");
     fs::write(
         &source_path,
-        "import std\nextern lib \"c\" \"libc.so.6\"\nextern fn puts: (msg :*const i8) :i32 lib \"c\"\n\npub fn main: () {\n    asm {\n        mov rax, rbx\n        add rax, rcx\n    }\n    use dasu(\"ok\")\n}\n",
+        "import std\nextern lib \"c\" \"libc.so.6\"\nextern fn puts: (msg :*const i8) :i32 lib \"c\"\n\npub fn main: () {\n    asm {\n        nop\n        nop\n    }\n    use dasu(\"ok\")\n}\n",
     )
     .expect("write source");
 

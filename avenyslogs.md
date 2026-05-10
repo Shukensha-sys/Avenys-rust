@@ -4,6 +4,21 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.5.6 (Mayo 2026)
+
+### Test Compatibility
+- `tests/language_regressions.rs`:
+  - Se actualizó `extern_and_inline_asm_declarations_parse_and_compile` para usar asm válido con lowering real (`nop` / `nop`), evitando plantillas ambiguas rechazadas por LLVM/clang.
+
+### Versionado
+- Bump semver de parche: `2.5.5` -> `2.5.6`.
+
+### Validación
+- `cargo build` ✅
+- `cargo test extern_and_inline_asm_declarations_parse_and_compile` ✅
+
+---
+
 ## v2.5.5 (Mayo 2026)
 
 ### Runtime + Backend Stability

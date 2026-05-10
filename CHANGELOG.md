@@ -4,6 +4,14 @@ All notable changes to Mire are documented in this file.
 
 ## [Unreleased]
 
+## [2.5.6] - 2026-05-10
+
+### Fixed
+- Updated integration test `extern_and_inline_asm_declarations_parse_and_compile` to use assembly templates compatible with real LLVM inline asm emission.
+
+### Changed
+- Patch semver bump: `2.5.5` -> `2.5.6`.
+
 ## [2.5.5] - 2026-05-10
 
 ### Added

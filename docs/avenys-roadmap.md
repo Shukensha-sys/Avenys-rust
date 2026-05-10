@@ -1,6 +1,6 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
-### Version: v2.5.5
+### Version: v2.5.6
 
 ### Nuevo: std.mire
 - Archivo de Standard Library disponible: `std.mire`
@@ -91,7 +91,7 @@ if a || expensive_check() { }
   - `for` ya soporta `range(...)` y también `list/vector/slice`.
   - Pendiente principal: `range` como valor de primera clase completo (hoy con representación placeholder).
 
-### ✅ Backend Coverage (v2.5.5)
+### ✅ Backend Coverage (v2.5.6)
 - `compile_statement` ya no falla con catch-all para declaraciones frontend-only:
   `Type`, `Skill`, `Code`, `Class`, `Trait`, `Impl`, `Enum`, `AddLib`, `Module`, `Dmire*`, `Query`, `Find`, `Drop`, `Move`.
 - `compile_expr` ahora baja literales compuestos:
