@@ -30,6 +30,13 @@ All notable changes to Mire are documented in this file.
 - Type checker source context no longer relies on thread-local state; diagnostics now use explicit checker context.
 
 ### Fixed
+- Backend lowering coverage expanded in Avenys (`src/avens/mod.rs`):
+  - Frontend-only statements now handled explicitly as no-op in codegen instead of generic backend failure (`Type`, `Skill`, `Code`, `Class`, `Trait`, `Impl`, `Enum`, `AddLib`, `Module`, `Dmire*`, `Query`, `Find`, `Drop`, `Move`).
+  - Added lowering for literal compound forms in `compile_expr`: `Literal::List`, `Literal::Dict`, `Literal::Tuple`.
+  - Added qualified string builtin wiring: `strings.contains`, `strings.concat`, `strings.len`, `strings.strip`, `strings.ltrim`, `strings.rtrim`, `strings.is_empty`.
+  - Improved unknown function diagnostics from "does not yet lower call" to explicit "unknown function".
+  - Expanded `map_type` support for previously unmapped frontend types (`Function`, `Db`, `Datetime`, `Box`, `DynTrait`, `Result`) by mapping to pointer backend representation.
+  - Expanded runtime kind classification for struct/enum/function/result families.
 - Removed unused constant in incremental cache module (`src/incremental.rs`) to keep warnings clean.
 - Simplified enum top-level scan patterns in parser (`src/parser/mod.rs`) by collapsing nested match/if branches without behavior changes.
 - Reduced unnecessary `Program` cloning in loader parse/cache path (`src/loader.rs`).

@@ -4,6 +4,25 @@ Historial de cambios completados y resueltos. Este archivo documenta lo que ya f
 
 ---
 
+## v2.5.4 (Mayo 2026)
+
+### Backend Lowering Coverage
+- `src/avens/mod.rs`:
+  - Se removió el fallo genérico para múltiples `Statement` frontend-only y se manejan como no-op explícito en codegen.
+  - `compile_expr` ahora soporta lowering de `Literal::List`, `Literal::Dict`, `Literal::Tuple`.
+  - Se cablearon builtins faltantes del namespace `strings.*`:
+    - `strings.contains`, `strings.concat`, `strings.len`
+    - `strings.strip`, `strings.ltrim`, `strings.rtrim`, `strings.is_empty`
+  - Diagnóstico de llamadas desconocidas actualizado a mensaje explícito de función desconocida.
+  - `map_type` ampliado para `Function`, `Db`, `Datetime`, `Box`, `DynTrait`, `Result`.
+  - `runtime_kind_code` ampliado para familias `Struct/Enum/Function/Result`.
+
+### Validación
+- `cargo build` ✅
+- `cargo test` ✅ (87 unit + 80 integration)
+
+---
+
 ## v2.6.1 (Mayo 2026)
 
 ### std.mire - Standard Library

@@ -259,6 +259,15 @@ asm {
     add rax, rcx
 }
 
+### Backend Pass (v2.5.4) - Completado
+- ✅ Cobertura ampliada en lowering de backend (`src/avens/mod.rs`)
+  - Statements frontend-only ya no disparan error genérico en codegen.
+  - Literales `List/Dict/Tuple` ahora se compilan.
+  - Builtins `strings.*` adicionales cableados en backend.
+  - `map_type` ampliado para tipos antes no mapeados.
+- ⏳ Pendiente real (siguiente iteración):
+  - FFI real (ABI/link), asm real, `list.pop`, `contains` genérico, `sqrt`, `range` first-class, `for` no-range.
+
 ---
 
 ## 🦉 Owl (Gestor de Proyecto Mire) - Estado Mayo 2026

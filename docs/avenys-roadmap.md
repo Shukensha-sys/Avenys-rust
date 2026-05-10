@@ -1,6 +1,6 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
-### Version: v2.5.0
+### Version: v2.5.4
 
 ### Nuevo: std.mire
 - Archivo de Standard Library disponible: `std.mire`
@@ -84,6 +84,27 @@ if a || expensive_check() { }
 - (Actualizado 2026-05-04) Sin pendientes abiertos en:
   - Float arithmetic `x + 1.5` con variables `:f32/:f64`
   - Conservacion de tipo interno en `vec[vec[T]]` durante inferencia/asignacion/push
+- (Actualizado 2026-05-10) Pendientes de backend aún abiertos:
+  - Lowering real de FFI (`extern`) con ABI/link (hoy es no-op en codegen).
+  - Emisión real de `asm` inline (hoy es no-op en codegen).
+  - Lowering seguro pendiente en builtins: `list.pop`, `contains` genérico, `sqrt`, `range` como valor de primera clase.
+  - `for` sobre iterables generales (hoy restringido a `range(...)`).
+
+### ✅ Backend Coverage (v2.5.4)
+- `compile_statement` ya no falla con catch-all para declaraciones frontend-only:
+  `Type`, `Skill`, `Code`, `Class`, `Trait`, `Impl`, `Enum`, `AddLib`, `Module`, `Dmire*`, `Query`, `Find`, `Drop`, `Move`.
+- `compile_expr` ahora baja literales compuestos:
+  `Literal::List`, `Literal::Dict`, `Literal::Tuple`.
+- Builtins `strings.*` cableados adicionales:
+  - `strings.contains`
+  - `strings.concat`
+  - `strings.len`
+  - `strings.strip`
+  - `strings.ltrim`
+  - `strings.rtrim`
+  - `strings.is_empty`
+- `map_type` amplió soporte para tipos frontend antes no mapeados:
+  `Function`, `Db`, `Datetime`, `Box`, `DynTrait`, `Result`.
 
 ### ✅ Resuelto en v2.2.0:
 - Float literals: `3.14`, `3.14 :f64` ✅
