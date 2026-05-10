@@ -1233,9 +1233,23 @@ impl LlvmIrGen {
             }
             Statement::ExternLib { .. } | Statement::ExternFunction { .. } => Ok(()),
             Statement::Asm { .. } => Ok(()),
-            other => Err(MireError::new(ErrorKind::Backend {
-                message: format!("Avenys does not yet lower statement {:?}", other),
-            })),
+            // Frontend-only declarations/analysis statements: currently no direct IR emission.
+            Statement::Type { .. }
+            | Statement::Skill { .. }
+            | Statement::Code { .. }
+            | Statement::Class { .. }
+            | Statement::Trait { .. }
+            | Statement::Impl { .. }
+            | Statement::Enum { .. }
+            | Statement::AddLib { .. }
+            | Statement::Module { .. }
+            | Statement::DmireTable { .. }
+            | Statement::DmireColumn { .. }
+            | Statement::DmireDlist { .. }
+            | Statement::Query { .. }
+            | Statement::Find { .. }
+            | Statement::Drop { .. }
+            | Statement::Move { .. } => Ok(()),
         }
     }
 
@@ -1266,6 +1280,19 @@ impl LlvmIrGen {
                 owned: false,
             }),
             Expression::Literal(Literal::Str(value)) => Ok(self.string_value(value)),
+            Expression::Literal(Literal::List(elements)) => {
+                self.compile_list_literal(elements, &DataType::Unknown)
+            }
+            Expression::Literal(Literal::Dict(entries)) => {
+                let lowered_entries: Vec<(Expression, Expression)> = entries
+                    .iter()
+                    .map(|((key, value), _)| (key.clone(), value.clone()))
+                    .collect();
+                self.compile_dict_literal(&lowered_entries)
+            }
+            Expression::Literal(Literal::Tuple(elements)) => {
+                self.compile_list_literal(elements, &DataType::Unknown)
+            }
             Expression::Literal(Literal::None) => Ok(LlValue {
                 ty: LlType::I64,
                 repr: "0".to_string(),
@@ -1521,6 +1548,9 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "contains" => {
                 self.compile_contains(args)
             }
+            Expression::Call { name, args, .. } if name == "strings.contains" => {
+                self.compile_contains(args)
+            }
             Expression::Call { name, args, .. } if name == "dicts.keys" => {
                 self.compile_dict_keys(args)
             }
@@ -1531,6 +1561,10 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "int" => self.compile_int(args),
             Expression::Call { name, args, .. } if name == "bool" => self.compile_bool(args),
             Expression::Call { name, args, .. } if name == "concat" => self.compile_concat(args),
+            Expression::Call { name, args, .. } if name == "strings.concat" => {
+                self.compile_concat(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.len" => self.compile_len(args),
             Expression::Call { name, args, .. } if name == "strings.replace" => {
                 self.compile_replace(args)
             }
@@ -1549,6 +1583,11 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "strings.trim" => {
                 self.compile_trim(args)
             }
+            Expression::Call { name, args, .. }
+                if name == "strings.strip" || name == "strings.ltrim" || name == "strings.rtrim" =>
+            {
+                self.compile_trim(args)
+            }
             Expression::Call { name, args, .. } if name == "strings.to_string" => {
                 self.compile_to_string(args)
             }
@@ -1560,6 +1599,23 @@ impl LlvmIrGen {
             }
             Expression::Call { name, args, .. } if name == "strings.ends_with" => {
                 self.compile_ends_with(args)
+            }
+            Expression::Call { name, args, .. } if name == "strings.is_empty" => {
+                if args.len() != 1 {
+                    return Err(MireError::new(ErrorKind::Runtime {
+                        message: "Avenys strings.is_empty(...) expects 1 argument".to_string(),
+                    }));
+                }
+                let len = self.compile_len(args)?;
+                let len_i64 = self.cast_to_i64(len)?;
+                let out = self.tmp();
+                self.body
+                    .push(format!("  {out} = icmp eq i64 {}, 0", len_i64.repr));
+                Ok(LlValue {
+                    ty: LlType::I1,
+                    repr: out,
+                    owned: false,
+                })
             }
             Expression::Call { name, args, .. } if name == "abs" => self.compile_abs(args),
             Expression::Call { name, args, .. } if name == "sqrt" => self.compile_sqrt(args),
@@ -1678,7 +1734,7 @@ impl LlvmIrGen {
                     .cloned()
                     .ok_or_else(|| {
                         MireError::new(ErrorKind::Backend {
-                            message: format!("Avenys does not yet lower call '{}'", name),
+                            message: format!("Avenys unknown function '{}'", name),
                         })
                     })?;
 
@@ -1769,7 +1825,7 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
-                                message: format!("Avenys does not yet lower call '{}'", name),
+                                message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
 
@@ -1823,7 +1879,7 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
-                                message: format!("Avenys does not yet lower call '{}'", name),
+                                message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
 
@@ -1867,8 +1923,12 @@ impl LlvmIrGen {
                     })),
                 }
             }
-            other => Err(MireError::new(ErrorKind::Backend {
-                message: format!("Avenys does not yet lower expression {:?}", other),
+            Expression::NamedArg { value, .. } => self.compile_expr(value),
+            Expression::Tuple { elements, .. } => self.compile_list_literal(elements, &DataType::Unknown),
+            Expression::Box { value, .. } => self.compile_expr(value),
+            Expression::Closure { .. } => Err(MireError::new(ErrorKind::Backend {
+                message: "Standalone closure values are not callable without a consuming builtin"
+                    .to_string(),
             })),
         }
     }
@@ -5908,10 +5968,13 @@ impl LlvmIrGen {
             | DataType::EnumNamed(_)
             | DataType::Ref { .. }
             | DataType::RefMut { .. } => Ok(LlType::Ptr),
+            DataType::Function
+            | DataType::Db
+            | DataType::Datetime
+            | DataType::Box
+            | DataType::DynTrait { .. }
+            | DataType::Result { .. } => Ok(LlType::Ptr),
             DataType::None => Ok(LlType::I64),
-            other => Err(MireError::new(ErrorKind::Backend {
-                message: format!("Avenys does not yet lower type {:?}", other),
-            })),
         }
     }
 
@@ -5926,6 +5989,12 @@ impl LlvmIrGen {
             | DataType::Tuple
             | DataType::Array { .. }
             | DataType::Slice { .. } => 5,
+            DataType::Struct
+            | DataType::StructNamed(_)
+            | DataType::Enum
+            | DataType::EnumNamed(_) => 6,
+            DataType::Function | DataType::DynTrait { .. } => 7,
+            DataType::Result { .. } => 8,
             _ => 1,
         }
     }
