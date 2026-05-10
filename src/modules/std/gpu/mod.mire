@@ -1,0 +1,3 @@
+# std.gpu
+pub fn available: () :bool
+pub fn snapshot: () :map[str i64]

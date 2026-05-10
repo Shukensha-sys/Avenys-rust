@@ -1,0 +1,4 @@
+# std.term
+pub fn style: (s :str, style :str) :str
+pub fn hr: (char :str, len :i64) :str
+pub fn clear: () :str
