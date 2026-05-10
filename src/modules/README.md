@@ -8,4 +8,4 @@ Layout rule:
 
 Current migration:
 - `std` split into section files under `src/modules/std/`
-- root `std.mire` kept as aggregator for compatibility
+- `std` aggregator moved to `src/modules/std/mod.mire`

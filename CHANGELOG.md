@@ -4,6 +4,11 @@ All notable changes to Mire are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Moved std aggregator from project root `std.mire` to `src/modules/std/mod.mire`.
+- Local import resolver now resolves `./...` relative to the importing file directory (still constrained to project root).
+- `import std` now resolves through `src/modules/std/mod.mire` in the loader.
+
 ## [2.5.6] - 2026-05-10
 
 ### Fixed

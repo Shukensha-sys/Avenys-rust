@@ -2,8 +2,8 @@
 
 ### Version: v2.5.6
 
-### Nuevo: std.mire
-- Archivo de Standard Library disponible: `std.mire`
+### Nuevo: std modular
+- Archivo agregador de Standard Library disponible: `src/modules/std/mod.mire`
 - Contains todas las funciones estándar organizadas por categorías
 - Uso con imports de la forma:
   ```

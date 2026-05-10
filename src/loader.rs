@@ -132,6 +132,25 @@ impl ImportResolver {
             match statement {
                 Statement::Use {
                     path,
+                    alias: _,
+                    items,
+                    is_local: false,
+                } if path == "std" => {
+                    let imported_path = self.std_entry_path()?;
+                    let imported = if items.is_some() {
+                        self.load_selected_imports(&imported_path, items.as_deref())?
+                    } else {
+                        self.load_file(&imported_path)?
+                    };
+                    direct_dependencies.push(imported_path.clone());
+                    expanded.extend(select_imported_statements(
+                        &imported,
+                        items.as_deref(),
+                        &imported_path,
+                    )?);
+                }
+                Statement::Use {
+                    path,
                     alias,
                     items,
                     is_local,
@@ -204,7 +223,7 @@ impl ImportResolver {
         let mut local_imports = Vec::new();
         for statement in &program.statements {
             if let Statement::Use {
-                path,
+                path: import_path,
                 items,
                 is_local,
                 ..
@@ -212,8 +231,8 @@ impl ImportResolver {
                 && *is_local
             {
                 local_imports.push(CachedImport {
-                    raw_path: path.clone(),
-                    resolved_path: self.resolve_local_import(path)?,
+                    raw_path: import_path.clone(),
+                    resolved_path: self.resolve_local_import(import_path, path)?,
                     items: items.clone(),
                 });
             }
@@ -268,7 +287,7 @@ impl ImportResolver {
         select_imported_statements(&expanded, items, path)
     }
 
-    fn resolve_local_import(&self, raw_path: &str) -> Result<PathBuf> {
+    fn resolve_local_import(&self, raw_path: &str, importer_path: &Path) -> Result<PathBuf> {
         if !raw_path.starts_with("./") {
             return Err(MireError::new(ErrorKind::Runtime {
                 message: format!("Local import '{}' must start with './'", raw_path),
@@ -276,7 +295,10 @@ impl ImportResolver {
         }
 
         let relative = &raw_path[2..];
-        let mut candidate = self.project_root.join(relative);
+        let importer_dir = importer_path
+            .parent()
+            .unwrap_or(self.project_root.as_path());
+        let mut candidate = importer_dir.join(relative);
         if candidate.extension().is_none() {
             candidate.set_extension("mire");
         }
@@ -298,6 +320,19 @@ impl ImportResolver {
         }
 
         Ok(canonical)
+    }
+
+    fn std_entry_path(&self) -> Result<PathBuf> {
+        let candidate = self.project_root.join("src/modules/std/mod.mire");
+        candidate.canonicalize().map_err(|err| {
+            MireError::new(ErrorKind::Runtime {
+                message: format!(
+                    "Could not resolve std module entry '{}': {}",
+                    candidate.display(),
+                    err
+                ),
+            })
+        })
     }
 }
 
