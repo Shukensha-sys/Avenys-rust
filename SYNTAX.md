@@ -1,6 +1,6 @@
 # Mire Syntax Reference
 
-Complete language syntax derived from 188 test files and working examples.
+Complete language syntax derived from test files and working examples.
 
 ---
 
@@ -14,12 +14,16 @@ Complete language syntax derived from 188 test files and working examples.
 6. [Enums](#6-enums)
 7. [Collections](#7-collections)
 8. [Control Flow](#8-control-flow)
-9. [String Interpolation](#9-string-interpolation)
-10. [Imports](#10-imports)
-11. [Traits/Skills](#11-traitsskills)
-12. [Operators](#12-operators)
-13. [Ownership](#13-ownership)
-14. [Types](#14-types)
+9. [Unsafe, Asm, Extern](#9-unsafe-asm-extern)
+10. [Move, Drop](#10-move-drop)
+11. [Pipeline Operator](#11-pipeline-operator)
+12. [String Interpolation](#12-string-interpolation)
+13. [Imports](#13-imports)
+14. [Traits/Skills](#14-traitsskills)
+15. [Operators](#15-operators)
+16. [Ownership and References](#16-ownership-and-references)
+17. [Types](#17-types)
+18. [Stability](#18-stability)
 
 ---
 
@@ -42,6 +46,7 @@ set age = 25 :i64
 set name = "mire" :str
 set ready = true :bool
 set total = 0 :i64 mut
+set immutable = "constant" :str const
 set counts = [] :vec![i64] mut
 set counts = lists.push(counts 4)
 ```
@@ -49,8 +54,20 @@ set counts = lists.push(counts 4)
 Rules:
 - `set` declares a binding
 - Type annotations use `name :Type`
-- `mut` enables reassignment
-- Commas optional in many positions
+- `mut` enables reassignment of the binding
+- `const` enforces immutability (compile-time constant)
+- Commas are optional in most positions
+
+### Compound Assignment
+
+```mire
+set x = 5 :i64 mut
+set x += 3    # x = x + 3
+set x -= 2    # x = x - 2
+set x *= 4    # x = x * 4
+set x /= 2    # x = x / 2
+set x %= 3    # x = x % 3
+```
 
 ---
 
@@ -72,6 +89,13 @@ pub fn main: () {
 
 Parameter and return types use `name :Type` syntax.
 Visibility is private by default; use `pub` only for exported APIs.
+
+### Closures
+
+```mire
+set double = (x :i64) => x * 2
+set result = lists.map((x) => x * 2, [1 2 3])
+```
 
 ---
 
@@ -99,29 +123,27 @@ struct Counter {
 }
 ```
 
-Construction with named fields:
+### Construction
 
 ```mire
 set p = (Point x: 1, y: 2)
 set b = (Box width: 10, height: 20)
 ```
 
-Field access:
+### Field Access and Mutation
 
 ```mire
 use dasu(p.x)
 set p.x = 5
-```
 
-Direct mutation inside `impl` works when the field is declared with `mut`:
-
-```mire
 impl Counter {
     fn increment: (self) {
         set self.value = self.value + self.step
     }
 }
 ```
+
+Struct fields declared with `mut` can be reassigned through `self` inside impl methods.
 
 ---
 
@@ -135,11 +157,7 @@ impl Point {
         return self.x + self.y
     }
 }
-```
 
-Call via instance:
-
-```mire
 use dasu(p.sum())
 ```
 
@@ -151,11 +169,7 @@ impl Point {
         return (Point x: x, y: y)
     }
 }
-```
 
-Call via type:
-
-```mire
 set p = Point::new(1 2)
 ```
 
@@ -164,6 +178,16 @@ set p = Point::new(1 2)
 - `Enum.Variant(...)` for enum construction
 - `Type::method(...)` for associated/static methods
 - `value.method(...)` for instance methods
+
+### Skill Implementation
+
+```mire
+impl Show for Box {
+    fn show: (self) :str {
+        return "Box"
+    }
+}
+```
 
 ---
 
@@ -181,25 +205,14 @@ enum Maybe {
     Some(value :i64)
 }
 
-enum Result {
-    Ok(value :i64)
-    Err(message :str)
-}
-
 enum Status {
     Ok
     Error
     Loading(progress :i64, total :i64)
 }
-
-enum Token {
-    Num(value :i64)
-    Str(text :str)
-    Op(name :str)
-}
 ```
 
-Construction:
+### Construction
 
 ```mire
 set c = Color.Red
@@ -208,7 +221,7 @@ set r = Result.Ok(42)
 set s = Status.Loading(progress: 75, total: 100)
 ```
 
-Match patterns:
+### Match Patterns
 
 ```mire
 match c {
@@ -235,18 +248,11 @@ set first = arr at 0
 set arr at 1 = 99
 ```
 
-También funciona cuando el array vive dentro de una struct:
-
-```mire
-set self.data at idx = val
-```
-
 ### Vectors (dynamic)
 
 ```mire
 set counts = [] :vec![i64] mut
 set counts = lists.push(counts 4)
-set counts = lists.push(counts 7)
 set first = lists.get(counts 0)
 ```
 
@@ -256,8 +262,8 @@ set first = lists.get(counts 0)
 set m = {a: 1, b: 2} :map[str i64]
 ```
 
-Typed map bindings expect actual map/dict values. List/vector values are not accepted as map fallbacks during type checking.
-Bare undeclared identifiers in dict keys are coerced to string keys only inside dict literals, so `{a: 1}` means `{"a": 1}`.
+Bare undeclared identifiers in dict keys are coerced to string keys inside dict literals:
+`{a: 1}` means `{"a": 1}`.
 
 ### List HOF
 
@@ -267,16 +273,19 @@ set doubled = lists.map((x) => x * 2, [1 2 3])
 set filtered = lists.filter((x) => x > 1, [1 2 3])
 ```
 
-Current calling convention:
-- `lists.fold(acc, closure, list)`
-- `lists.map(closure, list)`
-- `lists.filter(closure, list)`
+Calling convention: `lists.fold(acc, closure, list)`, `lists.map(closure, list)`, `lists.filter(closure, list)`.
+
+### Slices
+
+```mire
+set slice = lists.slice(list, 1, 3)
+```
 
 ---
 
 ## 8. Control Flow
 
-### If/Else
+### If/Elif/Else
 
 ```mire
 if age >= 18 {
@@ -322,7 +331,7 @@ do {
 } while count != 10
 ```
 
-### Match
+### Match (Statement)
 
 ```mire
 match code {
@@ -336,9 +345,119 @@ match x < 5 :bool {
 }
 ```
 
+### Break / Continue
+
+```mire
+for i in range(10) {
+    if i == 5 { break }
+    if i % 2 == 0 { continue }
+}
+```
+
+### Find
+
+```mire
+find item in collection {
+    use dasu(item)
+}
+```
+
 ---
 
-## 9. String Interpolation
+## 9. Unsafe, Asm, Extern
+
+### Unsafe Blocks
+
+Bypasses ownership/borrow checking for the enclosed block:
+
+```mire
+unsafe {
+    set x = 2 :i64
+    set raw_ptr = &x
+}
+```
+
+The body is compiled normally but without borrow checker restrictions.
+
+### Inline Assembly
+
+```mire
+asm {
+    mov rax, rbx
+    add rax, rcx
+}
+```
+
+The parser accepts `asm` blocks. Backend emits LLVM `asm sideeffect` with operands.
+
+### Extern Libraries
+
+```mire
+extern lib "c" "libc.so.6"
+```
+
+Registers a library alias and path for FFI linking.
+
+### Extern Functions
+
+```mire
+extern fn puts: (msg :*const i8) :i32 lib "c"
+```
+
+- Registers a function signature for type checking without a Mire body.
+- Pointer types (`*const T`, `*mut T`) are modeled as `i64` in the frontend.
+- Backend emits LLVM `declare` for the function signature.
+
+---
+
+## 10. Move, Drop
+
+### Move
+
+Transfers ownership of a value to a binding:
+
+```mire
+set source = "hello" :str
+set target = move source
+# source is now invalid
+```
+
+### Drop
+
+Explicitly drops a value, freeing its resources:
+
+```mire
+set s = "world" :str
+drop s
+# s is no longer usable
+```
+
+---
+
+## 11. Pipeline Operator
+
+The `|>` operator pipes a value through a function call. `_` is the placeholder for the piped value:
+
+```mire
+set doubled = [1 2 3]
+    |> lists.map((x) => x * 2)
+    |> lists.filter((x) => x > 2)
+
+# Same as:
+set step1 = lists.map((x) => x * 2, [1 2 3])
+set doubled = lists.filter((x) => x > 2, step1)
+```
+
+Safe pipeline `|?>` propagates errors:
+
+```mire
+set result = read_file("data.txt")
+    |?> parse_json
+```
+
+---
+
+## 12. String Interpolation
 
 ```mire
 use dasu("Hello {name}")
@@ -346,11 +465,11 @@ use dasu("Count: {count}")
 use dasu("Result: {add(5 3)}")
 ```
 
-Variables, function calls, and method calls inside `{}`.
+Variables, function calls, and method calls can appear inside `{}`.
 
 ---
 
-## 10. Imports
+## 13. Imports
 
 ```mire
 import std
@@ -361,27 +480,15 @@ import ./utils
 import strings: (split replace trim)
 ```
 
-Specific imports:
+Specific imports select only named items from a module:
 
 ```mire
 import strings: (split replace trim)
 ```
 
-### Extern / FFI
-
-```mire
-extern lib "c" "libc.so.6"
-extern fn puts: (msg :*const i8) :i32 lib "c"
-```
-
-Notas:
-- `extern lib` registra alias y ruta de librería.
-- `extern fn` registra firma para type checking.
-- Tipos puntero FFI (`*const T`, `*mut T`) se modelan como escalar `i64` en el frontend actual.
-
 ---
 
-## 11. Traits/Skills
+## 14. Traits/Skills
 
 ```mire
 pub skill Show {
@@ -401,7 +508,7 @@ impl Show for Box {
 
 ---
 
-## 12. Operators
+## 15. Operators
 
 ### Arithmetic
 
@@ -410,6 +517,7 @@ set sum = a + b
 set diff = a - b
 set prod = a * b
 set quot = a / b
+set rem = a % b
 ```
 
 ### Comparison
@@ -418,6 +526,9 @@ set quot = a / b
 if x >= 18 { }
 if x == 10 { }
 if x != 5 { }
+if x < 0 { }
+if y > 0 { }
+if z <= 100 { }
 ```
 
 ### Logical
@@ -431,206 +542,156 @@ if !flag { }
 ### Bitwise
 
 ```mire
-set result = a & b
-set result = a | b
-set result = a << b
-set result = a >> b
+set result = a & b    # AND
+set result = a | b    # OR
+set result = a ^ b    # XOR
+set result = a << b   # Shift left
+set result = a >> b   # Shift right
 ```
 
-### Inline Assembly
+### Index Access
 
 ```mire
-asm {
-    mov rax, rbx
-    add rax, rcx
-}
+set first = arr at 0
+set arr at 1 = 99
 ```
-
-Nota:
-- El parser acepta bloques `asm` y los conserva en AST.
-- El lowering Avenys actual no emite IR específico para `asm` (no-op).
 
 ---
 
-## 13. Ownership
+## 16. Ownership and References
+
+### References
 
 ```mire
 set x = 1 :i64
-set shared = &x
-set copied = *shared
+set shared = &x               # shared reference
+set copied = *shared          # dereference
 
 set m = 10 :i64 mut
-set rm = &m
-
-set n = 10 :i64
-set rn = &n
+set rm = &m                   # mutable reference (inferred from mut binding)
 
 fn read_ref: (value :&i64) :i64 {
     return *value
 }
 
 set y = read_ref(shared)
-set owned = box[i64]
 ```
 
-The ownership checker enforces:
-- No use-after-move
-- No mutation while shared borrow exists
-- No multiple mutable references
-- No return of local references
+### Type Rules
 
-Type checking also treats references strictly:
 - `&T` can flow into plain `T` through auto-deref
-- `&mut T` can satisfy `&T`
-- `&T` does not satisfy `&mut T`
+- `&mut T` can satisfy `&T` (reborrow)
+- `&T` does NOT satisfy `&mut T`
 - `&x` derives mutability from the original binding (`mut` => mutable ref, otherwise shared)
 - `&mut x` is rejected when `x` is immutable
 
-`unsafe` blocks bypass checks:
+### Ownership Checker Rules
+
+- No use-after-move
+- No mutation while a shared borrow exists
+- No multiple mutable references
+- No return of local references
+
+### Box (Heap Allocation)
 
 ```mire
-unsafe {
-    set x = 2
-}
+set owned = box[i64]
 ```
 
 ---
 
-## 14. Types
+## 17. Types
 
 ### Primitive Types
 
-| Type | Description |
-|------|-------------|
-| `i8`, `i16`, `i32`, `i64` | Signed integers |
-| `u8`, `u16`, `u32`, `u64` | Unsigned integers |
-| `f32`, `f64` | Floating point |
-| `char` | Unicode scalar (`u32`) |
-| `str` | String |
-| `bool` | Boolean |
-| `none` | Unit type |
+| Type | Description | Literal Example |
+|------|-------------|-----------------|
+| `i8`, `i16`, `i32`, `i64` | Signed integers | `42 :i64` |
+| `u8`, `u16`, `u32`, `u64` | Unsigned integers | `42 :u32` |
+| `f32`, `f64` | Floating point | `3.14 :f64` |
+| `char` | Unicode scalar (`u32`) | `'a' :char`, `'\n' :char` |
+| `str` | String (heap-allocated) | `"hello" :str` |
+| `bool` | Boolean | `true`, `false` |
+| `none` | Unit / void type | — |
 
 ### Literal Forms
 
 ```mire
-set i = 42
-set f = 3.14
-set s = "hello"
-set c = 'a' :char
-set nl = '\n' :char
-set bin = 0b1010 :i64
-set oct = 0o12 :i64
-set hex = 0xFF :i64
-set raw1 = r"hello"
-set raw2 = r#"hello "world""#
-set raw3 = r##"hello "world" with ##"##
+set i = 42              # inferred i64
+set f = 3.14            # inferred f64
+set s = "hello" :str    # explicit str
+set c = 'a' :char       # char literal
+set nl = '\n' :char     # escaped char
+set bin = 0b1010 :i64   # binary literal
+set oct = 0o12 :i64     # octal literal
+set hex = 0xFF :i64     # hex literal
+set raw1 = r"hello"                     # raw string (no escapes)
+set raw2 = r#"hello "world""#           # raw with delimiter
+set raw3 = r##"hello "world" with ##"## # raw with double delimiter
 ```
+
+**Important:** String literals must always be annotated with `:str` when the type cannot be inferred. `:char` is only for single-character literals (`'a'`, `'\n'`). Assigning `"text" :char` is a type error.
+
+### Reference Types
+
+| Type | Description |
+|------|-------------|
+| `&T` | Shared reference |
+| `&mut T` | Mutable reference |
 
 ### Collection Types
 
-| Type | Syntax |
-|------|--------|
-| Array | `arr[T N]` |
-| Vector | `vec![T]` |
-| Map | `map[K V]` |
+| Type | Syntax | Example |
+|------|--------|---------|
+| Array | `arr[T N]` | `arr[i64 10]` |
+| Vector | `vec![T]` | `vec![i64]` |
+| Map | `map[K V]` | `map[str i64]` |
+| Slice | `slice[T]` | `slice[i64]` |
+
+### Special Types
+
+| Type | Description |
+|------|-------------|
+| `result[T]` | Operation that succeeds with `T` or fails with error string |
+| `box[T]` | Heap-allocated value |
+| `datetime` | Date/time value |
+| `db` | Database connection handle |
 
 ### Custom Types
 
 ```mire
-set user = "mire" :str
 set p = (Point x: 1, y: 2) :Point
 ```
 
 ---
 
-## Examples from Working Tests
+## 18. Stability
 
-### Arithmetic
-
-```mire
-set a = 5 :i64
-set b = 3 :i64
-set sum = a + b
-set prod = a * b
-```
-
-### Struct with Impl
-
-```mire
-struct Point {
-    x :i64
-    y :i64
-}
-
-impl Point {
-    fn new: (x :i64, y :i64) :Point {
-        return (Point x: x, y: y)
-    }
-
-    fn sum: (self) :i64 {
-        return self.x + self.y
-    }
-}
-
-set p = Point::new(1 2)
-set s = p.sum()
-```
-
-### Enum with Match
-
-```mire
-enum Maybe {
-    None
-    Some(value :i64)
-}
-
-set m = Maybe.Some(value: 42)
-
-match m {
-    Maybe.None { use dasu("nothing") }
-    Maybe.Some(v) { use dasu(v) }
-}
-```
-
-### Vector Operations
-
-```mire
-set counts = [] :vec![i64] mut
-set counts = lists.push(counts 4)
-set counts = lists.push(counts 7)
-set counts = lists.push(counts 9)
-set total = math.sum(counts)
-```
-
----
-
-## Notes
-
-- Commas are optional in many positions
-- The `name :Type` style is consistent throughout
-- Empty collections with type annotation:
-
-```mire
-set arr = [] :vec![i64] mut
-set m = {} :map[str i64] mut
-```
-
----
-
-## Stability
-
-**Stable in :**
-- `struct`, field access
+**Stable:**
+- `struct`, field access, construction
 - `impl` with explicit `self`
 - `Type::method(...)` with `::`
-- `enum` with named variants
+- `enum` with named variants and payloads
 - Collections with type annotations
-- Ownership checks
+- Ownership/borrow checking
+- `match` statement
+- `if`/`elif`/`else`
+- `for`, `while`, `do-while`
+- Compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`)
+- Pipeline (`|>`, `|?>`)
+- `unsafe` blocks
+- `extern lib` / `extern fn`
+- `move` / `drop` statements
+- Inline assembly (`asm`)
+- String interpolation
+- Character literals (`char`)
+- Prefixed integer literals (`0b`, `0o`, `0x`)
+- Raw strings (`r"..."`, `r#"..."#`)
 
 **Still improving:**
-- Field-level constructor validation
 - Advanced trait conformance
-- Pipelines (`=>`)
+- FFI ABI stability
+- Field-level constructor validation
 
 ## Prototype Validation
 
