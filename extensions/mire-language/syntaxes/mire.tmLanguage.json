@@ -1,19 +1,69 @@
 {
   "name": "Mire",
+  "scopeName": "source.mire",
   "patterns": [
-    {
-      "include": "#keyword"
-    }
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#builtins" },
+    { "include": "#functions" },
+    { "include": "#operators" },
+    { "include": "#constants" }
   ],
   "repository": {
-    "keyword": {
+    "comments": {
       "patterns": [
-        {
-          "name": "keyword.mire",
-          "match": "\\b(if|elif|else|while|for|do|match|return|fn|pub|struct|enum|impl|skill|set|mut|import|export|extern|unsafe|asm|true|false|none)\\b"
-        }
+        { "name": "comment.line.double-slash.mire", "match": "//.*$" },
+        { "name": "comment.block.mire", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.mire", "begin": "\"", "end": "\"", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.mire" }] },
+        { "name": "string.quoted.single.mire", "begin": "'", "end": "'", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.mire" }] },
+        { "name": "string.raw.mire", "match": "r#+\"[\\s\\S]*?\"#+|r\"[^\"]*\"" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.mire", "match": "\\b0b[01_]+\\b|\\b0o[0-7_]+\\b|\\b0x[0-9A-Fa-f_]+\\b|\\b\\d+(?:\\.\\d+)?\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.mire", "match": "\\b(if|elif|else|while|for|do|match|return|break|continue)\\b" },
+        { "name": "keyword.declaration.mire", "match": "\\b(fn|pub|struct|enum|impl|skill|set|mut|import|export|extern|unsafe|asm|use)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "storage.type.primitive.mire", "match": "\\b(i64|i32|i16|i8|u64|u32|u16|u8|f64|f32|bool|char|str|none)\\b" },
+        { "name": "storage.type.collection.mire", "match": "\\b(vec|map|arr|slice|tuple|dict)\\b" }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        { "name": "support.function.builtin.mire", "match": "\\b(dasu|ireru|len|range|type|int|float|bool|str)\\b" },
+        { "name": "support.class.module.mire", "match": "\\b(std|math|strings|lists|dicts|time|mem|cpu|gpu|fs|env|proc)\\b" }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        { "name": "entity.name.function.mire", "match": "\\b(?:pub\\s+)?fn\\s+([A-Za-z_][A-Za-z0-9_]*)\\b" },
+        { "name": "entity.name.function.call.mire", "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.mire", "match": "\\+|\\-|\\*|/|%|==|!=|<=|>=|<|>|&&|\\|\\||!|\\^|=|=>|\\|>" }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.mire", "match": "\\b(true|false|none)\\b" }
       ]
     }
-  },
-  "scopeName": "source.mire"
+  }
 }

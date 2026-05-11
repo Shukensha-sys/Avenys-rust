@@ -1,8 +1,8 @@
 {
   "name": "mire-language",
   "displayName": "Mire Language",
-  "description": "Complete language support for Mire - compiled, statically typed programming language with ownership-oriented memory safety",
-  "version": "1.0.0",
+  "description": "Advanced language support for Mire and Owl projects",
+  "version": "1.1.0",
   "publisher": "mire",
   "author": "Mire Team",
   "license": "GPL-3.0-or-later",
@@ -18,13 +18,19 @@
   ],
   "keywords": [
     "mire",
+    "owl",
     "language",
     "compiler",
     "ownership"
   ],
   "activationEvents": [
     "onLanguage:mire",
-    "onCommand:mire.runFile"
+    "workspaceContains:**/owl.toml",
+    "onCommand:mire.runFile",
+    "onCommand:mire.checkFile",
+    "onCommand:mire.buildProject",
+    "onCommand:mire.owlRun",
+    "onCommand:mire.owlBuild"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -63,30 +69,30 @@
         "mire.runtimePath": {
           "type": "string",
           "default": "mire",
-          "description": "Path to Mire runtime binary"
+          "description": "Path to Mire binary"
+        },
+        "mire.owlPath": {
+          "type": "string",
+          "default": "owl",
+          "description": "Path to Owl binary"
         },
         "mire.autoRun": {
           "type": "boolean",
           "default": false,
           "description": "Automatically run .mire files on save"
+        },
+        "mire.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable fast in-editor diagnostics"
+        },
+        "mire.useCompilerCheck": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run `mire check` to enrich diagnostics (slower)"
         }
       }
     },
-    "tasks": [
-      {
-        "type": "mire",
-        "label": "Run Mire File",
-        "command": "${config:mire.runtimePath}",
-        "args": [
-          "${file}"
-        ],
-        "problemMatcher": [],
-        "group": {
-          "kind": "test",
-          "isDefault": true
-        }
-      }
-    ],
     "commands": [
       {
         "command": "mire.runFile",
@@ -94,11 +100,38 @@
         "category": "Mire"
       },
       {
+        "command": "mire.checkFile",
+        "title": "Mire: Check File",
+        "category": "Mire"
+      },
+      {
         "command": "mire.buildProject",
         "title": "Mire: Build Project",
         "category": "Mire"
+      },
+      {
+        "command": "mire.owlRun",
+        "title": "Owl: Run Project",
+        "category": "Owl"
+      },
+      {
+        "command": "mire.owlBuild",
+        "title": "Owl: Build Project",
+        "category": "Owl"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "mire.owlRun",
+          "when": "mire.isOwlProject"
+        },
+        {
+          "command": "mire.owlBuild",
+          "when": "mire.isOwlProject"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
