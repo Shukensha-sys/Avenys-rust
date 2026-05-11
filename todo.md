@@ -10,11 +10,12 @@
 - Fingerprint de cache incremental ampliado con nivel de optimización.
 - Optimización de backend conectada de forma consistente en `opt` + `clang`.
 
-## Siguiente entrada — Owl (pendiente de confirmación previa)
+## Completado — Owl (v0.7.0)
 
-- Optimizar Owl e implementar integración nativa con el compilador.
-- Mantener ecosistema ultra optimizado entre Owl y Avenys.
-- Rediseñar comandos Owl con UX simplificada y flujos fuera de proyecto (`.cache` + `bin/`).
+- Optimización de Owl y refactor de CLI principal.
+- Integración operativa con el compilador vía perfiles/opt-level.
+- Flujo fuera de proyecto con `.cache` y `bin`.
+- Base lista para siguiente fase de integración nativa profunda Owl/Avenys.
 
 ## Referencias
 

@@ -8,8 +8,10 @@
 - Pipeline de optimización de IR y `clang` sincronizado con `OptLevel`.
 - Fingerprint incremental de build extendido para incluir nivel de optimización.
 
-## Siguiente bloque (Owl)
+## Completado en Owl (v0.7.0)
 
-- Optimizar Owl e implementar integración nativa con Avenys.
-- Mantener ecosistema ultra optimizado entre Owl y compilador.
-- Rediseñar UX/flujo de comandos de Owl según especificación del proyecto.
+- CLI rediseñada con banner+help por defecto.
+- Flujo `new/run/build/test/install/remove/purge/update/clean/info`.
+- Soporte `run/build` en modo proyecto y sin proyecto (`.cache` + `bin`).
+- Flags de perfil y optimización (`--debug`, `--release`, `-O`).
+- Fast-path de ejecución por hash para reducir compilaciones repetidas.
