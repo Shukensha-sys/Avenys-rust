@@ -8,7 +8,7 @@ pub mod parser;
 
 pub use avens::{
     BuildMode, BuildOptions, BuildResult, MireCacheConfig, MireLock, MireManifest, MireProject,
-    compile_file_with_avenys, default_output_dir, find_project_root, load_project_manifest,
+    OptLevel, compile_file_with_avenys, default_output_dir, find_project_root, load_project_manifest,
     project_lock_path, project_manifest_path, write_lock_file,
 };
 pub use compiler::{

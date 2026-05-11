@@ -1,4 +1,4 @@
-use crate::avens::{BuildMode, find_project_root};
+use crate::avens::{BuildMode, OptLevel, find_project_root};
 use crate::error::mss::MssError;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::parser::Program;
@@ -132,6 +132,7 @@ pub struct LoadedProgram {
 pub struct BuildCacheEntry {
     pub fingerprint: u64,
     pub mode: BuildMode,
+    pub opt_level: OptLevel,
     pub emit_binary: bool,
     pub persist_ir: bool,
     pub binary_path: PathBuf,
@@ -1010,12 +1011,14 @@ pub fn build_fingerprint(
     source_path: &Path,
     files: &HashMap<PathBuf, LoadedFile>,
     mode: BuildMode,
+    opt_level: OptLevel,
     emit_binary: bool,
     runtime_support: &str,
 ) -> u64 {
     let mut hasher = FxHasher::new();
     normalize_path_key(source_path).hash(&mut hasher);
     mode.hash(&mut hasher);
+    opt_level.hash(&mut hasher);
     emit_binary.hash(&mut hasher);
     env!("CARGO_PKG_VERSION").hash(&mut hasher);
     runtime_support.hash(&mut hasher);
@@ -1293,6 +1296,17 @@ fn write_build_entry(out: &mut Vec<u8>, entry: &BuildCacheEntry) -> Result<()> {
             BuildMode::Release => 1,
         },
     );
+    write_u8(
+        out,
+        match entry.opt_level {
+            OptLevel::O0 => 0,
+            OptLevel::O1 => 1,
+            OptLevel::O2 => 2,
+            OptLevel::O3 => 3,
+            OptLevel::Os => 4,
+            OptLevel::Oz => 5,
+        },
+    );
     write_bool(out, entry.emit_binary);
     write_bool(out, entry.persist_ir);
     write_path(out, &entry.binary_path)?;
@@ -1436,6 +1450,15 @@ impl<'a> Cursor<'a> {
             1 => BuildMode::Release,
             _ => return Err(cache_runtime_err("Invalid build mode in cache")),
         };
+        let opt_level = match self.read_u8()? {
+            0 => OptLevel::O0,
+            1 => OptLevel::O1,
+            2 => OptLevel::O2,
+            3 => OptLevel::O3,
+            4 => OptLevel::Os,
+            5 => OptLevel::Oz,
+            _ => return Err(cache_runtime_err("Invalid opt level in cache")),
+        };
         let emit_binary = self.read_bool()?;
         let persist_ir = self.read_bool()?;
         let binary_path = self.read_path()?;
@@ -1444,6 +1467,7 @@ impl<'a> Cursor<'a> {
         Ok(BuildCacheEntry {
             fingerprint,
             mode,
+            opt_level,
             emit_binary,
             persist_ir,
             binary_path,

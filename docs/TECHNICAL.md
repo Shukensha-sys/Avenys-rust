@@ -180,4 +180,11 @@ fn string_to_upper_unicode() {
 
 ---
 
+## 7. Perfilado y Optimizaciones (v2.7.0)
+
+- El backend define `OptLevel` con niveles `O0`, `O1`, `O2`, `O3`, `Os`, `Oz`.
+- La CLI expone `-O/--opt-level` y perfiles `--debug/--release`.
+- El pipeline aplica el mismo nivel tanto en `opt` (IR) como en `clang` (enlace binario), evitando desalineaciones.
+- El fingerprint incremental de build ahora incluye `opt_level`, evitando reuso incorrecto entre builds con distinto nivel.
+
 Última actualización: Mayo 2026

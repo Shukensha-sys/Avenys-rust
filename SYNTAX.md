@@ -667,6 +667,8 @@ set p = (Point x: 1, y: 2) :Point
 
 ## 18. Stability
 
+Compatibility note (v2.7.0): no syntax changes were introduced in this release.
+
 **Stable:**
 - `struct`, field access, construction
 - `impl` with explicit `self`

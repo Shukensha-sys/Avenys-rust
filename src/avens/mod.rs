@@ -150,9 +150,45 @@ pub enum BuildMode {
     Release,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum OptLevel {
+    O0,
+    O1,
+    O2,
+    O3,
+    Os,
+    Oz,
+}
+
+impl OptLevel {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "0" | "O0" | "o0" => Some(Self::O0),
+            "1" | "O1" | "o1" => Some(Self::O1),
+            "2" | "O2" | "o2" => Some(Self::O2),
+            "3" | "O3" | "o3" => Some(Self::O3),
+            "s" | "S" | "os" | "Os" => Some(Self::Os),
+            "z" | "Z" | "oz" | "Oz" => Some(Self::Oz),
+            _ => None,
+        }
+    }
+
+    pub fn as_opt_flag(self) -> &'static str {
+        match self {
+            Self::O0 => "-O0",
+            Self::O1 => "-O1",
+            Self::O2 => "-O2",
+            Self::O3 => "-O3",
+            Self::Os => "-Os",
+            Self::Oz => "-Oz",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BuildOptions {
     pub mode: BuildMode,
+    pub opt_level: OptLevel,
     pub debug_dump: bool,
     pub output: Option<PathBuf>,
     pub emit_binary: bool,
@@ -209,6 +245,7 @@ pub struct MireLockProject {
 pub struct MireLockBuild {
     pub llvm_version: String,
     pub profile: String,
+    pub opt_level: String,
 }
 
 pub fn load_project_manifest(cwd: &Path) -> Result<Option<MireManifest>> {
@@ -256,6 +293,10 @@ pub fn write_lock_file(cwd: &Path, manifest: &MireManifest, mode: BuildMode) -> 
             profile: match mode {
                 BuildMode::Debug => "debug".to_string(),
                 BuildMode::Release => "release".to_string(),
+            },
+            opt_level: match mode {
+                BuildMode::Debug => "0".to_string(),
+                BuildMode::Release => "3".to_string(),
             },
         },
     };
@@ -328,6 +369,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         source_path,
         &loaded.files,
         options.mode,
+        options.opt_level,
         options.emit_binary,
         &runtime_support_source,
     );
@@ -366,7 +408,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             binary_path,
             ir_path,
             optimized_ir_path,
-            used_optimizations: matches!(options.mode, BuildMode::Release),
+            used_optimizations: !matches!(options.opt_level, OptLevel::O0),
         });
     }
     cache.record_build_miss();
@@ -468,10 +510,10 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         })?;
     }
 
-    let final_ir = if matches!(options.mode, BuildMode::Release) {
-        optimize_ir(&ir)?
-    } else {
+    let final_ir = if matches!(options.opt_level, OptLevel::O0) {
         ir
+    } else {
+        optimize_ir(&ir, options.opt_level)?
     };
 
     if let Some(path) = &optimized_ir_path {
@@ -483,7 +525,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     }
 
     if options.emit_binary {
-        compile_binary_from_ir(&final_ir, &runtime_support, &binary_path, options.mode)?;
+        compile_binary_from_ir(&final_ir, &runtime_support, &binary_path, options.opt_level)?;
     }
 
     cache.store_build(
@@ -491,6 +533,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         BuildCacheEntry {
             fingerprint,
             mode: options.mode,
+            opt_level: options.opt_level,
             emit_binary: options.emit_binary,
             persist_ir: options.persist_ir,
             binary_path: binary_path.clone(),
@@ -517,7 +560,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         binary_path,
         ir_path,
         optimized_ir_path,
-        used_optimizations: matches!(options.mode, BuildMode::Release),
+        used_optimizations: !matches!(options.opt_level, OptLevel::O0),
     })
 }
 
@@ -540,11 +583,11 @@ pub fn default_output_dir(source_path: &Path, mode: BuildMode) -> PathBuf {
         })
 }
 
-fn optimize_ir(ir: &str) -> Result<String> {
+fn optimize_ir(ir: &str, opt_level: OptLevel) -> Result<String> {
     let mut command = Command::new("opt");
     command
         .arg("-S")
-        .arg("-O3")
+        .arg(opt_level.as_opt_flag())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
     let mut child = command.spawn().map_err(|err| {
@@ -580,7 +623,7 @@ fn compile_binary_from_ir(
     ir: &str,
     runtime_support: &Path,
     binary_path: &Path,
-    mode: BuildMode,
+    opt_level: OptLevel,
 ) -> Result<()> {
     let mut clang = Command::new("clang");
     clang
@@ -595,11 +638,7 @@ fn compile_binary_from_ir(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if matches!(mode, BuildMode::Release) {
-        clang.arg("-O3");
-    } else {
-        clang.arg("-O0");
-    }
+    clang.arg(opt_level.as_opt_flag());
 
     let mut child = clang.spawn().map_err(|err| {
         MireError::new(ErrorKind::Runtime {

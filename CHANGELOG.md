@@ -2,6 +2,19 @@
 
 All notable changes to Mire are documented in this file.
 
+## [2.7.0] - 2026-05-11
+
+### Added
+- New backend optimization level model (`OptLevel`) with `-O0/-O1/-O2/-O3/-Os/-Oz`.
+- New roadmap document: `docs/roadmap.md` consolidating completed compiler work and pending Owl integration.
+
+### Changed
+- CLI reduced to four commands only: `run`, `build`, `check`, `debug`.
+- Default compilation profile switched to `debug` (`-O0`) for faster feedback.
+- Build fingerprint now includes optimization level to guarantee cache correctness.
+- LLVM `opt` and `clang` flags are now driven by selected optimization level.
+- Version bump: `2.6.0` → `2.7.0`.
+
 ## [2.6.0] - 2026-05-11
 
 ### Added
