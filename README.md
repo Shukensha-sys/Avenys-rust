@@ -2,7 +2,7 @@
 
 Mire is a compiled, statically typed programming language with ownership-oriented memory safety checks and an LLVM-based backend.
 
-Current compiler crate version: `2.7.0`.
+Current compiler crate version: `2.8.0`.
 
 ## Status
 

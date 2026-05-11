@@ -452,7 +452,7 @@ fn runtime_err(err: std::io::Error) -> MireError {
 }
 
 fn print_help() {
-    println!("Mire / Avenys v2.7.0");
+    println!("Mire / Avenys v2.8.0");
     println!("Usage: mire <run|build|check|debug> [file] [options]\n");
     println!("Profiles:");
     println!("  --debug               Build profile debug (default)");

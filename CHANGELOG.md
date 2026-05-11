@@ -2,6 +2,14 @@
 
 All notable changes to Mire are documented in this file.
 
+## [2.8.0] - 2026-05-11
+
+### Changed
+- Diagnostic precision hardening extended across type checker, borrow checker and backend context propagation.
+- Warning anchoring now prioritizes real source positions and suppresses non-source/internal diagnostics to avoid misleading `1:1` reports.
+- Improved compiler/Owl integration stability by surfacing and fixing multiple real ownership and symbol-collision issues discovered from Owl full-build workflows.
+- Version bump: `2.7.0` → `2.8.0`.
+
 ## [2.7.0] - 2026-05-11
 
 ### Added

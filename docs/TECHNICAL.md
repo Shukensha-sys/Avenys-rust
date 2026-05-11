@@ -193,4 +193,12 @@ fn string_to_upper_unicode() {
 - Errores MSS (`E0007`-`E0013`) usan la ubicación contextual al emitirse, en lugar del fallback `1:1`.
 - Esto mejora trazabilidad en casos de `UseAfterMove` complejos y reduce diagnósticos globales poco accionables.
 
+## 9. Integración Owl y Hardening (v2.8.0)
+
+- Owl se usó como workload real de compilación multi-módulo para validar estabilidad del compilador.
+- Se detectaron y resolvieron casos reales de:
+  - ownership en rutas de dependencias/CLI,
+  - colisiones de símbolos globales entre módulos Mire en backend lowering.
+- El flujo de diagnósticos se refinó para evitar reportes engañosos cuando no existe ubicación fuente trazable.
+
 Última actualización: Mayo 2026
