@@ -298,3 +298,32 @@ match value {
 
 ### Síntaxis Propuesta para Futuro
 Ver `todo.md` sección SYNTAX IMPROVEMENTS
+
+---
+
+## v2.6.0 (Mayo 2026)
+
+### Sistema de Diagnóstico Unificado (D6)
+- Nuevo `src/error/diagnostic.rs`: tipos core `Diagnostic`, `Severity`, `DiagnosticCode` (E0001–E0015, W0001–W0027), `Label`, `Suggestion`, `WarningFilter`.
+- Nuevo `src/error/format.rs`: `format_diagnostic()` con contexto de código, colores, labels, notes, help.
+- `MireError` refactorizado para envolver `Diagnostic` con `Severity::Error`. Retrocompatibilidad de API preservada.
+- `MssError` mapeado a códigos de diagnóstico E0007–E0013.
+- Warnings reescritas para emitir `Diagnostic`. Tracking de variables/funciones no usadas reparado.
+- Pipeline integrado: `analyze_program_with_warnings()` con `WarningConfig` (filter + deny).
+- Nuevo comando `mire check <file>`: análisis completo sin generar binario.
+- Nuevos flags CLI: `--warn-all`, `-W <Wxxxx>`, `--deny <Wxxxx>`.
+- Tests de warnings en `tests/warnings/`.
+- Documentación de diseño: `docs/diagnostic-system.md`, `MORE/0004-diagnostic-system.md`.
+- Guía de integración Owl: `docs/owl-diagnostics.md`.
+
+### Archivos modificados
+- `src/error/mod.rs`, `src/error/mss.rs` — refactor diagnóstico
+- `src/compiler/warnings.rs` — rewrite completo
+- `src/compiler/mod.rs`, `src/avens/mod.rs` — pipeline integration
+- `src/main.rs`, `src/lib.rs` — CLI + exports
+- `Cargo.toml` — bump v2.5.6 → v2.6.0
+- `docs/cli.md`, `todo.md`, `CHANGELOG.md` — documentation
+
+### Validación
+- `cargo build` ✅
+- `cargo test -q` ✅ (87 + 80 pasando)

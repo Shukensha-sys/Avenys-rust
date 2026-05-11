@@ -2,12 +2,27 @@
 
 All notable changes to Mire are documented in this file.
 
-## [Unreleased]
+## [2.6.0] - 2026-05-11
+
+### Added
+- Unified diagnostic system (`src/error/diagnostic.rs`, `src/error/format.rs`):
+  - `Diagnostic` struct with `Severity`, `DiagnosticCode` (E0001–E0015, W0001–W0027), `Label`, `Suggestion`.
+  - `format_diagnostic()` with source context, colors, labels, notes, help.
+  - `WarningFilter` enum (`Default`, `All`, `Codes`).
+- New CLI command `mire check <file>` for analysis-only mode without binary generation.
+- New CLI flags: `--warn-all`, `-W <Wxxxx>`, `--deny <Wxxxx>`.
+- `analyze_program_with_warnings()` in pipeline with `WarningConfig` (filter + deny).
+- Warning tests in `tests/warnings/`.
+- Integration guide `docs/owl-diagnostics.md` for Owl tooling.
 
 ### Changed
-- Moved std aggregator from project root `std.mire` to `src/modules/std/mod.mire`.
-- Local import resolver now resolves `./...` relative to the importing file directory (still constrained to project root).
-- `import std` now resolves through `src/modules/std/mod.mire` in the loader.
+- `MireError` refactored to wrap `Diagnostic` (backward-compatible API).
+- `MssError` mapped to diagnostic codes E0007–E0013.
+- Warnings rewritten to emit `Diagnostic` instead of `Warning` struct.
+- Unused variable/function tracking now works (previously silent).
+- `BuildOptions` now includes `warning_filter` + `deny_warnings`.
+- Docs updated: `docs/cli.md`, `docs/diagnostic-system.md`, `MORE/0004-diagnostic-system.md`.
+- Version bump: `2.5.6` → `2.6.0`.
 
 ## [2.5.6] - 2026-05-10
 

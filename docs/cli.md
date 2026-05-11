@@ -4,6 +4,7 @@ La CLI de Mire sigue teniendo comandos auxiliares, pero el flujo básico recomen
 
 - `mire run [file] [options]`
 - `mire build [file]`
+- `mire check [file]`
 - `mire new [name]`
 - `mire debug [file] [options]`
 
@@ -33,6 +34,9 @@ Opciones útiles:
 - `--ms`: muestra el tiempo wall-clock del proceso compilado
 - `--memory` o `-m`: muestra el pico de memoria del proceso
 - `--cpu`: muestra el tiempo de CPU del proceso
+- `--warn-all`: activa todas las warnings del compilador
+- `-W <Wxxxx>`: activa una warning específica por código (ej. `-W W0010`)
+- `--deny <Wxxxx>`: trata una warning específica como error
 - `--cache-max-units N`: sobreescribe el límite LRU del `project.toml`
 - `--no-analysis-cache`: desactiva la caché de análisis para esa ejecución
 - `--analysis-cache`: fuerza la caché de análisis para esa ejecución
@@ -42,6 +46,14 @@ Ejemplo:
 ```bash
 mire run benchmarks/string_build.mire --ms --cpu --memory
 ```
+
+### `mire check [file]`
+
+Analiza el programa y emite diagnósticos (errores y warnings) sin generar binario.
+
+Usa `WarningFilter::All` (todas las warnings activadas). Retorna exit code 0 si solo hay warnings, 1 si hay errores.
+
+Soporta los mismos flags de warnings que `run`: `--warn-all`, `-W`, `--deny`.
 
 ### `mire build [file]`
 
@@ -114,8 +126,9 @@ mire debug code/main.mire --run --log
 
 ## Qué hace cada uno
 
-- `run`: compila, guarda solo binario y usa IR en memoria
-- `build`: compila, guarda solo binario y usa IR en memoria
+- `run`: compila, guarda solo binario y usa IR en memoria, emite warnings por defecto
+- `build`: compila, guarda solo binario y usa IR en memoria, emite warnings por defecto
+- `check`: analiza sin compilar, emite todas las warnings
 - `new`: crea proyecto
 - `debug`: compila en debug, guarda `.ll` en disco y sirve para inspección, trazas e IR
 
@@ -145,7 +158,8 @@ Notas:
 
 Siguen existiendo, pero no son el flujo principal:
 
-- `mire test`
+- `mire test [--warn-all]` (ahora hereda warning_filter del build)
+- `mire bench`
 - `mire bench`
 - `mire clean`
 - `mire info`
