@@ -13,8 +13,19 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
     };
 
     let filename = diag.filename.as_deref().unwrap_or("main.mire");
-    let line = if diag.line == 0 { 1 } else { diag.line };
-    let col = if diag.column == 0 { 1 } else { diag.column };
+    let primary = diag.labels.iter().find(|label| label.style == LabelStyle::Primary);
+    let line = primary
+        .map(|label| label.line.max(1))
+        .unwrap_or_else(|| if diag.line == 0 { 1 } else { diag.line });
+    let col = primary
+        .map(|label| label.column.max(1))
+        .unwrap_or_else(|| if diag.column == 0 { 1 } else { diag.column });
+    let has_default_anchor = line == 1
+        && col == 1
+        && diag
+            .labels
+            .iter()
+            .any(|label| label.style == LabelStyle::Primary && label.line <= 1 && label.column <= 1);
 
     let mut out = String::new();
     out.push_str(&format!(
@@ -33,7 +44,7 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
         c(use_color, "\x1b[0m")
     ));
 
-    if let Some(source) = &diag.source {
+    if !has_default_anchor && let Some(source) = &diag.source {
         let lines: Vec<&str> = source.lines().collect();
         if !lines.is_empty() {
             let start = line.saturating_sub(2).max(1);
@@ -61,8 +72,14 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
             }
         }
     }
+    if has_default_anchor {
+        out.push_str("│     │ <source location unavailable>\n");
+    }
 
     out.push_str(&format!("╰─ {}\n", diag.message));
+    if has_default_anchor {
+        out.push_str("   ─┬─ note: error location is approximate; emitted from non-positioned backend/runtime path\n");
+    }
     for note in &diag.notes {
         out.push_str(&format!("   ─┬─ note: {}\n", note));
     }

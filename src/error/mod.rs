@@ -141,6 +141,32 @@ impl MireError {
         self
     }
 
+    pub fn with_position(mut self, line: usize, column: usize) -> Self {
+        let line = line.max(1);
+        let column = column.max(1);
+        self.line = line;
+        self.column = column;
+        self.diagnostic.line = line;
+        self.diagnostic.column = column;
+        if self.diagnostic.labels.is_empty() {
+            self.diagnostic.labels.push(Label {
+                line,
+                column,
+                length: 3,
+                message: "here".to_string(),
+                style: LabelStyle::Primary,
+            });
+        } else {
+            for label in &mut self.diagnostic.labels {
+                if label.style == LabelStyle::Primary {
+                    label.line = line;
+                    label.column = column;
+                }
+            }
+        }
+        self
+    }
+
     pub fn source(&self) -> Option<&String> {
         self.context.as_ref().and_then(|ctx| ctx.source.as_ref())
     }

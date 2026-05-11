@@ -110,6 +110,8 @@ struct TypeChecker {
     sources_by_filename: HashMap<String, String>,
     base_source: Option<String>,
     current_filename: Option<String>,
+    current_line: usize,
+    current_column: usize,
     current_top_level_index: Option<usize>,
     current_top_level_key: Option<String>,
     nested_statement_masks: HashMap<String, Vec<bool>>,
@@ -134,6 +136,8 @@ impl TypeChecker {
             sources_by_filename: HashMap::new(),
             base_source: (!source.is_empty()).then(|| source.to_string()),
             current_filename: None,
+            current_line: 1,
+            current_column: 1,
             current_top_level_index: None,
             current_top_level_key: None,
             nested_statement_masks: HashMap::new(),
@@ -225,6 +229,12 @@ impl TypeChecker {
     }
 
     fn attach_current_context(&self, err: MireError) -> MireError {
+        let err = if err.line == 1 && err.column == 1 {
+            err.with_position(self.current_line, self.current_column)
+        } else {
+            err
+        };
+
         let err = if err.filename().is_none() {
             if let Some(filename) = &self.current_filename {
                 err.with_filename(filename.clone())
@@ -763,6 +773,9 @@ impl TypeChecker {
     }
 
     fn check_statement(&mut self, statement: &mut Statement) -> Result<()> {
+        let (line, column) = Self::statement_location(statement);
+        self.current_line = line;
+        self.current_column = column;
         match statement {
             Statement::Let {
                 name,
@@ -1272,6 +1285,9 @@ impl TypeChecker {
     }
 
     fn check_expression(&mut self, expression: &mut Expression) -> Result<DataType> {
+        let (line, column) = Self::expression_location(expression);
+        self.current_line = line;
+        self.current_column = column;
         match expression {
             Expression::Literal(lit) => Ok(Self::literal_type(lit)),
             Expression::Identifier(ident) => {
@@ -3505,6 +3521,63 @@ impl TypeChecker {
                 Ok(result)
             }
             _ => unreachable!(),
+        }
+    }
+
+    fn statement_location(statement: &Statement) -> (usize, usize) {
+        match statement {
+            Statement::Let {
+                value: Some(value), ..
+            }
+            | Statement::Assignment { value, .. }
+            | Statement::Expression(value)
+            | Statement::Drop { value }
+            | Statement::Move { value, .. } => Self::expression_location(value),
+            Statement::Return(Some(value)) => Self::expression_location(value),
+            Statement::If { condition, .. } | Statement::While { condition, .. } => {
+                Self::expression_location(condition)
+            }
+            Statement::For { iterable, .. } | Statement::Find { iterable, .. } => {
+                Self::expression_location(iterable)
+            }
+            Statement::Match { value, .. } => Self::expression_location(value),
+            _ => (1, 1),
+        }
+    }
+
+    fn expression_location(expression: &Expression) -> (usize, usize) {
+        match expression {
+            Expression::Identifier(ident) => (ident.line.max(1), ident.column.max(1)),
+            Expression::BinaryOp { left, .. }
+            | Expression::NamedArg { value: left, .. }
+            | Expression::Reference { expr: left, .. }
+            | Expression::Dereference { expr: left, .. }
+            | Expression::Box { value: left, .. }
+            | Expression::Pipeline { input: left, .. } => Self::expression_location(left),
+            Expression::UnaryOp { operand, .. } => Self::expression_location(operand),
+            Expression::Call { args, .. }
+            | Expression::List { elements: args, .. }
+            | Expression::Tuple { elements: args, .. } => args
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Dict { entries, .. } => entries
+                .first()
+                .map(|(key, _)| Self::expression_location(key))
+                .unwrap_or((1, 1)),
+            Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
+                Self::expression_location(target)
+            }
+            Expression::Closure { body, .. } => body
+                .first()
+                .map(Self::statement_location)
+                .unwrap_or((1, 1)),
+            Expression::Match { value, .. } => Self::expression_location(value),
+            Expression::EnumVariant { payloads, .. } => payloads
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
         }
     }
 }

@@ -7,6 +7,8 @@
 - Niveles de optimización tipo Rust expuestos por CLI: `-O0/-O1/-O2/-O3/-Os/-Oz`.
 - Pipeline de optimización de IR y `clang` sincronizado con `OptLevel`.
 - Fingerprint incremental de build extendido para incluir nivel de optimización.
+- Diagnósticos de errores/warnings reanclados con contexto AST activo (sin falsos positivos en `import std`/`1:1`).
+- Warnings sin ubicación fuente real ahora se suprimen para evitar ruido y anclaje engañoso.
 
 ## Completado en Owl (v0.7.0)
 
@@ -15,3 +17,9 @@
 - Soporte `run/build` en modo proyecto y sin proyecto (`.cache` + `bin`).
 - Flags de perfil y optimización (`--debug`, `--release`, `-O`).
 - Fast-path de ejecución por hash para reducir compilaciones repetidas.
+
+## Siguiente en Owl (pendiente)
+
+- Integración nativa Owl <-> Avenys sobre `mire check/build/run` con profiles y `-O` unificados.
+- Optimización de resolución de dependencias (lock/update/install) con validación semver y hashes.
+- Refactor de comandos para reducir duplicación de parsing y mejorar tiempos de arranque.

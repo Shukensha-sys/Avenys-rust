@@ -791,6 +791,8 @@ struct LlvmIrGen {
     extern_decls: Vec<String>,
     loop_stack: Vec<LoopLabels>,
     current_return: LlType,
+    current_line: usize,
+    current_column: usize,
     next_tmp: usize,
     next_label: usize,
 }
@@ -809,6 +811,8 @@ impl LlvmIrGen {
             extern_decls: Vec::new(),
             loop_stack: Vec::new(),
             current_return: LlType::I64,
+            current_line: 1,
+            current_column: 1,
             next_tmp: 0,
             next_label: 0,
         }
@@ -1156,7 +1160,10 @@ impl LlvmIrGen {
     }
 
     fn compile_statement(&mut self, stmt: &Statement) -> Result<()> {
-        match stmt {
+        let (line, column) = Self::statement_location(stmt);
+        self.current_line = line;
+        self.current_column = column;
+        let result = match stmt {
             Statement::Use { .. } => Ok(()),
             Statement::Function { .. } => Ok(()),
             Statement::Let {
@@ -1382,11 +1389,15 @@ impl LlvmIrGen {
                 self.store_variable(target, &var.ptr, var.ty, var.data_type, compiled)?;
                 Ok(())
             }
-        }
+        };
+        result.map_err(|err| self.attach_context(err))
     }
 
     fn compile_expr(&mut self, expr: &Expression) -> Result<LlValue> {
-        match expr {
+        let (line, column) = Self::expression_location(expr);
+        self.current_line = line;
+        self.current_column = column;
+        let result = match expr {
             Expression::Literal(Literal::Int(value)) => Ok(LlValue {
                 ty: LlType::I64,
                 repr: value.to_string(),
@@ -2071,6 +2082,72 @@ impl LlvmIrGen {
             Expression::Tuple { elements, .. } => self.compile_list_literal(elements, &DataType::Unknown),
             Expression::Box { value, .. } => self.compile_expr(value),
             Expression::Closure { .. } => Ok(self.string_value("<closure>")),
+        };
+        result.map_err(|err| self.attach_context(err))
+    }
+
+    fn attach_context(&self, err: MireError) -> MireError {
+        if err.line == 1 && err.column == 1 {
+            err.with_position(self.current_line.max(1), self.current_column.max(1))
+        } else {
+            err
+        }
+    }
+
+    fn statement_location(statement: &Statement) -> (usize, usize) {
+        match statement {
+            Statement::Let {
+                value: Some(value), ..
+            }
+            | Statement::Assignment { value, .. }
+            | Statement::Expression(value)
+            | Statement::Drop { value }
+            | Statement::Move { value, .. } => Self::expression_location(value),
+            Statement::Return(Some(value)) => Self::expression_location(value),
+            Statement::If { condition, .. } | Statement::While { condition, .. } => {
+                Self::expression_location(condition)
+            }
+            Statement::For { iterable, .. } | Statement::Find { iterable, .. } => {
+                Self::expression_location(iterable)
+            }
+            Statement::Match { value, .. } => Self::expression_location(value),
+            _ => (1, 1),
+        }
+    }
+
+    fn expression_location(expression: &Expression) -> (usize, usize) {
+        match expression {
+            Expression::Identifier(ident) => (ident.line.max(1), ident.column.max(1)),
+            Expression::BinaryOp { left, .. }
+            | Expression::NamedArg { value: left, .. }
+            | Expression::Reference { expr: left, .. }
+            | Expression::Dereference { expr: left, .. }
+            | Expression::Box { value: left, .. }
+            | Expression::Pipeline { input: left, .. } => Self::expression_location(left),
+            Expression::UnaryOp { operand, .. } => Self::expression_location(operand),
+            Expression::Call { args, .. }
+            | Expression::List { elements: args, .. }
+            | Expression::Tuple { elements: args, .. } => args
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Dict { entries, .. } => entries
+                .first()
+                .map(|(key, _)| Self::expression_location(key))
+                .unwrap_or((1, 1)),
+            Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
+                Self::expression_location(target)
+            }
+            Expression::Closure { body, .. } => body
+                .first()
+                .map(Self::statement_location)
+                .unwrap_or((1, 1)),
+            Expression::Match { value, .. } => Self::expression_location(value),
+            Expression::EnumVariant { payloads, .. } => payloads
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
         }
     }
 

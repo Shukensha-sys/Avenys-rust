@@ -13,6 +13,9 @@ All notable changes to Mire are documented in this file.
 - Default compilation profile switched to `debug` (`-O0`) for faster feedback.
 - Build fingerprint now includes optimization level to guarantee cache correctness.
 - LLVM `opt` and `clang` flags are now driven by selected optimization level.
+- Borrow checker ownership diagnostics now report contextual line/column based on active statement/expression instead of defaulting to `1:1`.
+- Type checker/backend diagnostic propagation now reanchors default-position errors to active AST context when available.
+- Warning diagnostics (`unused variable/function/import`) now resolve concrete source positions more reliably and skip non-source internal symbols instead of emitting misleading `1:1`.
 - Version bump: `2.6.0` → `2.7.0`.
 
 ## [2.6.0] - 2026-05-11

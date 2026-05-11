@@ -71,6 +71,8 @@ struct BorrowChecker<'a> {
     statement_origins: Vec<String>,
     sources_by_filename: HashMap<String, String>,
     current_filename: Option<String>,
+    current_line: usize,
+    current_column: usize,
     current_top_level_index: Option<usize>,
     current_top_level_key: Option<String>,
     nested_statement_masks: HashMap<String, Vec<bool>>,
@@ -92,6 +94,8 @@ impl<'a> BorrowChecker<'a> {
             statement_origins: Vec::new(),
             sources_by_filename: HashMap::new(),
             current_filename: None,
+            current_line: 1,
+            current_column: 1,
             current_top_level_index: None,
             current_top_level_key: None,
             nested_statement_masks: HashMap::new(),
@@ -181,6 +185,9 @@ impl<'a> BorrowChecker<'a> {
     }
 
     fn check_statement(&mut self, statement: &Statement) -> Result<()> {
+        let (line, column) = Self::statement_location(statement);
+        self.current_line = line;
+        self.current_column = column;
         match statement {
             Statement::Let { name, value, .. } => {
                 if let Some(value) = value {
@@ -430,6 +437,9 @@ impl<'a> BorrowChecker<'a> {
     }
 
     fn check_expression(&mut self, expression: &Expression) -> Result<()> {
+        let (line, column) = Self::expression_location(expression);
+        self.current_line = line;
+        self.current_column = column;
         match expression {
             Expression::Literal(_) => {}
             Expression::Identifier(ident) => {
@@ -530,7 +540,7 @@ impl<'a> BorrowChecker<'a> {
         if let Some(state) = self.lookup_binding(name)
             && state.is_moved
         {
-            return Err(ownership_error(MssError::UseAfterMove));
+            return Err(self.ownership_error(MssError::UseAfterMove));
         }
         Ok(())
     }
@@ -541,9 +551,9 @@ impl<'a> BorrowChecker<'a> {
         }
         let state = self
             .lookup_binding(name)
-            .ok_or_else(|| ownership_error(MssError::UseAfterMove))?;
+            .ok_or_else(|| self.ownership_error(MssError::UseAfterMove))?;
         if state.mutable_borrow || state.immutable_borrows > 0 {
-            return Err(ownership_error(MssError::MutationWhileShared));
+            return Err(self.ownership_error(MssError::MutationWhileShared));
         }
         Ok(())
     }
@@ -551,12 +561,12 @@ impl<'a> BorrowChecker<'a> {
     fn ensure_can_move(&self, name: &str) -> Result<()> {
         let state = self
             .lookup_binding(name)
-            .ok_or_else(|| ownership_error(MssError::UseAfterMove))?;
+            .ok_or_else(|| self.ownership_error(MssError::UseAfterMove))?;
         if state.is_moved {
-            return Err(ownership_error(MssError::UseAfterMove));
+            return Err(self.ownership_error(MssError::UseAfterMove));
         }
         if self.unsafe_depth == 0 && (state.mutable_borrow || state.immutable_borrows > 0) {
-            return Err(ownership_error(MssError::MoveWhileBorrowed));
+            return Err(self.ownership_error(MssError::MoveWhileBorrowed));
         }
         Ok(())
     }
@@ -564,12 +574,12 @@ impl<'a> BorrowChecker<'a> {
     fn ensure_can_drop(&self, name: &str) -> Result<()> {
         let state = self
             .lookup_binding(name)
-            .ok_or_else(|| ownership_error(MssError::UseAfterMove))?;
+            .ok_or_else(|| self.ownership_error(MssError::UseAfterMove))?;
         if state.is_moved {
-            return Err(ownership_error(MssError::UseAfterMove));
+            return Err(self.ownership_error(MssError::UseAfterMove));
         }
         if self.unsafe_depth == 0 && (state.mutable_borrow || state.immutable_borrows > 0) {
-            return Err(ownership_error(MssError::DropWhileBorrowed));
+            return Err(self.ownership_error(MssError::DropWhileBorrowed));
         }
         Ok(())
     }
@@ -580,28 +590,29 @@ impl<'a> BorrowChecker<'a> {
         }
         let state = self
             .lookup_binding(name)
-            .ok_or_else(|| ownership_error(MssError::UseAfterMove))?;
+            .ok_or_else(|| self.ownership_error(MssError::UseAfterMove))?;
         if state.is_moved {
-            return Err(ownership_error(MssError::UseAfterMove));
+            return Err(self.ownership_error(MssError::UseAfterMove));
         }
         if is_mutable {
             if state.mutable_borrow {
-                return Err(ownership_error(MssError::MultipleMutableRefs));
+                return Err(self.ownership_error(MssError::MultipleMutableRefs));
             }
             if state.immutable_borrows > 0 {
-                return Err(ownership_error(MssError::MutationWhileShared));
+                return Err(self.ownership_error(MssError::MutationWhileShared));
             }
         } else if state.mutable_borrow {
-            return Err(ownership_error(MssError::MutationWhileShared));
+            return Err(self.ownership_error(MssError::MutationWhileShared));
         }
         Ok(())
     }
 
     fn register_borrow(&mut self, name: &str, is_mutable: bool) -> Result<()> {
         self.ensure_borrow_allowed(name, is_mutable)?;
-        let state = self
-            .lookup_binding_mut(name)
-            .ok_or_else(|| ownership_error(MssError::UseAfterMove))?;
+        let state = match self.lookup_binding_mut(name) {
+            Some(state) => state,
+            None => return Err(self.ownership_error(MssError::UseAfterMove)),
+        };
         if is_mutable {
             state.mutable_borrow = true;
         } else {
@@ -726,7 +737,7 @@ impl<'a> BorrowChecker<'a> {
         if let Some((target, is_mutable)) = Self::reference_target(Some(expression)) {
             let binding = self
                 .semantic_binding(&target)
-                .ok_or_else(|| ownership_error(MssError::BorrowOutOfScope))?;
+                .ok_or_else(|| self.ownership_error(MssError::BorrowOutOfScope))?;
 
             let is_reference_binding = matches!(
                 binding.kind,
@@ -735,7 +746,7 @@ impl<'a> BorrowChecker<'a> {
             let same_function_scope = binding.scope_id >= function_context.scope_id;
 
             if same_function_scope && !is_reference_binding {
-                return Err(ownership_error(if is_mutable {
+                return Err(self.ownership_error(if is_mutable {
                     MssError::UnsafeViolation
                 } else {
                     MssError::BorrowOutOfScope
@@ -758,7 +769,7 @@ impl<'a> BorrowChecker<'a> {
             DataType::Ref { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if is_mutable {
-                        return Err(ownership_error(MssError::MultipleMutableRefs));
+                        return Err(self.ownership_error(MssError::MultipleMutableRefs));
                     }
                     self.ensure_borrow_allowed(&target, false)?;
                 } else if let Some(binding) =
@@ -807,7 +818,7 @@ impl<'a> BorrowChecker<'a> {
                         && self.unsafe_depth == 0
                         && (state.mutable_borrow || state.immutable_borrows > 0)
                     {
-                        return Err(ownership_error(MssError::MoveWhileBorrowed));
+                        return Err(self.ownership_error(MssError::MoveWhileBorrowed));
                     }
 
                     if should_consume {
@@ -821,6 +832,67 @@ impl<'a> BorrowChecker<'a> {
         }
 
         Ok(())
+    }
+
+    fn ownership_error(&self, kind: MssError) -> MireError {
+        MireError::ownership_error(self.current_line.max(1), self.current_column.max(1), kind)
+    }
+
+    fn statement_location(statement: &Statement) -> (usize, usize) {
+        match statement {
+            Statement::Let {
+                value: Some(value), ..
+            }
+            | Statement::Assignment { value, .. }
+            | Statement::Expression(value)
+            | Statement::Drop { value }
+            | Statement::Move { value, .. } => Self::expression_location(value),
+            Statement::Return(Some(value)) => Self::expression_location(value),
+            Statement::If { condition, .. } | Statement::While { condition, .. } => {
+                Self::expression_location(condition)
+            }
+            Statement::For { iterable, .. } | Statement::Find { iterable, .. } => {
+                Self::expression_location(iterable)
+            }
+            Statement::Match { value, .. } => Self::expression_location(value),
+            _ => (1, 1),
+        }
+    }
+
+    fn expression_location(expression: &Expression) -> (usize, usize) {
+        match expression {
+            Expression::Identifier(ident) => (ident.line.max(1), ident.column.max(1)),
+            Expression::BinaryOp { left, .. }
+            | Expression::NamedArg { value: left, .. }
+            | Expression::Reference { expr: left, .. }
+            | Expression::Dereference { expr: left, .. }
+            | Expression::Box { value: left, .. }
+            | Expression::Pipeline { input: left, .. } => Self::expression_location(left),
+            Expression::UnaryOp { operand, .. } => Self::expression_location(operand),
+            Expression::Call { args, .. }
+            | Expression::List { elements: args, .. }
+            | Expression::Tuple { elements: args, .. } => args
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Dict { entries, .. } => entries
+                .first()
+                .map(|(key, _)| Self::expression_location(key))
+                .unwrap_or((1, 1)),
+            Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
+                Self::expression_location(target)
+            }
+            Expression::Closure { body, .. } => body
+                .first()
+                .map(Self::statement_location)
+                .unwrap_or((1, 1)),
+            Expression::Match { value, .. } => Self::expression_location(value),
+            Expression::EnumVariant { payloads, .. } => payloads
+                .first()
+                .map(Self::expression_location)
+                .unwrap_or((1, 1)),
+            Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
+        }
     }
 
     fn semantic_binding(&self, name: &str) -> Option<&BindingInfo> {
@@ -882,10 +954,6 @@ impl<'a> BorrowChecker<'a> {
             .enumerate()
             .find_map(|(rev_index, scope)| scope.contains_key(name).then_some(depth - rev_index))
     }
-}
-
-fn ownership_error(kind: MssError) -> MireError {
-    MireError::ownership_error(1, 1, kind)
 }
 
 fn assignment_binding_target(target: &AssignmentTarget) -> String {
@@ -973,6 +1041,15 @@ mod tests {
         })
     }
 
+    fn ident_at(name: &str, line: usize, column: usize) -> Expression {
+        Expression::Identifier(Identifier {
+            name: name.to_string(),
+            data_type: DataType::Unknown,
+            line,
+            column,
+        })
+    }
+
     #[test]
     fn rejects_assignment_while_shared_borrow_exists() {
         let program = Program {
@@ -1038,15 +1115,17 @@ mod tests {
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Move {
                     target: "y".to_string(),
-                    value: ident("x"),
+                    value: ident_at("x", 10, 4),
                 },
-                Statement::Expression(ident("x")),
+                Statement::Expression(ident_at("x", 12, 8)),
             ],
         };
 
         let semantic_model = semantic::analyze_program(&program);
         let err = check_program(&program, &semantic_model).unwrap_err();
         assert!(format!("{}", err).contains("Use after move"));
+        assert_eq!(err.line, 12);
+        assert_eq!(err.column, 8);
     }
 
     #[test]

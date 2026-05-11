@@ -187,4 +187,10 @@ fn string_to_upper_unicode() {
 - El pipeline aplica el mismo nivel tanto en `opt` (IR) como en `clang` (enlace binario), evitando desalineaciones.
 - El fingerprint incremental de build ahora incluye `opt_level`, evitando reuso incorrecto entre builds con distinto nivel.
 
+## 8. Diagnósticos de Ownership (v2.7.0)
+
+- Borrow checker ahora mantiene posición contextual `(line, column)` durante el recorrido AST.
+- Errores MSS (`E0007`-`E0013`) usan la ubicación contextual al emitirse, en lugar del fallback `1:1`.
+- Esto mejora trazabilidad en casos de `UseAfterMove` complejos y reduce diagnósticos globales poco accionables.
+
 Última actualización: Mayo 2026

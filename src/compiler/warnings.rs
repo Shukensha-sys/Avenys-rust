@@ -1,19 +1,23 @@
 use crate::error::diagnostic::{Diagnostic, DiagnosticCode, Label, LabelStyle, Severity, WarningFilter};
 use crate::parser::Program;
 use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub struct WarningAnalyzer {
     diagnostics: Vec<Diagnostic>,
     filter: WarningFilter,
     deny: HashSet<DiagnosticCode>,
     defined_variables: HashSet<String>,
+    variable_positions: HashMap<String, (usize, usize)>,
     used_variables: HashSet<String>,
     defined_functions: HashSet<String>,
+    function_positions: HashMap<String, (usize, usize)>,
     used_functions: HashSet<String>,
     imported_modules: Vec<Identifier>,
     used_imports: HashSet<String>,
     loop_depth: usize,
+    current_line: usize,
+    current_column: usize,
 }
 
 impl WarningAnalyzer {
@@ -23,12 +27,16 @@ impl WarningAnalyzer {
             filter,
             deny,
             defined_variables: HashSet::new(),
+            variable_positions: HashMap::new(),
             used_variables: HashSet::new(),
             defined_functions: HashSet::new(),
+            function_positions: HashMap::new(),
             used_functions: HashSet::new(),
             imported_modules: Vec::new(),
             used_imports: HashSet::new(),
             loop_depth: 0,
+            current_line: 1,
+            current_column: 1,
         }
     }
 
@@ -43,12 +51,21 @@ impl WarningAnalyzer {
         let defined_variables: Vec<String> = self.defined_variables.iter().cloned().collect();
         for name in &defined_variables {
             if !name.starts_with('_') && !self.used_variables.contains(name) {
+                let pos = self
+                    .variable_positions
+                    .get(name)
+                    .copied()
+                    .filter(|(l, c)| !(*l == 1 && *c == 1))
+                    .or_else(|| find_position_for_var(source, name));
+                let Some((line, column)) = pos else {
+                    continue;
+                };
                 self.push_warn(
                     DiagnosticCode::W0001,
                     "Unused Variable",
                     format!("Variable '{}' is never used", name),
-                    1,
-                    1,
+                    line,
+                    column,
                     Some("prefix with '_' to suppress this warning".to_string()),
                 );
             }
@@ -57,12 +74,21 @@ impl WarningAnalyzer {
         let defined_functions: Vec<String> = self.defined_functions.iter().cloned().collect();
         for name in &defined_functions {
             if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name) {
+                let pos = self
+                    .function_positions
+                    .get(name)
+                    .copied()
+                    .filter(|(l, c)| !(*l == 1 && *c == 1))
+                    .or_else(|| find_position_for_fn(source, name));
+                let Some((line, column)) = pos else {
+                    continue;
+                };
                 self.push_warn(
                     DiagnosticCode::W0002,
                     "Unused Function",
                     format!("Function '{}' is never used", name),
-                    1,
-                    1,
+                    line,
+                    column,
                     None,
                 );
             }
@@ -71,12 +97,17 @@ impl WarningAnalyzer {
         let imported_modules = self.imported_modules.clone();
         for import in &imported_modules {
             if !self.used_imports.contains(&import.name) {
+                let (line, column) = if import.line == 1 && import.column == 1 {
+                    find_position_for_import(source, &import.name).unwrap_or((1, 1))
+                } else {
+                    (import.line, import.column)
+                };
                 self.push_warn(
                     DiagnosticCode::W0003,
                     "Unused Import",
                     format!("Import '{}' is never used", import.name),
-                    import.line,
-                    import.column,
+                    line,
+                    column,
                     None,
                 );
             }
@@ -92,9 +123,13 @@ impl WarningAnalyzer {
     }
 
     fn scan_defs(&mut self, stmt: &Statement) {
+        let (line, column) = statement_location(stmt);
+        self.current_line = line;
+        self.current_column = column;
         match stmt {
             Statement::Let { name, data_type, .. } => {
                 self.defined_variables.insert(name.clone());
+                self.variable_positions.insert(name.clone(), (line, column));
                 if *data_type == DataType::Unknown {
                     self.push_warn(
                         DiagnosticCode::W0004,
@@ -108,6 +143,7 @@ impl WarningAnalyzer {
             }
             Statement::Function { name, params, return_type, body, .. } => {
                 self.defined_functions.insert(name.clone());
+                self.function_positions.insert(name.clone(), (line, column));
                 if *return_type == DataType::Unknown {
                     self.push_warn(
                         DiagnosticCode::W0005,
@@ -194,6 +230,9 @@ impl WarningAnalyzer {
     }
 
     fn scan_usage(&mut self, stmt: &Statement) {
+        let (line, column) = statement_location(stmt);
+        self.current_line = line;
+        self.current_column = column;
         match stmt {
             Statement::Expression(expr) => self.scan_expr(expr),
             Statement::Assignment { value, .. } => self.scan_expr(value),
@@ -284,6 +323,9 @@ impl WarningAnalyzer {
     }
 
     fn scan_expr(&mut self, expr: &Expression) {
+        let (line, column) = expression_location(expr);
+        self.current_line = line;
+        self.current_column = column;
         match expr {
             Expression::Identifier(id) => {
                 self.used_variables.insert(id.name.clone());
@@ -400,6 +442,11 @@ impl WarningAnalyzer {
         if !self.filter.matches(code) {
             return;
         }
+        let (line, column) = if line == 1 && column == 1 {
+            (self.current_line.max(1), self.current_column.max(1))
+        } else {
+            (line.max(1), column.max(1))
+        };
         let severity = if self.deny.contains(&code) {
             Severity::Error
         } else {
@@ -416,6 +463,102 @@ impl WarningAnalyzer {
         diag.help = help;
         self.diagnostics.push(diag);
     }
+}
+
+fn statement_location(statement: &Statement) -> (usize, usize) {
+    match statement {
+        Statement::Let {
+            value: Some(value), ..
+        }
+        | Statement::Assignment { value, .. }
+        | Statement::Expression(value)
+        | Statement::Drop { value }
+        | Statement::Move { value, .. } => expression_location(value),
+        Statement::Return(Some(value)) => expression_location(value),
+        Statement::If { condition, .. } | Statement::While { condition, .. } => {
+            expression_location(condition)
+        }
+        Statement::For { iterable, .. } | Statement::Find { iterable, .. } => {
+            expression_location(iterable)
+        }
+        Statement::Match { value, .. } => expression_location(value),
+        _ => (1, 1),
+    }
+}
+
+fn expression_location(expression: &Expression) -> (usize, usize) {
+    match expression {
+        Expression::Identifier(ident) => (ident.line.max(1), ident.column.max(1)),
+        Expression::BinaryOp { left, .. }
+        | Expression::NamedArg { value: left, .. }
+        | Expression::Reference { expr: left, .. }
+        | Expression::Dereference { expr: left, .. }
+        | Expression::Box { value: left, .. }
+        | Expression::Pipeline { input: left, .. } => expression_location(left),
+        Expression::UnaryOp { operand, .. } => expression_location(operand),
+        Expression::Call { args, .. }
+        | Expression::List { elements: args, .. }
+        | Expression::Tuple { elements: args, .. } => {
+            args.first().map(expression_location).unwrap_or((1, 1))
+        }
+        Expression::Dict { entries, .. } => entries
+            .first()
+            .map(|(key, _)| expression_location(key))
+            .unwrap_or((1, 1)),
+        Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
+            expression_location(target)
+        }
+        Expression::Closure { body, .. } => body.first().map(statement_location).unwrap_or((1, 1)),
+        Expression::Match { value, .. } => expression_location(value),
+        Expression::EnumVariant { payloads, .. } => {
+            payloads.first().map(expression_location).unwrap_or((1, 1))
+        }
+        Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
+    }
+}
+
+fn find_position_for_import(source: &str, module: &str) -> Option<(usize, usize)> {
+    find_position_for_any_pattern(source, &[
+        &format!("import {} ", module),
+        &format!("import {}\n", module),
+        &format!("import {}", module),
+    ])
+}
+
+fn find_position_for_var(source: &str, name: &str) -> Option<(usize, usize)> {
+    find_position_for_any_pattern(source, &[
+        &format!("set {} ", name),
+        &format!("set {}=", name),
+        &format!("set {}\n", name),
+        &format!("set {}", name),
+    ])
+}
+
+fn find_position_for_fn(source: &str, name: &str) -> Option<(usize, usize)> {
+    find_position_for_any_pattern(source, &[
+        &format!("fn {}:", name),
+        &format!("fn {} ", name),
+        &format!("pub fn {}:", name),
+        &format!("pub fn {} ", name),
+    ])
+}
+
+fn find_position_for_pattern(source: &str, pattern: &str) -> Option<(usize, usize)> {
+    for (idx, line) in source.lines().enumerate() {
+        if let Some(col) = line.find(pattern) {
+            return Some((idx + 1, col + 1));
+        }
+    }
+    None
+}
+
+fn find_position_for_any_pattern(source: &str, patterns: &[&str]) -> Option<(usize, usize)> {
+    for p in patterns {
+        if let Some(pos) = find_position_for_pattern(source, p) {
+            return Some(pos);
+        }
+    }
+    None
 }
 
 pub fn check_warnings(
