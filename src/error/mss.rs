@@ -1,3 +1,5 @@
+use crate::error::diagnostic::DiagnosticCode;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MssError {
     MutationWhileShared,
@@ -9,6 +11,20 @@ pub enum MssError {
     BorrowOutOfScope,
     InvalidMove,
     UnsafeViolation,
+}
+
+impl MssError {
+    pub fn diagnostic_code(&self) -> DiagnosticCode {
+        match self {
+            MssError::UseAfterMove => DiagnosticCode::E0007,
+            MssError::MultipleMutableRefs => DiagnosticCode::E0008,
+            MssError::MutationWhileShared => DiagnosticCode::E0009,
+            MssError::MoveWhileBorrowed | MssError::InvalidMove => DiagnosticCode::E0010,
+            MssError::DropWhileBorrowed => DiagnosticCode::E0011,
+            MssError::DoubleDrop => DiagnosticCode::E0012,
+            MssError::BorrowOutOfScope | MssError::UnsafeViolation => DiagnosticCode::E0013,
+        }
+    }
 }
 
 impl std::fmt::Display for MssError {

@@ -6,14 +6,19 @@ use mire::MireError;
 use mire::MireManifest;
 use mire::MireProject;
 use mire::analyze_program;
+use mire::analyze_program_with_warnings;
 use mire::compile_file_with_avenys;
 use mire::default_output_dir;
+use mire::WarningConfig;
 use mire::lexer::tokenize;
 use mire::load_program_from_file;
 use mire::load_project_manifest;
 use mire::parser::parse;
 use mire::project_manifest_path;
 use mire::write_lock_file;
+use mire::error::diagnostic::{DiagnosticCode, Severity, WarningFilter};
+use mire::error::format::format_diagnostic;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,6 +33,7 @@ type RunOptionsResult = Result<
         Option<PathBuf>,
         RunStatsOptions,
         CacheOverrides,
+        WarningCliOptions,
     ),
     MireError,
 >;
@@ -45,6 +51,12 @@ struct RunStatsOptions {
     show_ms: bool,
     show_memory: bool,
     show_cpu: bool,
+}
+
+#[derive(Debug, Clone)]
+struct WarningCliOptions {
+    filter: WarningFilter,
+    deny: HashSet<DiagnosticCode>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +134,7 @@ fn run_cli() -> Result<i32, MireError> {
         "init" => init_command(&cwd, &args[2..]),
         "run" | "avenys" => run_command(&cwd, &args[2..]),
         "build" => build_command(&cwd, &args[2..]),
+        "check" => check_command(&cwd, &args[2..]),
         "test" => test_command(&cwd, &args[2..]),
         "bench" => bench_command(&cwd, &args[2..]),
         "debug" => debug_command(&cwd, &args[2..]),
@@ -145,7 +158,7 @@ fn run_cli() -> Result<i32, MireError> {
 }
 
 fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    let (common, file, output, stats_options, cache) = parse_run_options(cwd, args)?;
+    let (common, file, output, stats_options, cache, warn) = parse_run_options(cwd, args)?;
     let path = resolve_source_path(cwd, file)?;
     inspect_source(&path, &common)?;
     let options = BuildOptions {
@@ -159,6 +172,8 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         emit_binary: true,
         persist_ir: false,
         cache,
+        warning_filter: warn.filter,
+        deny_warnings: warn.deny,
     };
     let build = compile_file_with_avenys(&path, &options)?;
     if common.debug {
@@ -176,7 +191,7 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 }
 
 fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    let (common, file, output, cache) = parse_command_options(cwd, args)?;
+    let (common, file, output, cache, warn) = parse_command_options(cwd, args)?;
     let path = resolve_source_path(cwd, file)?;
     inspect_source(&path, &common)?;
 
@@ -191,6 +206,8 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         emit_binary: true,
         persist_ir: false,
         cache,
+        warning_filter: warn.filter,
+        deny_warnings: warn.deny,
     };
     let build = compile_file_with_avenys(&path, &options)?;
     println!("{}", build.binary_path.display());
@@ -202,8 +219,34 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     Ok(0)
 }
 
+fn check_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
+    let (common, file, _, _, warn) = parse_command_options(cwd, args)?;
+    let path = resolve_source_path(cwd, file)?;
+    inspect_source(&path, &common)?;
+    let source = fs::read_to_string(&path).map_err(runtime_err)?;
+    let mut expanded_program = load_program_from_file(&path)?;
+    let _ = analyze_program(&mut expanded_program, &source)?;
+    let report = analyze_program_with_warnings(
+        &mut expanded_program,
+        &source,
+        Some(&path.display().to_string()),
+        WarningConfig {
+            filter: warn.filter,
+            deny: warn.deny,
+        },
+    )?;
+    let mut has_error = false;
+    for diagnostic in &report.diagnostics {
+        eprintln!("{}", format_diagnostic(diagnostic, true));
+        if matches!(diagnostic.severity, Severity::Error) {
+            has_error = true;
+        }
+    }
+    Ok(if has_error { 1 } else { 0 })
+}
+
 fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    let (common, file, _, cache) = parse_command_options(cwd, args)?;
+    let (common, file, _, cache, warn) = parse_command_options(cwd, args)?;
     let test_root = if let Some(file) = file {
         PathBuf::from(file)
     } else {
@@ -236,6 +279,8 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             emit_binary: true,
             persist_ir: false,
             cache,
+            warning_filter: warn.filter.clone(),
+            deny_warnings: warn.deny.clone(),
         };
         let build = compile_file_with_avenys(&file, &options)?;
         let code = Command::new(&build.binary_path)
@@ -351,6 +396,8 @@ fn bench_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             emit_binary: true,
             persist_ir: false,
             cache: CacheOverrides::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         };
 
         let start = std::time::Instant::now();
@@ -467,7 +514,9 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         emit_binary: !options.emit_ir_only,
         persist_ir: true,
         cache: options.cache,
-    };
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
+        };
     let build = compile_file_with_avenys(&path, &build_options)?;
     if options.show_log {
         println!("=== Debug Snapshot ===");
@@ -655,7 +704,7 @@ fn create_project_in_dir(project_dir: &Path, manifest_dir: &Path) -> Result<i32,
 }
 
 fn parse_run_options(cwd: &Path, args: &[String]) -> RunOptionsResult {
-    let (common, file, output, cache) = parse_command_options(cwd, args)?;
+    let (common, file, output, cache, warn) = parse_command_options(cwd, args)?;
     let mut stats = RunStatsOptions::default();
     for arg in args {
         match arg.as_str() {
@@ -665,7 +714,7 @@ fn parse_run_options(cwd: &Path, args: &[String]) -> RunOptionsResult {
             _ => {}
         }
     }
-    Ok((common, file, output, stats, cache))
+    Ok((common, file, output, stats, cache, warn))
 }
 
 fn parse_debug_options(cwd: &Path, args: &[String]) -> Result<DebugOptions, MireError> {
@@ -856,6 +905,7 @@ fn parse_command_options(
         Option<String>,
         Option<PathBuf>,
         CacheOverrides,
+        WarningCliOptions,
     ),
     MireError,
 > {
@@ -868,6 +918,9 @@ fn parse_command_options(
     let mut file = None;
     let mut output = None;
     let mut cache = CacheOverrides::default();
+    let mut warn_all = false;
+    let mut warn_codes: HashSet<DiagnosticCode> = HashSet::new();
+    let mut deny_codes: HashSet<DiagnosticCode> = HashSet::new();
 
     let mut index = 0;
     while index < args.len() {
@@ -886,6 +939,19 @@ fn parse_command_options(
             "--cache-max-units" => {
                 index += 1;
                 cache.max_units = Some(parse_usize_arg(args.get(index), "cache-max-units")?);
+            }
+            "--warn-all" => warn_all = true,
+            "-W" => {
+                index += 1;
+                if let Some(code) = args.get(index).and_then(|v| parse_warning_code(v)) {
+                    warn_codes.insert(code);
+                }
+            }
+            "--deny" => {
+                index += 1;
+                if let Some(code) = args.get(index).and_then(|v| parse_warning_code(v)) {
+                    deny_codes.insert(code);
+                }
             }
             "--show-tokens" => common.show_tokens = true,
             "--show-ast" => common.show_ast = true,
@@ -920,7 +986,26 @@ fn parse_command_options(
         ));
     }
 
-    Ok((common, file, output, cache))
+    let filter = if warn_all {
+        WarningFilter::All
+    } else if warn_codes.is_empty() {
+        WarningFilter::Default
+    } else {
+        let mut merged = WarningFilter::default_codes();
+        merged.extend(warn_codes);
+        WarningFilter::Codes(merged)
+    };
+
+    Ok((
+        common,
+        file,
+        output,
+        cache,
+        WarningCliOptions {
+            filter,
+            deny: deny_codes,
+        },
+    ))
 }
 
 fn parse_bench_options(
@@ -1078,6 +1163,39 @@ fn parse_u64_arg(value: Option<&String>, name: &str) -> Result<u64, MireError> {
     let raw = value.ok_or_else(|| runtime_msg(&format!("Missing {}", name)))?;
     raw.parse::<u64>()
         .map_err(|_| runtime_msg(&format!("Invalid {} '{}'", name, raw)))
+}
+
+fn parse_warning_code(raw: &str) -> Option<DiagnosticCode> {
+    match raw {
+        "W0001" => Some(DiagnosticCode::W0001),
+        "W0002" => Some(DiagnosticCode::W0002),
+        "W0003" => Some(DiagnosticCode::W0003),
+        "W0004" => Some(DiagnosticCode::W0004),
+        "W0005" => Some(DiagnosticCode::W0005),
+        "W0006" => Some(DiagnosticCode::W0006),
+        "W0007" => Some(DiagnosticCode::W0007),
+        "W0008" => Some(DiagnosticCode::W0008),
+        "W0009" => Some(DiagnosticCode::W0009),
+        "W0010" => Some(DiagnosticCode::W0010),
+        "W0011" => Some(DiagnosticCode::W0011),
+        "W0012" => Some(DiagnosticCode::W0012),
+        "W0013" => Some(DiagnosticCode::W0013),
+        "W0014" => Some(DiagnosticCode::W0014),
+        "W0015" => Some(DiagnosticCode::W0015),
+        "W0016" => Some(DiagnosticCode::W0016),
+        "W0017" => Some(DiagnosticCode::W0017),
+        "W0018" => Some(DiagnosticCode::W0018),
+        "W0019" => Some(DiagnosticCode::W0019),
+        "W0020" => Some(DiagnosticCode::W0020),
+        "W0021" => Some(DiagnosticCode::W0021),
+        "W0022" => Some(DiagnosticCode::W0022),
+        "W0023" => Some(DiagnosticCode::W0023),
+        "W0024" => Some(DiagnosticCode::W0024),
+        "W0025" => Some(DiagnosticCode::W0025),
+        "W0026" => Some(DiagnosticCode::W0026),
+        "W0027" => Some(DiagnosticCode::W0027),
+        _ => None,
+    }
 }
 
 fn benchmark_command<F>(
@@ -1308,6 +1426,7 @@ fn print_help() {
     println!("Basic commands:");
     println!("  run [file] [options]    Compile and run");
     println!("  build [file]            Compile only using the project target/output");
+    println!("  check [file]            Analyze and emit diagnostics without binary output");
     println!("  new [name]              Create a project, default name: default");
     println!("  debug [file] [options]  Debug compile in LLVM IR mode");
     println!();
@@ -1315,6 +1434,9 @@ fn print_help() {
     println!("  --ms                 Show wall-clock time in ms");
     println!("  --memory, -m         Show peak process memory");
     println!("  --cpu                Show process CPU time in ms");
+    println!("  --warn-all           Enable all warnings");
+    println!("  -W <Wxxxx>           Enable specific warning code");
+    println!("  --deny <Wxxxx>       Treat warning as error");
     println!();
     println!("debug options:");
     println!("  --ast, -p            Show parsed AST");

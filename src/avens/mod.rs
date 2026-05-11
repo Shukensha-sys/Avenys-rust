@@ -1,6 +1,9 @@
 use crate::compiler::{
-    AnalysisSelection, analyze_program_with_origins, analyze_program_with_origins_partial,
+    AnalysisSelection, WarningConfig, analyze_program_with_origins,
+    analyze_program_with_origins_partial, analyze_program_with_warnings,
 };
+use crate::error::diagnostic::{DiagnosticCode, Severity, WarningFilter};
+use crate::error::format::format_diagnostic;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::incremental::{
     AnalysisInvalidationReport, BuildCacheEntry, CacheOverrides, CacheSettings, CachedAnalysis,
@@ -12,7 +15,7 @@ use crate::parser::ast::{
     AssignmentTarget, DataType, Expression, Identifier, Literal, Program, Statement,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -155,6 +158,8 @@ pub struct BuildOptions {
     pub emit_binary: bool,
     pub persist_ir: bool,
     pub cache: CacheOverrides,
+    pub warning_filter: WarningFilter,
+    pub deny_warnings: HashSet<DiagnosticCode>,
 }
 
 #[derive(Debug, Clone)]
@@ -419,6 +424,29 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         cache.store_analysis(source_path, fingerprint, &program)?;
         program
     };
+
+    let mut warning_program = program.clone();
+    let warning_report = analyze_program_with_warnings(
+        &mut warning_program,
+        &source,
+        Some(&source_filename),
+        WarningConfig {
+            filter: options.warning_filter.clone(),
+            deny: options.deny_warnings.clone(),
+        },
+    )?;
+    for diagnostic in &warning_report.diagnostics {
+        eprintln!("{}", format_diagnostic(diagnostic, true));
+    }
+    if warning_report
+        .diagnostics
+        .iter()
+        .any(|diag| matches!(diag.severity, Severity::Error))
+    {
+        return Err(MireError::runtime(
+            "Compilation aborted due to denied warnings".to_string(),
+        ));
+    }
 
     let ir = LlvmIrGen::new().compile_program(&program).map_err(|err| {
         let err = if err.source().is_none() {

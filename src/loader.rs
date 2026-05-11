@@ -295,10 +295,14 @@ impl ImportResolver {
         }
 
         let relative = &raw_path[2..];
-        let importer_dir = importer_path
-            .parent()
-            .unwrap_or(self.project_root.as_path());
-        let mut candidate = importer_dir.join(relative);
+        let mut candidate = if importer_path.starts_with(&self.project_root) {
+            self.project_root.join(relative)
+        } else {
+            let importer_dir = importer_path
+                .parent()
+                .unwrap_or(self.project_root.as_path());
+            importer_dir.join(relative)
+        };
         if candidate.extension().is_none() {
             candidate.set_extension("mire");
         }
@@ -309,26 +313,46 @@ impl ImportResolver {
             })
         })?;
 
-        if !canonical.starts_with(&self.project_root) {
-            return Err(MireError::new(ErrorKind::Runtime {
-                message: format!(
-                    "Local import '{}' escapes the project root '{}'",
-                    raw_path,
-                    self.project_root.display()
-                ),
-            }));
+        if importer_path.starts_with(&self.project_root) {
+            if !canonical.starts_with(&self.project_root) {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Local import '{}' escapes the project root '{}'",
+                        raw_path,
+                        self.project_root.display()
+                    ),
+                }));
+            }
+        } else {
+            let bundled_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules");
+            if !canonical.starts_with(&bundled_root) {
+                return Err(MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Local import '{}' escapes bundled modules root '{}'",
+                        raw_path,
+                        bundled_root.display()
+                    ),
+                }));
+            }
         }
 
         Ok(canonical)
     }
 
     fn std_entry_path(&self) -> Result<PathBuf> {
-        let candidate = self.project_root.join("src/modules/std/mod.mire");
-        candidate.canonicalize().map_err(|err| {
+        let project_candidate = self.project_root.join("src/modules/std/mod.mire");
+        if let Ok(path) = project_candidate.canonicalize() {
+            return Ok(path);
+        }
+
+        let bundled_candidate =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules/std/mod.mire");
+        bundled_candidate.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
                 message: format!(
-                    "Could not resolve std module entry '{}': {}",
-                    candidate.display(),
+                    "Could not resolve std module entry '{}' nor bundled '{}': {}",
+                    project_candidate.display(),
+                    bundled_candidate.display(),
                     err
                 ),
             })

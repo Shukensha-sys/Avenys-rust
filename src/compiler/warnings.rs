@@ -1,621 +1,429 @@
-use crate::parser::ast::{DataType, Expression, Statement, Literal};
+use crate::error::diagnostic::{Diagnostic, DiagnosticCode, Label, LabelStyle, Severity, WarningFilter};
 use crate::parser::Program;
+use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
-pub struct Warning {
-    pub code: String,
-    pub message: String,
-    pub severity: WarningSeverity,
-    pub category: WarningCategory,
-    pub line: usize,
-    pub column: usize,
-    pub source_file: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WarningSeverity {
-    Hint,
-    Info,
-    Warning,
-    Error,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum WarningCategory {
-    Unused,
-    Type,
-    Performance,
-    Security,
-    Style,
-    Complexity,
-    BestPractice,
-    Deprecated,
-    NullSafety,
-    Concurrency,
-    Memory,
-}
-
-impl WarningSeverity {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            WarningSeverity::Hint => "hint",
-            WarningSeverity::Info => "info",
-            WarningSeverity::Warning => "warning",
-            WarningSeverity::Error => "error",
-        }
-    }
-}
-
-impl WarningCategory {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            WarningCategory::Unused => "unused",
-            WarningCategory::Type => "type",
-            WarningCategory::Performance => "performance",
-            WarningCategory::Security => "security",
-            WarningCategory::Style => "style",
-            WarningCategory::Complexity => "complexity",
-            WarningCategory::BestPractice => "best-practice",
-            WarningCategory::Deprecated => "deprecated",
-            WarningCategory::NullSafety => "null-safety",
-            WarningCategory::Concurrency => "concurrency",
-            WarningCategory::Memory => "memory",
-        }
-    }
-}
-
-pub struct Warnings {
-    pub warnings: Vec<Warning>,
+pub struct WarningAnalyzer {
+    diagnostics: Vec<Diagnostic>,
+    filter: WarningFilter,
+    deny: HashSet<DiagnosticCode>,
     defined_variables: HashSet<String>,
-    defined_functions: HashSet<String>,
     used_variables: HashSet<String>,
+    defined_functions: HashSet<String>,
     used_functions: HashSet<String>,
+    imported_modules: Vec<Identifier>,
+    used_imports: HashSet<String>,
     loop_depth: usize,
-    max_loop_depth: usize,
 }
 
-impl Default for Warnings {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Warnings {
-    pub fn new() -> Self {
+impl WarningAnalyzer {
+    pub fn new(filter: WarningFilter, deny: HashSet<DiagnosticCode>) -> Self {
         Self {
-            warnings: Vec::new(),
+            diagnostics: Vec::new(),
+            filter,
+            deny,
             defined_variables: HashSet::new(),
-            defined_functions: HashSet::new(),
             used_variables: HashSet::new(),
+            defined_functions: HashSet::new(),
             used_functions: HashSet::new(),
+            imported_modules: Vec::new(),
+            used_imports: HashSet::new(),
             loop_depth: 0,
-            max_loop_depth: 0,
         }
     }
 
-    pub fn analyze(program: &Program) -> Vec<Warning> {
-        let mut warnings = Warnings::new();
-        warnings.analyze_program(program);
-        warnings.warnings
-    }
-
-    fn analyze_program(&mut self, program: &Program) {
-        self.analyze_statements(&program.statements);
-        
+    pub fn analyze(mut self, program: &Program, source: &str, filename: Option<&str>) -> Vec<Diagnostic> {
         for stmt in &program.statements {
-            self.check_statement_warnings(stmt);
+            self.scan_defs(stmt);
         }
-        
-        self.check_unused_definitions();
+        for stmt in &program.statements {
+            self.scan_usage(stmt);
+        }
+
+        let defined_variables: Vec<String> = self.defined_variables.iter().cloned().collect();
+        for name in &defined_variables {
+            if !name.starts_with('_') && !self.used_variables.contains(name) {
+                self.push_warn(
+                    DiagnosticCode::W0001,
+                    "Unused Variable",
+                    format!("Variable '{}' is never used", name),
+                    1,
+                    1,
+                    Some("prefix with '_' to suppress this warning".to_string()),
+                );
+            }
+        }
+
+        let defined_functions: Vec<String> = self.defined_functions.iter().cloned().collect();
+        for name in &defined_functions {
+            if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name) {
+                self.push_warn(
+                    DiagnosticCode::W0002,
+                    "Unused Function",
+                    format!("Function '{}' is never used", name),
+                    1,
+                    1,
+                    None,
+                );
+            }
+        }
+
+        let imported_modules = self.imported_modules.clone();
+        for import in &imported_modules {
+            if !self.used_imports.contains(&import.name) {
+                self.push_warn(
+                    DiagnosticCode::W0003,
+                    "Unused Import",
+                    format!("Import '{}' is never used", import.name),
+                    import.line,
+                    import.column,
+                    None,
+                );
+            }
+        }
+
+        for diag in &mut self.diagnostics {
+            diag.source = Some(source.to_string());
+            if let Some(filename) = filename {
+                diag.filename = Some(filename.to_string());
+            }
+        }
+        self.diagnostics
     }
 
-    fn check_statement_warnings(&mut self, stmt: &Statement) {
+    fn scan_defs(&mut self, stmt: &Statement) {
         match stmt {
-            Statement::Use { path, items, .. } => {
-                if path.trim().is_empty() || matches!(items, Some(v) if v.is_empty()) {
-                    self.add_warning("W001", "Suspicious or empty import",
-                        WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
-                }
-            }
-            Statement::Function { name, body, .. } => {
-                if body.len() > 50 {
-                    self.add_warning("W012", &format!("Function '{}' is too long ({} lines)", name, body.len()),
-                        WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
-                }
-                for s in body {
-                    self.check_statement_warnings(s);
-                }
-                if body.is_empty() {
-                    self.add_warning("W010", &format!("Function '{}' has empty body", name),
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-            }
-            Statement::While { condition, body, .. } => {
-                self.loop_depth += 1;
-                self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
-                
-                self.check_loop_warnings(condition);
-                for s in body {
-                    self.check_statement_warnings(s);
-                }
-                
-                self.loop_depth -= 1;
-            }
-            Statement::For { body, .. } => {
-                self.loop_depth += 1;
-                self.max_loop_depth = self.max_loop_depth.max(self.loop_depth);
-                if body.is_empty() {
-                    self.add_warning("W037", "Loop has empty body",
-                        WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
-                }
-                for s in body {
-                    self.check_statement_warnings(s);
-                }
-                self.loop_depth -= 1;
-            }
-            Statement::If { condition, then_branch, else_branch, .. } => {
-                self.check_condition_warnings(condition);
-                if then_branch.is_empty() && else_branch.as_ref().map(|b| b.is_empty()).unwrap_or(true) {
-                    self.add_warning("W013", "If statement has empty branches",
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-                for s in then_branch {
-                    self.check_statement_warnings(s);
-                }
-                if let Some(else_br) = else_branch {
-                    for s in else_br {
-                        self.check_statement_warnings(s);
-                    }
-                }
-            }
-            Statement::Match { value, cases, default, .. } => {
-                self.check_expression_warnings(value);
-                for (_, body) in cases {
-                    for s in body {
-                        self.check_statement_warnings(s);
-                    }
-                }
-                for s in default {
-                    self.check_statement_warnings(s);
-                }
-            }
-            Statement::Expression(expr) => {
-                self.check_expression_warnings(expr);
-                if let Expression::Literal(_) = expr {
-                    self.add_warning("W006", "Useless literal expression statement",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-            Statement::Return(expr) => {
-                if let Some(e) = expr {
-                    self.check_return_warnings(e);
-                }
-            }
-            Statement::Break | Statement::Continue => {
-                if self.loop_depth == 0 {
-                    self.add_warning("W052", "Break/continue outside of loop",
-                        WarningSeverity::Error, WarningCategory::Concurrency, 0, 0);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn check_expression_warnings(&mut self, expr: &Expression) {
-        match expr {
-            Expression::Identifier(id) => {
-                if self.defined_variables.contains(&id.name) || self.defined_functions.contains(&id.name) {
-                    self.used_variables.insert(id.name.clone());
-                }
-                
-                if id.name.len() > 30 {
-                    self.add_warning("W014", &format!("Variable name '{}' is too long", id.name),
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-            }
-            Expression::Call { name, args, .. } => {
-                self.used_functions.insert(name.clone());
-                
-                if name == "clone" {
-                    self.add_warning("W015", "Unnecessary clone call",
-                        WarningSeverity::Info, WarningCategory::Performance, 0, 0);
-                }
-                
-                if name == "println" || name == "print" {
-                    self.add_warning("W016", "Consider using dasu() for output",
-                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
-                }
-                
-                if args.is_empty() && !self.defined_functions.contains(name) {
-                    self.add_warning("W017", &format!("Call to undefined function: '{}'", name),
-                        WarningSeverity::Error, WarningCategory::Type, 0, 0);
-                }
-                
-                for arg in args {
-                    self.check_expression_warnings(arg);
-                }
-            }
-            Expression::BinaryOp { operator, left, right, .. } => {
-                self.check_binary_op_warnings(operator, left, right);
-                self.check_expression_warnings(left);
-                self.check_expression_warnings(right);
-            }
-            Expression::UnaryOp { operator, operand, .. } => {
-                if *operator == "*" {
-                    if let Expression::Identifier(id) = operand.as_ref() {
-                        if !self.used_variables.contains(&id.name) {
-                            self.add_warning("W018", &format!("Dereferencing unused variable: '{}'", id.name),
-                                WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
-                        }
-                    }
-                }
-                self.check_expression_warnings(operand);
-            }
-            Expression::List { elements, .. } => {
-                if elements.is_empty() {
-                    self.add_warning("W019", "Empty list literal",
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-                for elem in elements {
-                    self.check_expression_warnings(elem);
-                }
-            }
-            Expression::Dict { entries, .. } => {
-                if entries.is_empty() {
-                    self.add_warning("W020", "Empty dict literal",
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-                for (key, value) in entries {
-                    self.check_expression_warnings(key);
-                    self.check_expression_warnings(value);
-                }
-            }
-            Expression::Index { target, index, .. } => {
-                if let Expression::Literal(Literal::Int(n)) = index.as_ref() {
-                    if *n < 0 {
-                        self.add_warning("W021", "Negative index access",
-                            WarningSeverity::Error, WarningCategory::Type, 0, 0);
-                    }
-                }
-                self.check_expression_warnings(target);
-                self.check_expression_warnings(index);
-            }
-            Expression::Closure { params, body, .. } => {
-                if params.len() > 3 {
-                    self.add_warning("W022", "Closure has many parameters",
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-                self.analyze_statements(body);
-            }
-            Expression::Literal(lit) => {
-                self.check_literal_warnings(lit);
-            }
-            Expression::Match { value, cases, .. } => {
-                self.check_expression_warnings(value);
-                for (case_expr, case_body) in cases {
-                    self.check_expression_warnings(case_expr);
-                    if let Expression::List { elements, .. } = case_body {
-                        for elem in elements {
-                            self.check_expression_warnings(elem);
-                        }
-                    }
-                }
-            }
-            Expression::Reference { expr, .. } => {
-                self.check_expression_warnings(expr);
-            }
-            Expression::Dereference { expr, .. } => {
-                self.check_expression_warnings(expr);
-            }
-            _ => {}
-        }
-    }
-
-    fn check_binary_op_warnings(&mut self, operator: &String, left: &Expression, right: &Expression) {
-        if operator == "&&" {
-            if let Expression::Literal(Literal::Bool(false)) = left {
-                self.add_warning("W007", "Left side of '&&' is always false (short-circuit)",
-                    WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-            }
-            self.check_condition_warnings(left);
-        } else if operator == "||" {
-            if let Expression::Literal(Literal::Bool(true)) = left {
-                self.add_warning("W008", "Left side of '||' is always true (short-circuit)",
-                    WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-            }
-            self.check_condition_warnings(left);
-        } else if operator == "+" {
-            if let Expression::Literal(Literal::Str(s)) = left {
-                if s.is_empty() {
-                    self.add_warning("W023", "Adding empty string",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-            if let Expression::Literal(Literal::Str(s)) = right {
-                if s.is_empty() {
-                    self.add_warning("W024", "Adding empty string",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-        } else if operator == "*" {
-            if let Expression::Literal(Literal::Int(n)) = left {
-                if *n == 0 {
-                    self.add_warning("W025", "Multiplication by zero",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-            if let Expression::Literal(Literal::Int(n)) = right {
-                if *n == 0 {
-                    self.add_warning("W026", "Multiplication by zero",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-                if *n == 1 {
-                    self.add_warning("W027", "Multiplication by 1 is redundant",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-        } else if operator == "/" {
-            if let Expression::Literal(Literal::Int(n)) = right {
-                if *n == 0 {
-                    self.add_warning("W028", "Division by zero",
-                        WarningSeverity::Error, WarningCategory::Security, 0, 0);
-                }
-                if *n == 1 {
-                    self.add_warning("W029", "Division by 1 is redundant",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-        } else if operator == "%" {
-            if let Expression::Literal(Literal::Int(n)) = right {
-                if *n == 0 {
-                    self.add_warning("W030", "Modulo by zero",
-                        WarningSeverity::Error, WarningCategory::Security, 0, 0);
-                }
-                if *n == 1 {
-                    self.add_warning("W031", "Modulo by 1 is always 0",
-                        WarningSeverity::Hint, WarningCategory::Performance, 0, 0);
-                }
-            }
-        }
-    }
-
-    fn check_condition_warnings(&mut self, condition: &Expression) {
-        if let Expression::Literal(Literal::Bool(false)) = condition {
-            self.add_warning("W009", "Condition is always false",
-                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
-        }
-        if let Expression::Literal(Literal::Bool(true)) = condition {
-            self.add_warning("W032", "Condition is always true",
-                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
-        }
-    }
-
-    fn check_loop_warnings(&mut self, condition: &Expression) {
-        if let Expression::Literal(Literal::Bool(true)) = condition {
-            self.add_warning("W033", "Infinite loop detected (while true)",
-                WarningSeverity::Warning, WarningCategory::Performance, 0, 0);
-        }
-        if let Expression::Literal(Literal::Bool(false)) = condition {
-            self.add_warning("W034", "Loop body is unreachable (while false)",
-                WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
-        }
-        
-        if self.loop_depth > 3 {
-            self.add_warning("W035", &format!("Nested loops (depth: {})", self.loop_depth),
-                WarningSeverity::Info, WarningCategory::Complexity, 0, 0);
-        }
-        if self.loop_depth > 5 {
-            self.add_warning("W036", &format!("Very deep loop nesting (depth: {})", self.loop_depth),
-                WarningSeverity::Warning, WarningCategory::Complexity, 0, 0);
-        }
-    }
-
-    fn check_return_warnings(&mut self, expr: &Expression) {
-        if let Expression::Literal(Literal::Int(_)) = expr {
-            self.add_warning("W038", "Returning literal number, consider using a constant",
-                WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
-        }
-        if let Expression::Literal(Literal::Str(_)) = expr {
-            self.add_warning("W039", "Returning literal string, consider using a constant",
-                WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
-        }
-    }
-
-    fn check_literal_warnings(&mut self, lit: &Literal) {
-        match lit {
-            Literal::Str(s) => {
-                if s.len() > 100 {
-                    self.add_warning("W040", "Very long string literal",
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
-                }
-                
-                if s.is_empty() {
-                    self.add_warning("W041", "Empty string literal",
-                        WarningSeverity::Hint, WarningCategory::Style, 0, 0);
-                }
-                if s.chars().any(|c| c.is_control()) {
-                    self.add_warning("W050", "String literal contains control characters",
-                        WarningSeverity::Warning, WarningCategory::Security, 0, 0);
-                }
-            }
-            Literal::Int(n) => {
-                if *n == 0 || *n == 1 {
-                    self.add_warning("W042", "Using magic number, consider using a named constant",
-                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
-                }
-                if *n < 0 {
-                    self.add_warning("W051", "Negative literal used directly",
-                        WarningSeverity::Hint, WarningCategory::BestPractice, 0, 0);
-                }
-            }
-            Literal::Float(_) => {
-                self.add_warning("W043", "Float literal may reduce deterministic behavior",
-                    WarningSeverity::Info, WarningCategory::BestPractice, 0, 0);
-            }
-            Literal::Bool(_) => {
-                self.add_warning("W044", "Boolean literal can hide hardcoded control flow",
-                    WarningSeverity::Hint, WarningCategory::Style, 0, 0);
-            }
-            Literal::Char(_) => {
-                self.add_warning("W045", "Character literal used directly",
-                    WarningSeverity::Hint, WarningCategory::Style, 0, 0);
-            }
-            Literal::None => {
-                self.add_warning("W046", "None literal used directly",
-                    WarningSeverity::Info, WarningCategory::NullSafety, 0, 0);
-            }
-            Literal::List(values) if values.len() > 128 => {
-                self.add_warning("W047", "Large list literal can impact compile/runtime memory",
-                    WarningSeverity::Info, WarningCategory::Memory, 0, 0);
-            }
-            Literal::Dict(values) if values.len() > 64 => {
-                self.add_warning("W048", "Large dict literal can impact compile/runtime memory",
-                    WarningSeverity::Info, WarningCategory::Memory, 0, 0);
-            }
-            Literal::Tuple(values) if values.len() > 16 => {
-                self.add_warning("W049", "Large tuple literal may hurt readability",
-                    WarningSeverity::Info, WarningCategory::Style, 0, 0);
-            }
-            _ => {}
-        }
-    }
-
-    fn check_unused_definitions(&mut self) {
-        // Check unused variables
-        let defined: Vec<String> = self.defined_variables.iter().cloned().collect();
-        for var in defined {
-            if !self.used_variables.contains(&var) && !var.starts_with('_') {
-                self.add_warning("W002", &format!("Unused variable: '{}'", var),
-                    WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
-            }
-        }
-        
-        // Check unused functions
-        let funcs: Vec<String> = self.defined_functions.iter().cloned().collect();
-        for func in funcs {
-            if !self.used_functions.contains(&func) && func != "main" && !func.starts_with('_') {
-                self.add_warning("W004", &format!("Unused function: '{}'", func),
-                    WarningSeverity::Hint, WarningCategory::Unused, 0, 0);
-            }
-        }
-    }
-
-    fn analyze_statements(&mut self, statements: &[Statement]) {
-        for stmt in statements {
-            self.analyze_statement_defs_and_uses(stmt);
-        }
-    }
-
-    fn analyze_statement_defs_and_uses(&mut self, stmt: &Statement) {
-        match stmt {
-            Statement::Let { name, data_type, value, .. } => {
+            Statement::Let { name, data_type, .. } => {
                 self.defined_variables.insert(name.clone());
                 if *data_type == DataType::Unknown {
-                    self.add_warning("W003", "Implicit type annotation",
-                        WarningSeverity::Hint, WarningCategory::Type, 0, 0);
+                    self.push_warn(
+                        DiagnosticCode::W0004,
+                        "Implicit Type Annotation",
+                        format!("Variable '{}' relies on implicit typing", name),
+                        1,
+                        1,
+                        None,
+                    );
                 }
-                if let Some(expr) = value {
-                    self.check_expression_warnings(expr);
-                }
-            }
-            Statement::Assignment { target: _, value, .. } => {
-                self.check_expression_warnings(value);
-            }
-            Statement::Return(expr) => {
-                if let Some(e) = expr {
-                    self.check_expression_warnings(e);
-                }
-            }
-            Statement::If { condition, then_branch, else_branch, .. } => {
-                self.check_expression_warnings(condition);
-                self.analyze_statements(then_branch);
-                if let Some(else_br) = else_branch {
-                    self.analyze_statements(else_br);
-                }
-            }
-            Statement::While { condition, body, .. } => {
-                self.check_expression_warnings(condition);
-                self.analyze_statements(body);
-            }
-            Statement::For { variable, iterable, body, .. } => {
-                self.used_variables.insert(variable.clone());
-                self.check_expression_warnings(iterable);
-                self.analyze_statements(body);
             }
             Statement::Function { name, params, return_type, body, .. } => {
                 self.defined_functions.insert(name.clone());
                 if *return_type == DataType::Unknown {
-                    self.add_warning("W005", &format!("Function '{}' has implicit return type", name),
-                        WarningSeverity::Hint, WarningCategory::Type, 0, 0);
+                    self.push_warn(
+                        DiagnosticCode::W0005,
+                        "Implicit Return Type",
+                        format!("Function '{}' has implicit return type", name),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+                if body.is_empty() {
+                    self.push_warn(
+                        DiagnosticCode::W0006,
+                        "Empty Function Body",
+                        format!("Function '{}' has an empty body", name),
+                        1,
+                        1,
+                        Some("add statements to the function body".to_string()),
+                    );
+                }
+                if body.len() > 60 {
+                    self.push_warn(
+                        DiagnosticCode::W0011,
+                        "Long Function",
+                        format!("Function '{}' is very long ({} statements)", name, body.len()),
+                        1,
+                        1,
+                        None,
+                    );
                 }
                 if params.len() > 5 {
-                    self.add_warning("W011", &format!("Function '{}' has many parameters", name),
-                        WarningSeverity::Info, WarningCategory::Style, 0, 0);
+                    self.push_warn(
+                        DiagnosticCode::W0012,
+                        "Many Parameters",
+                        format!("Function '{}' has many parameters ({})", name, params.len()),
+                        1,
+                        1,
+                        None,
+                    );
                 }
-                self.analyze_statements(body);
-            }
-            Statement::Match { value, cases, default, .. } => {
-                self.check_expression_warnings(value);
-                for (pat, body) in cases {
-                    self.check_expression_warnings(pat);
-                    self.analyze_statements(body);
+                for b in body {
+                    self.scan_defs(b);
                 }
-                self.analyze_statements(default);
             }
-            Statement::Find { variable, iterable, body, .. } => {
-                self.used_variables.insert(variable.clone());
-                self.check_expression_warnings(iterable);
-                self.analyze_statements(body);
+            Statement::Use { path, is_local, .. } => {
+                if !*is_local {
+                    self.imported_modules.push(Identifier {
+                        name: path.clone(),
+                        data_type: DataType::Unknown,
+                        line: 1,
+                        column: 1,
+                    });
+                }
             }
-            Statement::Type { fields, .. } => {
-                self.analyze_statements(fields);
+            Statement::If { then_branch, else_branch, .. } => {
+                for s in then_branch {
+                    self.scan_defs(s);
+                }
+                if let Some(else_branch) = else_branch {
+                    for s in else_branch {
+                        self.scan_defs(s);
+                    }
+                }
             }
-            Statement::Code { methods, .. } => {
-                self.analyze_statements(methods);
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Find { body, .. } => {
+                for s in body {
+                    self.scan_defs(s);
+                }
             }
-            Statement::Class { methods, .. } => {
-                self.analyze_statements(methods);
-            }
-            Statement::Expression(expr) => {
-                self.check_expression_warnings(expr);
+            Statement::Match { cases, default, .. } => {
+                for (_, body) in cases {
+                    for s in body {
+                        self.scan_defs(s);
+                    }
+                }
+                for s in default {
+                    self.scan_defs(s);
+                }
             }
             _ => {}
         }
     }
 
-    fn add_warning(&mut self, code: &str, message: &str, severity: WarningSeverity, category: WarningCategory, line: usize, column: usize) {
-        self.warnings.push(Warning {
-            code: code.to_string(),
-            message: message.to_string(),
-            severity,
-            category,
+    fn scan_usage(&mut self, stmt: &Statement) {
+        match stmt {
+            Statement::Expression(expr) => self.scan_expr(expr),
+            Statement::Assignment { value, .. } => self.scan_expr(value),
+            Statement::Return(expr) => {
+                if let Some(expr) = expr {
+                    self.scan_expr(expr);
+                }
+            }
+            Statement::If { condition, then_branch, else_branch } => {
+                self.scan_expr(condition);
+                if then_branch.is_empty() && else_branch.as_ref().is_none_or(|v| v.is_empty()) {
+                    self.push_warn(
+                        DiagnosticCode::W0014,
+                        "Empty If Branches",
+                        "if statement has empty branches".to_string(),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+                for s in then_branch {
+                    self.scan_usage(s);
+                }
+                if let Some(else_branch) = else_branch {
+                    for s in else_branch {
+                        self.scan_usage(s);
+                    }
+                }
+            }
+            Statement::While { condition, body } => {
+                self.loop_depth += 1;
+                self.scan_expr(condition);
+                if let Expression::Literal(Literal::Bool(true)) = condition {
+                    self.push_warn(DiagnosticCode::W0016, "Infinite Loop", "while true can loop forever".to_string(), 1, 1, None);
+                }
+                if let Expression::Literal(Literal::Bool(false)) = condition {
+                    self.push_warn(DiagnosticCode::W0017, "Unreachable Loop", "while false body is unreachable".to_string(), 1, 1, None);
+                }
+                if self.loop_depth > 4 {
+                    self.push_warn(DiagnosticCode::W0018, "Deep Loop Nesting", format!("loop nesting depth is {}", self.loop_depth), 1, 1, None);
+                }
+                if body.is_empty() {
+                    self.push_warn(DiagnosticCode::W0013, "Empty Loop Body", "loop has an empty body".to_string(), 1, 1, None);
+                }
+                for s in body {
+                    self.scan_usage(s);
+                }
+                self.loop_depth -= 1;
+            }
+            Statement::For { iterable, body, .. } => {
+                self.loop_depth += 1;
+                self.scan_expr(iterable);
+                if body.is_empty() {
+                    self.push_warn(DiagnosticCode::W0013, "Empty Loop Body", "loop has an empty body".to_string(), 1, 1, None);
+                }
+                for s in body {
+                    self.scan_usage(s);
+                }
+                self.loop_depth -= 1;
+            }
+            Statement::Break | Statement::Continue => {
+                if self.loop_depth == 0 {
+                    self.push_warn(DiagnosticCode::W0019, "Control Flow", "break/continue outside loop".to_string(), 1, 1, None);
+                }
+            }
+            Statement::Use { path, .. } => {
+                self.used_imports.insert(path.clone());
+            }
+            Statement::Function { body, .. } => {
+                for s in body {
+                    self.scan_usage(s);
+                }
+            }
+            Statement::Match { value, cases, default } => {
+                self.scan_expr(value);
+                for (pat, body) in cases {
+                    self.scan_expr(pat);
+                    for s in body {
+                        self.scan_usage(s);
+                    }
+                }
+                for s in default {
+                    self.scan_usage(s);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn scan_expr(&mut self, expr: &Expression) {
+        match expr {
+            Expression::Identifier(id) => {
+                self.used_variables.insert(id.name.clone());
+            }
+            Expression::Call { name, args, .. } => {
+                self.used_functions.insert(name.clone());
+                if name == "clone" {
+                    self.push_warn(DiagnosticCode::W0027, "Unnecessary Clone", "unnecessary clone call".to_string(), 1, 1, None);
+                }
+                if args.is_empty() && !self.defined_functions.contains(name) {
+                    self.push_warn(
+                        DiagnosticCode::W0020,
+                        "Unknown Function Call",
+                        format!("call to undefined function '{}'", name),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+                for arg in args {
+                    self.scan_expr(arg);
+                }
+            }
+            Expression::BinaryOp { operator, left, right, .. } => {
+                self.scan_expr(left);
+                self.scan_expr(right);
+                if let Expression::Literal(Literal::Int(n)) = right.as_ref() {
+                    match operator.as_str() {
+                        "*" if *n == 0 => self.push_warn(DiagnosticCode::W0007, "Multiplication by Zero", "multiplication by zero".to_string(), 1, 1, None),
+                        "/" if *n == 0 => self.push_warn(DiagnosticCode::W0008, "Division by Zero", "division by zero".to_string(), 1, 1, None),
+                        "%" if *n == 0 => self.push_warn(DiagnosticCode::W0009, "Modulo by Zero", "modulo by zero".to_string(), 1, 1, None),
+                        _ => {}
+                    }
+                }
+            }
+            Expression::UnaryOp { operand, .. }
+            | Expression::Reference { expr: operand, .. }
+            | Expression::Dereference { expr: operand, .. }
+            | Expression::Box { value: operand, .. } => self.scan_expr(operand),
+            Expression::List { elements, .. } => {
+                for e in elements {
+                    self.scan_expr(e);
+                }
+                if elements.len() > 128 {
+                    self.push_warn(DiagnosticCode::W0025, "Large List Literal", "large list literal may impact memory".to_string(), 1, 1, None);
+                }
+            }
+            Expression::Dict { entries, .. } => {
+                for (k, v) in entries {
+                    self.scan_expr(k);
+                    self.scan_expr(v);
+                }
+                if entries.len() > 64 {
+                    self.push_warn(DiagnosticCode::W0025, "Large Dict Literal", "large dict literal may impact memory".to_string(), 1, 1, None);
+                }
+            }
+            Expression::Index { target, index, .. } => {
+                self.scan_expr(target);
+                self.scan_expr(index);
+                if let Expression::Literal(Literal::Int(n)) = index.as_ref()
+                    && *n < 0
+                {
+                    self.push_warn(DiagnosticCode::W0021, "Negative Index", "negative index access".to_string(), 1, 1, None);
+                }
+            }
+            Expression::Literal(lit) => {
+                if let Literal::Int(n) = lit {
+                    if *n == 0 || *n == 1 {
+                        self.push_warn(DiagnosticCode::W0026, "Magic Number", "using literal 0/1 directly".to_string(), 1, 1, None);
+                    }
+                    if *n < 0 {
+                        self.push_warn(DiagnosticCode::W0022, "Negative Literal", "negative literal used directly".to_string(), 1, 1, None);
+                    }
+                }
+                if let Literal::Str(s) = lit {
+                    if s.len() > 120 {
+                        self.push_warn(DiagnosticCode::W0024, "Long String Literal", "very long string literal".to_string(), 1, 1, None);
+                    }
+                }
+            }
+            Expression::Tuple { elements, .. } => {
+                for e in elements {
+                    self.scan_expr(e);
+                }
+            }
+            Expression::MemberAccess { target, .. }
+            | Expression::Pipeline { input: target, .. } => self.scan_expr(target),
+            Expression::Match { value, cases, default, .. } => {
+                self.scan_expr(value);
+                for (p, e) in cases {
+                    self.scan_expr(p);
+                    self.scan_expr(e);
+                }
+                self.scan_expr(default);
+            }
+            Expression::EnumVariant { payloads, .. } => {
+                for p in payloads {
+                    self.scan_expr(p);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn push_warn(
+        &mut self,
+        code: DiagnosticCode,
+        title: &str,
+        message: String,
+        line: usize,
+        column: usize,
+        help: Option<String>,
+    ) {
+        if !self.filter.matches(code) {
+            return;
+        }
+        let severity = if self.deny.contains(&code) {
+            Severity::Error
+        } else {
+            Severity::Warning
+        };
+        let mut diag = Diagnostic::new(severity, code, title, message, line, column);
+        diag.labels.push(Label {
             line,
             column,
-            source_file: None,
+            length: 3,
+            message: "".to_string(),
+            style: LabelStyle::Primary,
         });
+        diag.help = help;
+        self.diagnostics.push(diag);
     }
 }
 
-pub fn check_warnings(program: &Program) -> Vec<Warning> {
-    Warnings::analyze(program)
-}
-
-pub fn format_warning(w: &Warning) -> String {
-    let severity_color = match w.severity {
-        WarningSeverity::Error => "\x1b[1;31m",   // bold red
-        WarningSeverity::Warning => "\x1b[1;33m", // bold yellow
-        WarningSeverity::Info => "\x1b[1;34m",    // bold blue
-        WarningSeverity::Hint => "\x1b[1;32m",    // bold green
-    };
-    let reset = "\x1b[0m";
-    format!(
-        "{severity_color}warning[{code}]{reset} {category_color}{category}{reset}: {message}",
-        severity_color = severity_color,
-        code = w.code,
-        reset = reset,
-        category_color = "\x1b[90m",
-        category = w.category.as_str(),
-        message = w.message,
-    )
+pub fn check_warnings(
+    program: &Program,
+    source: &str,
+    filename: Option<&str>,
+    filter: WarningFilter,
+    deny: HashSet<DiagnosticCode>,
+) -> Vec<Diagnostic> {
+    WarningAnalyzer::new(filter, deny).analyze(program, source, filename)
 }

@@ -1,4 +1,3 @@
-# std.mem
 pub fn used: () :i64
 pub fn total: () :i64
 pub fn free: () :i64

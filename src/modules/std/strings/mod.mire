@@ -1,4 +1,3 @@
-# std.strings
 pub fn upper: (s :str) :str
 pub fn lower: (s :str) :str
 pub fn strip: (s :str) :str

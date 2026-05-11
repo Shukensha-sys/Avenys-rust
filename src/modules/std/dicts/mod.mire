@@ -1,4 +1,3 @@
-# std.dicts
 pub fn len: (dict) :i64
 pub fn keys: (dict) :vec![str]
 pub fn values: (dict) :vec![i64]

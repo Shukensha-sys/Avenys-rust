@@ -1,4 +1,3 @@
-# std.time
 pub fn unix_ms: () :i64
 pub fn unix_ns: () :i64
 pub fn since_ms: (start :i64) :i64

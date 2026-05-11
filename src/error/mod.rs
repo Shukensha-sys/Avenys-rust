@@ -1,5 +1,9 @@
+pub mod diagnostic;
+pub mod format;
 pub mod mss;
 
+use diagnostic::{Diagnostic, DiagnosticCode, Label, LabelStyle, Severity};
+use format::format_diagnostic;
 use mss::MssError;
 
 #[derive(Debug, Clone)]
@@ -61,38 +65,6 @@ impl ErrorKind {
     pub fn ownership_error(line: usize, column: usize, kind: MssError) -> Self {
         ErrorKind::Ownership { line, column, kind }
     }
-
-    fn error_type_name(&self) -> &'static str {
-        match self {
-            ErrorKind::Lexer { .. } => "lexer",
-            ErrorKind::DeprecatedSyntax { .. } => "deprecated",
-            ErrorKind::Parser { .. } => "parser",
-            ErrorKind::Backend { .. } => "backend",
-            ErrorKind::Runtime { .. } => "runtime",
-            ErrorKind::Type { .. } => "type",
-            ErrorKind::Ownership { .. } => "ownership",
-        }
-    }
-
-    fn error_title(&self) -> &'static str {
-        match self {
-            ErrorKind::Lexer { .. } => "Lexical Error",
-            ErrorKind::DeprecatedSyntax { .. } => "Deprecated Syntax",
-            ErrorKind::Parser { .. } => "Syntax Error",
-            ErrorKind::Backend { .. } => "Backend Limitation",
-            ErrorKind::Runtime { .. } => "Runtime Error",
-            ErrorKind::Type { .. } => "Type Error",
-            ErrorKind::Ownership { .. } => "Ownership Error",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MireError {
-    pub kind: ErrorKind,
-    pub line: usize,
-    pub column: usize,
-    context: Option<Box<MireErrorContext>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -100,6 +72,15 @@ struct MireErrorContext {
     source: Option<String>,
     filename: Option<String>,
     explanation: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MireError {
+    pub kind: ErrorKind,
+    pub line: usize,
+    pub column: usize,
+    diagnostic: Box<Diagnostic>,
+    context: Option<Box<MireErrorContext>>,
 }
 
 impl std::fmt::Display for MireError {
@@ -112,42 +93,51 @@ impl std::error::Error for MireError {}
 
 impl MireError {
     pub fn new(kind: ErrorKind) -> Self {
-        let (line, column) = match &kind {
-            ErrorKind::Lexer { line, column, .. } => (*line, *column),
-            ErrorKind::DeprecatedSyntax { line, column, .. } => (*line, *column),
-            ErrorKind::Parser { line, column, .. } => (*line, *column),
-            ErrorKind::Backend { .. } => (1, 1),
-            ErrorKind::Runtime { .. } => (1, 1),
-            ErrorKind::Type { line, column, .. } => (*line, *column),
-            ErrorKind::Ownership { line, column, .. } => (*line, *column),
-        };
-
-        let explanation = generate_explanation(&kind);
+        let (line, column, title, message, code) = map_kind(&kind);
+        let mut diagnostic = Diagnostic::new(Severity::Error, code, title, message, line, column);
+        if line > 0 {
+            diagnostic.labels.push(Label {
+                line,
+                column,
+                length: 3,
+                message: "here".to_string(),
+                style: LabelStyle::Primary,
+            });
+        }
+        diagnostic.help = default_help_for_code(code);
 
         Self {
             kind,
             line,
             column,
+            diagnostic: Box::new(diagnostic),
             context: Some(Box::new(MireErrorContext {
                 source: None,
                 filename: None,
-                explanation,
+                explanation: None,
             })),
         }
     }
 
+    pub fn diagnostic(&self) -> &Diagnostic {
+        &self.diagnostic
+    }
+
     pub fn with_source(mut self, source: String) -> Self {
-        self.context_mut().source = Some(source);
+        self.context_mut().source = Some(source.clone());
+        self.diagnostic.source = Some(source);
         self
     }
 
     pub fn with_filename(mut self, filename: String) -> Self {
-        self.context_mut().filename = Some(filename);
+        self.context_mut().filename = Some(filename.clone());
+        self.diagnostic.filename = Some(filename);
         self
     }
 
     pub fn with_explanation(mut self, explanation: String) -> Self {
-        self.context_mut().explanation = Some(explanation);
+        self.context_mut().explanation = Some(explanation.clone());
+        self.diagnostic.notes.push(explanation);
         self
     }
 
@@ -166,15 +156,20 @@ impl MireError {
     }
 
     pub fn set_source(&mut self, source: Option<String>) {
-        self.context_mut().source = source;
+        self.context_mut().source = source.clone();
+        self.diagnostic.source = source;
     }
 
     pub fn set_filename(&mut self, filename: Option<String>) {
-        self.context_mut().filename = filename;
+        self.context_mut().filename = filename.clone();
+        self.diagnostic.filename = filename;
     }
 
     pub fn set_explanation(&mut self, explanation: Option<String>) {
-        self.context_mut().explanation = explanation;
+        self.context_mut().explanation = explanation.clone();
+        if let Some(explanation) = explanation {
+            self.diagnostic.notes.push(explanation);
+        }
     }
 
     pub fn source_mut(&mut self) -> &mut Option<String> {
@@ -190,170 +185,33 @@ impl MireError {
     }
 
     pub fn format(&self) -> String {
-        self.format_with_options(false)
+        let mut out = format!("error[{}]\n", self.legacy_kind_tag());
+        out.push_str(&format_diagnostic(&self.diagnostic, false));
+        out
     }
 
     pub fn format_color(&self) -> String {
-        self.format_with_options(true)
-    }
-
-    fn format_with_options(&self, use_color: bool) -> String {
-        let message = match &self.kind {
-            ErrorKind::Lexer { message, .. } => message.clone(),
-            ErrorKind::DeprecatedSyntax { message, .. } => message.clone(),
-            ErrorKind::Parser { message, .. } => message.clone(),
-            ErrorKind::Backend { message } => message.clone(),
-            ErrorKind::Runtime { message } => message.clone(),
-            ErrorKind::Type { message, .. } => message.clone(),
-            ErrorKind::Ownership { kind, .. } => kind.to_string(),
-        };
-
-        let filename = self
-            .filename()
-            .cloned()
-            .unwrap_or_else(|| "main.mire".to_string());
-
-        let error_type = self.kind.error_type_name();
-        let error_title = self.kind.error_title();
-
-        let mut output = String::new();
-
-        if use_color {
-            output.push_str(
-                "\n\x1b[1;36m✦\x1b[0m \x1b[1;37mAvenys Compiler\x1b[0m \x1b[1;36m✦\x1b[0m\n",
-            );
-        } else {
-            output.push_str("\n✦ Avenys Compiler ✦\n");
-        }
-
-        if use_color {
-            output.push_str(&format!(
-                "\n\x1b[1;31merror[{}]\x1b[0m \x1b[90m───\x1b[0m \x1b[1;33m{}\x1b[0m\n",
-                error_type, error_title
-            ));
-        } else {
-            output.push_str(&format!("\nerror[{}] ── {}\n", error_type, error_title));
-        }
-
-        if use_color {
-            output.push_str(&format!(
-                "\x1b[1;36m╭─[ {}:{} ]\x1b[0m\n",
-                filename,
-                self.format_location()
-            ));
-        } else {
-            output.push_str(&format!(
-                "\n╭─[ {}:{} ]\n",
-                filename,
-                self.format_location()
-            ));
-        }
-
-        output.push_str(&self.format_code_context(use_color));
-
-        if use_color {
-            output.push_str(&format!("\x1b[90m╰─\x1b[0m \x1b[1;37m{}\x1b[0m\n", message));
-        } else {
-            output.push_str(&format!("\n╰─ {}\n", message));
-        }
-
-        if let Some(explanation) = self.explanation() {
-            if use_color {
-                output.push_str(&format!("   \x1b[90mexplanation:\x1b[0m {}\n", explanation));
-            } else {
-                output.push_str(&format!("   explanation: {}\n", explanation));
-            }
-        }
-
-        output
-    }
-
-    fn format_location(&self) -> String {
-        format!("{}:{}", self.line, self.column)
-    }
-
-    fn format_code_context(&self, use_color: bool) -> String {
-        if let Some(source) = self.source() {
-            let lines: Vec<&str> = source.lines().collect();
-            if self.line == 0 || self.line > lines.len() {
-                return String::new();
-            }
-
-            let start_line = if self.line > 2 { self.line - 2 } else { 1 };
-            let end_line = (self.line + 2).min(lines.len());
-
-            let line_num_width = end_line.to_string().len();
-            let mut output = String::new();
-
-            for (i, line) in lines
-                .iter()
-                .enumerate()
-                .skip(start_line - 1)
-                .take(end_line - start_line + 1)
-            {
-                let line_num = i + 1;
-
-                if line_num == self.line {
-                    let col = self
-                        .column
-                        .saturating_sub(1)
-                        .min(line.len().saturating_sub(3));
-                    let marker = format!("{}{}", " ".repeat(col), "^^^");
-
-                    if use_color {
-                        output.push_str(&format!(
-                            "│ {:width$} │ \x1b[1;37m{}\x1b[0m\n",
-                            line_num,
-                            line,
-                            width = line_num_width
-                        ));
-                        output.push_str(&format!(
-                            "│ {} │ \x1b[1;31m{}\x1b[0m\n",
-                            " ".repeat(line_num_width),
-                            marker
-                        ));
-                    } else {
-                        output.push_str(&format!(
-                            "│ {:width$} │ {}\n",
-                            line_num,
-                            line,
-                            width = line_num_width
-                        ));
-                        output.push_str(&format!(
-                            "│ {} │ {}\n",
-                            " ".repeat(line_num_width),
-                            marker
-                        ));
-                    }
-                } else {
-                    if use_color {
-                        output.push_str(&format!(
-                            "│ \x1b[1;90m{:width$}\x1b[0m │ \x1b[90m{}\x1b[0m\n",
-                            line_num,
-                            line,
-                            width = line_num_width
-                        ));
-                    } else {
-                        output.push_str(&format!(
-                            "│ {:width$} │ {}\n",
-                            line_num,
-                            line,
-                            width = line_num_width
-                        ));
-                    }
-                }
-            }
-
-            output
-        } else {
-            String::new()
-        }
+        let mut out = format!("error[{}]\n", self.legacy_kind_tag());
+        out.push_str(&format_diagnostic(&self.diagnostic, true));
+        out
     }
 
     fn context_mut(&mut self) -> &mut MireErrorContext {
         self.context
             .get_or_insert_with(|| Box::new(MireErrorContext::default()))
             .as_mut()
+    }
+
+    fn legacy_kind_tag(&self) -> &'static str {
+        match &self.kind {
+            ErrorKind::Lexer { .. } => "lexer",
+            ErrorKind::DeprecatedSyntax { .. } => "deprecated",
+            ErrorKind::Parser { .. } => "parser",
+            ErrorKind::Backend { .. } => "backend",
+            ErrorKind::Runtime { .. } => "runtime",
+            ErrorKind::Type { .. } => "type",
+            ErrorKind::Ownership { .. } => "ownership",
+        }
     }
 }
 
@@ -386,6 +244,8 @@ impl MireError {
         let mut error = Self::new(ErrorKind::Runtime { message });
         error.line = line;
         error.column = column;
+        error.diagnostic.line = line;
+        error.diagnostic.column = column;
         error
     }
 
@@ -410,100 +270,75 @@ impl MireError {
     }
 }
 
-pub type Result<T> = std::result::Result<T, MireError>;
-
-fn generate_explanation(kind: &ErrorKind) -> Option<String> {
+fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, DiagnosticCode) {
     match kind {
-        ErrorKind::Lexer { message, .. } => {
-            if message.contains("Unexpected character") {
-                Some("The lexer found a character it cannot process.".to_string())
-            } else if message.contains("Unterminated") {
-                Some("A string or comment was not properly closed.".to_string())
-            } else if message.contains("Invalid") {
-                Some("The input contains invalid characters.".to_string())
-            } else {
-                Some("A lexical error was found while reading the code.".to_string())
-            }
-        }
-        ErrorKind::DeprecatedSyntax { message, .. } => {
-            if message.contains("use `import`") {
-                Some("This source uses obsolete syntax from an older Mire version. Replace `add` with `import`.".to_string())
-            } else {
-                Some("This source uses syntax that is no longer supported.".to_string())
-            }
-        }
-        ErrorKind::Parser { message, .. } => {
-            if message.contains("Expected") {
-                Some("The parser expected different syntax here.".to_string())
-            } else if message.contains("Unexpected") {
-                Some("The parser found unexpected syntax.".to_string())
-            } else if message.contains("Unexpected token") {
-                Some("This token is not valid in this context.".to_string())
-            } else if message.contains("Unexpected end") {
-                Some("The code ended unexpectedly.".to_string())
-            } else {
-                Some("A syntax error was found.".to_string())
-            }
-        }
-        ErrorKind::Backend { message } => {
-            if message.contains("does not yet lower") {
-                Some("The frontend accepted this program, but the current Avenys backend cannot lower this construct yet.".to_string())
-            } else {
-                Some("The current backend cannot compile this construct yet.".to_string())
-            }
-        }
-        ErrorKind::Runtime { message } => {
-            if message.contains("Undefined") {
-                Some("A variable or function was used before being defined.".to_string())
-            } else if message.contains("Cannot call") || message.contains("not callable") {
-                Some("You tried to call something that is not a function.".to_string())
-            } else if message.contains("Index") || message.contains("out of bounds") {
-                Some("The index is outside the valid range.".to_string())
-            } else if message.contains("division") || message.contains("divide") {
-                Some("Cannot divide by zero.".to_string())
-            } else if message.contains("No such file") || message.contains("not found") {
-                Some("The requested file was not found.".to_string())
-            } else {
-                Some("An error occurred while running the program.".to_string())
-            }
-        }
-        ErrorKind::Type { message, .. } => {
-            if message.contains("mismatch") || message.contains("incompatible") {
-                Some("The types do not match what was expected.".to_string())
-            } else if message.contains("Unknown identifier") {
-                Some("This name has not been defined in the current scope.".to_string())
-            } else if message.contains("cannot") && message.contains("+") {
-                Some("These types cannot be added together.".to_string())
-            } else if message.contains("Expected") {
-                Some("The type is different from what was expected.".to_string())
-            } else {
-                Some("A type error was found.".to_string())
-            }
-        }
-        ErrorKind::Ownership { kind, .. } => Some(format!("Ownership rule violated: {}", kind)),
+        ErrorKind::Lexer {
+            line,
+            column,
+            message,
+        } => (*line, *column, "Lexical Error", message.clone(), DiagnosticCode::E0001),
+        ErrorKind::DeprecatedSyntax {
+            line,
+            column,
+            message,
+        } => (*line, *column, "Deprecated Syntax", message.clone(), DiagnosticCode::W0010),
+        ErrorKind::Parser {
+            line,
+            column,
+            message,
+        } => (*line, *column, "Syntax Error", message.clone(), DiagnosticCode::E0003),
+        ErrorKind::Backend { message } => (
+            1,
+            1,
+            "Backend Limitation",
+            message.clone(),
+            DiagnosticCode::E0014,
+        ),
+        ErrorKind::Runtime { message } => (1, 1, "Runtime Error", message.clone(), DiagnosticCode::E0015),
+        ErrorKind::Type {
+            line,
+            column,
+            message,
+        } => (*line, *column, "Type Error", message.clone(), DiagnosticCode::E0005),
+        ErrorKind::Ownership { line, column, kind } => (
+            *line,
+            *column,
+            "Ownership Error",
+            kind.to_string(),
+            kind.diagnostic_code(),
+        ),
     }
 }
 
-pub fn format_error_chain(errors: &[MireError], _use_color: bool) -> String {
+fn default_help_for_code(code: DiagnosticCode) -> Option<String> {
+    match code {
+        DiagnosticCode::E0005 => Some("review the declared type and assigned expression".to_string()),
+        DiagnosticCode::E0006 => Some("define the identifier before use".to_string()),
+        DiagnosticCode::E0014 => Some(
+            "The frontend accepted this program, but the current Avenys backend cannot lower this construct yet."
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
+
+pub type Result<T> = std::result::Result<T, MireError>;
+
+pub fn format_error_chain(errors: &[MireError], use_color: bool) -> String {
     if errors.is_empty() {
         return String::new();
     }
-
-    let mut output = String::new();
-
-    if errors.len() == 1 {
-        output.push_str(&errors[0].format_color());
-        return output;
-    }
-
-    for (i, error) in errors.iter().enumerate() {
-        output.push_str(&error.format_color());
-        if i < errors.len() - 1 {
-            output.push('\n');
-        }
-    }
-
-    output
+    errors
+        .iter()
+        .map(|e| {
+            if use_color {
+                e.format_color()
+            } else {
+                e.format()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]

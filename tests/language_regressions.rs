@@ -32,6 +32,8 @@ fn expect_compile_error_from_source(test_name: &str, filename: &str, source: &st
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect_err("compilation should fail")
@@ -186,6 +188,8 @@ fn compile_attributes_imported_type_error_to_imported_file() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect_err("imported file type error should fail compilation");
@@ -320,6 +324,8 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("named enum payloads should compile");
@@ -407,6 +413,8 @@ fn if_expression_infers_branch_type_and_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("if expression should compile");
@@ -469,6 +477,8 @@ fn match_expression_with_default_infers_string_branch_type_and_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("match expression returning string should compile");
@@ -506,6 +516,8 @@ fn match_expression_can_be_returned_directly_from_function() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("return match should compile");
@@ -542,6 +554,8 @@ fn enum_match_without_default_returns_second_variant_string() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("enum match returning second variant string should compile");
@@ -576,7 +590,9 @@ fn incremental_recompile_keeps_enum_match_string_result_consistent() {
                 emit_binary: true,
                 persist_ir: false,
                 cache: Default::default(),
-            },
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
+        },
         )
         .expect("compile case");
 
@@ -641,6 +657,8 @@ fn instance_method_call_resolves_and_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("instance method call should compile");
@@ -678,6 +696,8 @@ fn direct_template_member_access_prints_field_values() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("member access template should compile");
@@ -718,6 +738,8 @@ fn direct_struct_field_assignment_updates_mutable_binding() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("field assignment should compile");
@@ -767,6 +789,8 @@ fn struct_with_array_field_declaration_and_construction_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("struct array field should compile");
@@ -803,6 +827,8 @@ fn static_impl_method_call_resolves_and_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("static impl method call should compile");
@@ -841,6 +867,8 @@ fn implicit_self_method_return_still_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("explicit self method return should compile");
@@ -959,6 +987,8 @@ fn runtime_division_by_zero_exits_with_error() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -996,6 +1026,8 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1033,6 +1065,8 @@ fn float_arithmetic_with_typed_float_variable_executes() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("float arithmetic should compile");
@@ -1084,6 +1118,8 @@ fn secondary_for_loop_binding_compiles_and_uses_index() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("two-binding for loop should compile");
@@ -1121,6 +1157,8 @@ fn advanced_literals_compile_and_run() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("advanced literals should compile");
@@ -1159,6 +1197,8 @@ fn unsafe_block_compiles_and_runs() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("unsafe block should compile");
@@ -1195,6 +1235,8 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("extern/asm declarations should compile");
@@ -1224,6 +1266,8 @@ fn runtime_out_of_bounds_exits_with_error() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1273,6 +1317,8 @@ fn strings_split_returns_list_and_works_with_join() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("strings.split should compile");
@@ -1310,6 +1356,8 @@ fn strings_split_supports_multi_char_delimiter() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("strings.split multichar should compile");
@@ -1350,6 +1398,8 @@ fn strings_split_preserves_empty_segments() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("strings.split empty segments should compile");
@@ -1385,6 +1435,8 @@ fn syntax_reference_prototype_compiles_and_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("syntax prototype should compile");
@@ -1424,6 +1476,8 @@ fn array_index_assignment_mutates_elements_in_place() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1461,6 +1515,8 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1498,6 +1554,8 @@ fn shared_reference_lowering_compiles_and_runs() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1535,6 +1593,8 @@ fn impl_method_can_mutate_self_field_and_run() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("compile");
@@ -1691,6 +1751,8 @@ fn enum_match_payload_statement_body_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("enum match payload statement body should compile");
@@ -1720,6 +1782,8 @@ fn enum_match_multiple_payloads_compile() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("enum match with multiple payloads should compile");
@@ -1749,6 +1813,8 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("comma-separated enum payloads should compile");
@@ -1778,6 +1844,8 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("match statement payload bindings should support string and bool");
@@ -1802,6 +1870,8 @@ fn pipeline_len_builtin_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("pipeline len should compile");
@@ -1826,6 +1896,8 @@ fn nested_output_pipeline_compiles() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("nested output pipeline should compile");
@@ -1855,6 +1927,8 @@ fn debug_build_persists_ir_on_disk() {
             emit_binary: true,
             persist_ir: true,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("debug compile");
@@ -1950,6 +2024,8 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("first compile");
@@ -1970,6 +2046,8 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("second compile");
@@ -2014,6 +2092,8 @@ fn incremental_build_invalidates_on_local_import_change() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("first compile");
@@ -2038,6 +2118,8 @@ fn incremental_build_invalidates_on_local_import_change() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("second compile");
@@ -2073,6 +2155,8 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect_err("first compile should fail");
@@ -2092,6 +2176,8 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect_err("second compile should fail");
@@ -2134,6 +2220,8 @@ fn list_hofs_infer_closure_params_and_execute() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("list hof sample should compile");
@@ -2172,6 +2260,8 @@ fn nested_map_string_render_executes_without_runtime_errors() {
             emit_binary: true,
             persist_ir: false,
             cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
         },
     )
     .expect("nested map sample should compile");

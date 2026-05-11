@@ -1,4 +1,3 @@
-# std.fs
 pub fn read: (path :str) :str
 pub fn write: (path :str, data :str)
 pub fn append: (path :str, data :str)

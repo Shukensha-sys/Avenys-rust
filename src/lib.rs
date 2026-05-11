@@ -11,7 +11,10 @@ pub use avens::{
     compile_file_with_avenys, default_output_dir, find_project_root, load_project_manifest,
     project_lock_path, project_manifest_path, write_lock_file,
 };
-pub use compiler::{analyze_program, check_program_types};
+pub use compiler::{
+    AnalysisReport, WarningConfig, analyze_program, analyze_program_with_warnings,
+    check_program_types,
+};
 pub use error::mss::MssError;
 pub use error::{ErrorKind, MireError, Result};
 pub use incremental::{CacheOverrides, CacheSettings, LoadedProgram, cache_file_path};

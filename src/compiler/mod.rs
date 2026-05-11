@@ -4,20 +4,42 @@ pub mod typeck;
 pub mod warnings;
 
 use crate::error::Result;
+use crate::error::diagnostic::{Diagnostic, DiagnosticCode, WarningFilter};
 use crate::parser::Program;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 pub use semantic::{
     BindingInfo, BindingKind, BorrowFact, BorrowKind, MoveFact, ScopeInfo, SemanticModel,
 };
 pub use typeck::check_program_types;
-pub use warnings::{Warning, WarningSeverity, check_warnings};
+pub use warnings::check_warnings;
 
 #[derive(Debug, Clone, Default)]
 pub struct AnalysisSelection {
     pub statement_mask: Vec<bool>,
     pub nested_statement_masks: HashMap<String, Vec<bool>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WarningConfig {
+    pub filter: WarningFilter,
+    pub deny: HashSet<DiagnosticCode>,
+}
+
+impl Default for WarningConfig {
+    fn default() -> Self {
+        Self {
+            filter: WarningFilter::Default,
+            deny: HashSet::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalysisReport {
+    pub semantic: SemanticModel,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl AnalysisSelection {
@@ -34,6 +56,26 @@ pub fn analyze_program(program: &mut Program, source: &str) -> Result<SemanticMo
     let semantic_model = semantic::analyze_program(program);
     borrowck::check_program(program, &semantic_model)?;
     Ok(semantic_model)
+}
+
+pub fn analyze_program_with_warnings(
+    program: &mut Program,
+    source: &str,
+    filename: Option<&str>,
+    warning_config: WarningConfig,
+) -> Result<AnalysisReport> {
+    let semantic_model = semantic::analyze_program(program);
+    let warnings = check_warnings(
+        program,
+        source,
+        filename,
+        warning_config.filter,
+        warning_config.deny,
+    );
+    Ok(AnalysisReport {
+        semantic: semantic_model,
+        diagnostics: warnings,
+    })
 }
 
 pub fn analyze_program_with_origins(

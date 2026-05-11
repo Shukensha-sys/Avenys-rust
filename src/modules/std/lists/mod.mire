@@ -1,4 +1,3 @@
-# std.lists
 pub fn len: (list) :i64
 pub fn push: (list, value)
 pub fn pop: (list) :i64
