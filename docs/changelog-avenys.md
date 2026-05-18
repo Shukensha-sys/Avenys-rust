@@ -2,6 +2,16 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.5.0] - 2026-05-18
+
+- Backend ahora genera símbolos monomórficos estables por call-site genérico (wrappers LLVM).
+- Normalización nominal genérica en backend (`Type[T]` / `Type[i64]` -> `Type`) para:
+  - resolución de constructores de `type`
+  - resolución de miembros/campos de structs genéricos
+  - enlazado de métodos `impl[T]` en receptores concretos
+- Nueva regresión E2E de codegen para método en `impl` genérico sobre `Box[i64]`.
+- Bump de versión menor: `3.4.0` -> `3.5.0`.
+
 ## [3.4.0] - 2026-05-18
 
 - Resolución estable de métodos en `impl` genéricos para receptores concretos.

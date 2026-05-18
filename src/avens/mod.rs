@@ -954,7 +954,7 @@ impl LlvmIrGen {
                         ..
                     } = method
                     {
-                        let full_name = format!("{}.{}", type_name, name);
+                        let full_name = format!("{}.{}", normalize_nominal_name(type_name), name);
                         self.user_functions.insert(
                             full_name.clone(),
                             FnInfo {
@@ -1008,7 +1008,8 @@ impl LlvmIrGen {
                         ..
                     } = method
                     {
-                        let full_name = format!("{}.{}", type_name, name);
+                        let full_name =
+                            format!("{}.{}", normalize_nominal_name(type_name), name);
                         let fn_ir = self.compile_function_ir(
                             &full_name,
                             params,
@@ -1920,8 +1921,11 @@ impl LlvmIrGen {
                 ..
             } => {
                 // Check if this is a struct constructor call
-                if data_type.is_struct_like() && self.user_structs.contains_key(name) {
-                    return self.compile_struct_constructor(name, args);
+                if data_type.is_struct_like() {
+                    let normalized_name = normalize_nominal_name(name);
+                    if self.user_structs.contains_key(&normalized_name) {
+                        return self.compile_struct_constructor(&normalized_name, args);
+                    }
                 }
 
                 let mut resolved_name = name.clone();
@@ -1933,7 +1937,8 @@ impl LlvmIrGen {
                         .get(receiver_name)
                         .and_then(|info| info.struct_name.clone())
                 {
-                    let candidate_name = format!("{}.{}", struct_name, method_name);
+                    let candidate_name =
+                        format!("{}.{}", normalize_nominal_name(&struct_name), method_name);
                     if let Some(candidate_info) = self.user_functions.get(&candidate_name)
                         && candidate_info.params.len() == args.len() + 1
                     {
@@ -2984,9 +2989,10 @@ impl LlvmIrGen {
         let mut current_ptr = target_val.repr;
 
         for (index, member) in fields.iter().enumerate() {
+            let struct_lookup = normalize_nominal_name(&struct_name);
             let struct_info = self
                 .user_structs
-                .get(&struct_name)
+                .get(&struct_lookup)
                 .cloned()
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
@@ -3075,9 +3081,10 @@ impl LlvmIrGen {
                 ),
             })
         })?;
+        let struct_lookup = normalize_nominal_name(&struct_name);
         let struct_info = self
             .user_structs
-            .get(&struct_name)
+            .get(&struct_lookup)
             .cloned()
             .ok_or_else(|| {
                 MireError::new(ErrorKind::Runtime {
@@ -6344,16 +6351,16 @@ impl LlvmIrGen {
                 name, data_type, ..
             } if data_type.is_struct_like() => {
                 data_type.struct_name().map(ToOwned::to_owned).or_else(|| {
-                    if self.user_structs.contains_key(name) {
-                        Some(name.clone())
+                    if self.user_structs.contains_key(&normalize_nominal_name(name)) {
+                        Some(normalize_nominal_name(name))
                     } else if let Some((owner, _method)) = name.split_once('.') {
                         self.vars
                             .get(owner)
                             .and_then(|info| info.struct_name.clone())
                             .or_else(|| {
                                 self.user_structs
-                                    .contains_key(owner)
-                                    .then(|| owner.to_string())
+                                    .contains_key(&normalize_nominal_name(owner))
+                                    .then(|| normalize_nominal_name(owner))
                             })
                     } else {
                         None
@@ -7682,4 +7689,11 @@ fn sanitize_symbol(value: &str) -> String {
             }
         })
         .collect()
+}
+
+fn normalize_nominal_name(value: &str) -> String {
+    value
+        .split_once('[')
+        .map(|(base, _)| base.to_string())
+        .unwrap_or_else(|| value.to_string())
 }

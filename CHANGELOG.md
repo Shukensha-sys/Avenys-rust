@@ -2,6 +2,21 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.5.0] - 2026-05-18
+
+### Added
+- Backend monomorph call symbol wrappers for generic calls:
+  - call-site type arguments now produce stable specialized LLVM symbols
+  - wrappers are emitted once per signature and forward to canonical function bodies
+
+### Changed
+- Generic nominal normalization in backend (`Type[T]` / `Type[i64]` -> `Type`) for:
+  - struct constructor lookup
+  - struct field/member resolution
+  - impl method metadata and dispatch (`b.get()` on generic nominal receivers)
+- Added E2E regression for generic impl method codegen/build path.
+- Version bump: `3.4.0` -> `3.5.0`.
+
 ## [3.4.0] - 2026-05-18
 
 ### Added
