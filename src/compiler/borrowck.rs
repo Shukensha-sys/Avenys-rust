@@ -814,24 +814,10 @@ impl<'a> BorrowChecker<'a> {
             }
             _ => {
                 if let Some(name) = Self::identifier_name(arg) {
-                    let should_consume = self
-                        .semantic_binding(&name)
-                        .map(|binding| Self::is_move_type(&binding.data_type))
-                        .unwrap_or(false);
-
-                    if let Some(state) = self.lookup_binding(&name)
-                        && self.unsafe_depth == 0
-                        && (state.mutable_borrow || state.immutable_borrows > 0)
-                    {
-                        return Err(self.ownership_error(MssError::MoveWhileBorrowed));
-                    }
-
-                    if should_consume {
-                        self.ensure_can_move(&name)?;
-                        if let Some(state) = self.lookup_binding_mut(&name) {
-                            state.is_moved = true;
-                        }
-                    }
+                    // Calls are non-consuming by default. Explicit ownership transfer
+                    // should use `move::(...)` so call sites stay readable and Owl/CLI
+                    // orchestration code can pass strings/paths safely.
+                    let _ = name;
                 }
             }
         }
@@ -914,18 +900,6 @@ impl<'a> BorrowChecker<'a> {
             .rev()
             .filter_map(|index| self.semantic_model.bindings.get(*index))
             .find(|binding| binding.scope_depth == binding_depth)
-    }
-
-    fn is_move_type(data_type: &DataType) -> bool {
-        matches!(
-            data_type,
-            DataType::Str
-                | DataType::List
-                | DataType::Vector { .. }
-                | DataType::Dict
-                | DataType::Map { .. }
-                | DataType::Box
-        )
     }
 
     fn reference_target(expression: Option<&Expression>) -> Option<(String, bool)> {

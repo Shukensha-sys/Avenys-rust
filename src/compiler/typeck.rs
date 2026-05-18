@@ -1085,6 +1085,7 @@ impl TypeChecker {
                 default,
             } => {
                 let value_type = self.check_expression(value)?;
+                self.validate_match_coverage(&value_type, cases, !default.is_empty())?;
                 for (case_expr, case_body) in cases.iter_mut() {
                     if !Self::is_match_identifier_pattern(case_expr) {
                         let case_type = self.check_match_pattern(case_expr)?;
@@ -1131,6 +1132,7 @@ impl TypeChecker {
                 value,
                 declared_type,
             } => {
+                self.validate_new_target_type(declared_type)?;
                 if let Some(initial) = value {
                     let initial_ty = self.check_expression(initial)?;
                     if !self.is_assignable(declared_type, &initial_ty) {
@@ -1142,6 +1144,7 @@ impl TypeChecker {
                 }
             }
             Statement::Own { value, inner_type } => {
+                self.validate_own_target_type(inner_type)?;
                 if let Some(initial) = value {
                     let initial_ty = self.check_expression(initial)?;
                     if !self.is_assignable(inner_type, &initial_ty) {
@@ -1968,7 +1971,8 @@ impl TypeChecker {
                 default,
                 data_type,
             } => {
-                let _ = self.check_expression(value)?;
+                let value_type = self.check_expression(value)?;
+                self.validate_match_expr_coverage(&value_type, cases, default)?;
                 let mut resolved_type = DataType::Unknown;
                 for (case_expr, case_body) in cases.iter_mut() {
                     if !Self::is_match_identifier_pattern(case_expr) {
@@ -2005,6 +2009,168 @@ impl TypeChecker {
                 Ok(data_type.clone())
             }
         }
+    }
+
+    fn validate_new_target_type(&self, declared_type: &DataType) -> Result<()> {
+        if matches!(
+            declared_type,
+            DataType::Array { .. } | DataType::Vector { .. } | DataType::Map { .. }
+        ) {
+            return Ok(());
+        }
+
+        Err(type_error(format!(
+            "new:: only supports arr/vec/map targets, got {:?}",
+            declared_type
+        )))
+    }
+
+    fn validate_own_target_type(&self, inner_type: &DataType) -> Result<()> {
+        if matches!(
+            inner_type,
+            DataType::I8
+                | DataType::I16
+                | DataType::I32
+                | DataType::I64
+                | DataType::U8
+                | DataType::U16
+                | DataType::U32
+                | DataType::U64
+                | DataType::F32
+                | DataType::F64
+                | DataType::Bool
+                | DataType::Char
+                | DataType::Str
+                | DataType::Struct
+                | DataType::StructNamed(_)
+                | DataType::Enum
+                | DataType::EnumNamed(_)
+                | DataType::Array { .. }
+                | DataType::Vector { .. }
+                | DataType::Map { .. }
+        ) {
+            return Ok(());
+        }
+
+        Err(type_error(format!(
+            "own:: target type {:?} is not heap-allocatable",
+            inner_type
+        )))
+    }
+
+    fn variant_name_from_match_pattern<'a>(
+        &'a self,
+        pattern: &'a Expression,
+        expected_enum: &str,
+    ) -> Result<Option<&'a str>> {
+        match pattern {
+            Expression::EnumVariantPath {
+                enum_name,
+                variant_name,
+                ..
+            }
+            | Expression::EnumVariant {
+                enum_name,
+                variant_name,
+                ..
+            } => {
+                if enum_name != expected_enum {
+                    return Err(type_error(format!(
+                        "Match pattern enum mismatch: expected '{}', got '{}'",
+                        expected_enum, enum_name
+                    )));
+                }
+                Ok(Some(variant_name.as_str()))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn enum_variant_names_for(&self, enum_name: &str) -> Vec<String> {
+        let prefix = format!("{enum_name}.");
+        self.enum_variants
+            .keys()
+            .filter_map(|full| full.strip_prefix(&prefix).map(ToOwned::to_owned))
+            .collect()
+    }
+
+    fn validate_match_coverage(
+        &self,
+        value_type: &DataType,
+        cases: &[(Expression, Vec<Statement>)],
+        has_default: bool,
+    ) -> Result<()> {
+        let DataType::EnumNamed(enum_name) = value_type else {
+            return Ok(());
+        };
+
+        let mut covered = std::collections::HashSet::new();
+        for (pattern, _) in cases {
+            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)? {
+                if !covered.insert(variant_name.to_string()) {
+                    return Err(type_error(format!(
+                        "Duplicate match arm for enum variant '{}.{}'",
+                        enum_name, variant_name
+                    )));
+                }
+            }
+        }
+
+        if has_default {
+            return Ok(());
+        }
+
+        let all = self.enum_variant_names_for(enum_name);
+        let missing: Vec<String> = all.into_iter().filter(|name| !covered.contains(name)).collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+
+        Err(type_error(format!(
+            "Non-exhaustive match for enum '{}'; missing variants: {}",
+            enum_name,
+            missing.join(", ")
+        )))
+    }
+
+    fn validate_match_expr_coverage(
+        &self,
+        value_type: &DataType,
+        cases: &[(Expression, Expression)],
+        default: &Expression,
+    ) -> Result<()> {
+        let DataType::EnumNamed(enum_name) = value_type else {
+            return Ok(());
+        };
+
+        let mut covered = std::collections::HashSet::new();
+        for (pattern, _) in cases {
+            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)? {
+                if !covered.insert(variant_name.to_string()) {
+                    return Err(type_error(format!(
+                        "Duplicate match arm for enum variant '{}.{}'",
+                        enum_name, variant_name
+                    )));
+                }
+            }
+        }
+
+        let has_default = !matches!(default, Expression::Literal(Literal::None));
+        if has_default {
+            return Ok(());
+        }
+
+        let all = self.enum_variant_names_for(enum_name);
+        let missing: Vec<String> = all.into_iter().filter(|name| !covered.contains(name)).collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+
+        Err(type_error(format!(
+            "Non-exhaustive match expression for enum '{}'; missing variants: {}",
+            enum_name,
+            missing.join(", ")
+        )))
     }
 
     fn resolve_binary_type(

@@ -2278,6 +2278,48 @@ fn nested_map_string_render_executes_without_runtime_errors() {
     assert!(stdout.contains("y"), "{stdout:?}");
 }
 
+#[test]
+fn enum_match_statement_requires_exhaustive_coverage_without_default() {
+    let source = "enum State {\n    Idle\n    Busy\n}\n\npub fn main: () {\n    set state = State.Idle\n    match state {\n        State.Idle { use dasu(\"idle\") }\n    }\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    let err = check_program_types(&mut program, source).expect_err("typecheck should fail");
+    let rendered = err.to_string();
+    assert!(rendered.contains("Non-exhaustive match for enum 'State'"), "{rendered}");
+}
+
+#[test]
+fn enum_match_expression_rejects_duplicate_variant_arms() {
+    let source = "enum State {\n    Idle\n    Busy\n}\n\npub fn main: () {\n    set state = State.Idle\n    set code = match state {\n        State.Idle { 1 }\n        State.Idle { 2 }\n        _ { 3 }\n    } :i64\n    use dasu(code)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    let err = check_program_types(&mut program, source).expect_err("typecheck should fail");
+    let rendered = err.to_string();
+    assert!(rendered.contains("Duplicate match arm for enum variant 'State.Idle'"), "{rendered}");
+}
+
+#[test]
+fn new_statement_rejects_non_collection_targets() {
+    let source = "pub fn main: () {\n    new::(42) :i64\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    let err = check_program_types(&mut program, source).expect_err("typecheck should fail");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("new:: only supports arr/vec/map targets"),
+        "{rendered}"
+    );
+}
+
+#[test]
+fn own_statement_rejects_none_target() {
+    let source = "pub fn main: () {\n    own::() :none\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    let err = check_program_types(&mut program, source).expect_err("typecheck should fail");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("own:: target type None is not heap-allocatable"),
+        "{rendered}"
+    );
+}
+
 fn make_temp_project_root(prefix: &str) -> PathBuf {
     let root = unique_temp_dir(prefix);
     fs::create_dir_all(&root).expect("mkdir project root");

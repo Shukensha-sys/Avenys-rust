@@ -7,6 +7,11 @@ Este archivo consolida el historial operativo principal del compilador Avenys.
 - Integración de sintaxis lifecycle (`new::`, `own::`, `move::`, `drop::`) en lexer/parser y validadores.
 - Eliminación de `vec![T]` como sintaxis de tipo; estándar consolidado en `vec[T]`.
 - Refuerzo de diagnósticos orientados a ownership explícito (`W0028`-`W0033`), alineado con flujos Owl.
+- Match reforzado: detección de brazos duplicados por variante enum y chequeo de exhaustividad cuando no existe `_`.
+- Parser de `match` endurecido: error en múltiples defaults `_` y en casos declarados después del default.
+- Reglas de lifecycle ampliadas en type checker:
+  - `new::` restringido a objetivos de construcción en stack (`arr/vec/map`).
+  - `own::` restringido a tipos heap-allocatables con error explícito por tipo inválido.
 
 ## [2.8.0] - 2026-05-11
 

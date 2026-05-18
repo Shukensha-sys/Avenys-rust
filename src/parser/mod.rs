@@ -1118,6 +1118,7 @@ impl Parser {
 
         let mut cases = Vec::new();
         let mut default = Vec::new();
+        let mut seen_default = false;
         let mut consumed_closing_brace = false;
 
         loop {
@@ -1152,8 +1153,17 @@ impl Parser {
                 Expression::Identifier(Identifier { name, .. }) if name == "_"
             );
             if is_default {
+                if seen_default {
+                    return Err(self.error("match statement cannot contain multiple default '_' arms"));
+                }
+                seen_default = true;
                 default = body;
             } else {
+                if seen_default {
+                    return Err(self.error(
+                        "match statement cases cannot appear after default '_' arm",
+                    ));
+                }
                 cases.push((pattern, body));
             }
         }
@@ -2044,6 +2054,7 @@ impl Parser {
 
         let mut cases = Vec::new();
         let mut default = None;
+        let mut seen_default = false;
         let mut consumed_closing_brace = false;
 
         loop {
@@ -2078,8 +2089,17 @@ impl Parser {
                 Expression::Identifier(Identifier { name, .. }) if name == "_"
             );
             if is_default {
+                if seen_default {
+                    return Err(self.error("match expression cannot contain multiple default '_' arms"));
+                }
+                seen_default = true;
                 default = Some(body_expr);
             } else {
+                if seen_default {
+                    return Err(self.error(
+                        "match expression cases cannot appear after default '_' arm",
+                    ));
+                }
                 cases.push((pattern_expr, body_expr));
             }
 

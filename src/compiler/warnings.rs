@@ -130,6 +130,16 @@ impl WarningAnalyzer {
             Statement::Let { name, data_type, .. } => {
                 self.defined_variables.insert(name.clone());
                 self.variable_positions.insert(name.clone(), (line, column));
+                if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                    self.push_warn(
+                        DiagnosticCode::W0034,
+                        "Non-Idiomatic Variable Name",
+                        format!("Variable '{}' starts with uppercase; prefer snake_case", name),
+                        1,
+                        1,
+                        None,
+                    );
+                }
                 if *data_type == DataType::Unknown {
                     self.push_warn(
                         DiagnosticCode::W0004,
@@ -144,6 +154,16 @@ impl WarningAnalyzer {
             Statement::Function { name, params, return_type, body, .. } => {
                 self.defined_functions.insert(name.clone());
                 self.function_positions.insert(name.clone(), (line, column));
+                if name.chars().any(|c| c.is_ascii_uppercase()) {
+                    self.push_warn(
+                        DiagnosticCode::W0035,
+                        "Non-Idiomatic Function Name",
+                        format!("Function '{}' contains uppercase characters; prefer snake_case", name),
+                        1,
+                        1,
+                        None,
+                    );
+                }
                 if *return_type == DataType::Unknown {
                     self.push_warn(
                         DiagnosticCode::W0005,
@@ -179,6 +199,26 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0012,
                         "Many Parameters",
                         format!("Function '{}' has many parameters ({})", name, params.len()),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+                if params.len() > 12 {
+                    self.push_warn(
+                        DiagnosticCode::W0037,
+                        "Excessive Parameter Count",
+                        format!("Function '{}' has {} parameters; consider grouping inputs", name, params.len()),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+                if *return_type != DataType::None && !contains_explicit_return(body) {
+                    self.push_warn(
+                        DiagnosticCode::W0040,
+                        "Missing Explicit Return",
+                        format!("Function '{}' declares a return type but has no explicit return", name),
                         1,
                         1,
                         None,
@@ -292,9 +332,24 @@ impl WarningAnalyzer {
                 }
                 self.loop_depth -= 1;
             }
-            Statement::For { iterable, body, .. } => {
+            Statement::For {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
                 self.loop_depth += 1;
                 self.scan_expr(iterable);
+                if self.defined_variables.contains(variable) {
+                    self.push_warn(
+                        DiagnosticCode::W0039,
+                        "Variable Shadowing",
+                        format!("Loop variable '{}' shadows an existing binding", variable),
+                        1,
+                        1,
+                        None,
+                    );
+                }
                 if body.is_empty() {
                     self.push_warn(DiagnosticCode::W0013, "Empty Loop Body", "loop has an empty body".to_string(), 1, 1, None);
                 }
@@ -358,6 +413,7 @@ impl WarningAnalyzer {
             }
             Statement::Match { value, cases, default } => {
                 self.scan_expr(value);
+                self.warn_duplicate_literal_patterns(cases);
                 for (pat, body) in cases {
                     self.scan_expr(pat);
                     for s in body {
@@ -395,6 +451,16 @@ impl WarningAnalyzer {
                         None,
                     );
                 }
+                if args.len() > 16 {
+                    self.push_warn(
+                        DiagnosticCode::W0037,
+                        "Large Call Arity",
+                        format!("Call to '{}' has {} arguments", name, args.len()),
+                        1,
+                        1,
+                        None,
+                    );
+                }
                 for arg in args {
                     self.scan_expr(arg);
                 }
@@ -402,6 +468,18 @@ impl WarningAnalyzer {
             Expression::BinaryOp { operator, left, right, .. } => {
                 self.scan_expr(left);
                 self.scan_expr(right);
+                if matches!(operator.as_str(), "==" | "!=" | "<=" | ">=" | "<" | ">")
+                    && expr_fingerprint(left) == expr_fingerprint(right)
+                {
+                    self.push_warn(
+                        DiagnosticCode::W0036,
+                        "Self Comparison",
+                        format!("Expression compares a value to itself with '{}'", operator),
+                        1,
+                        1,
+                        None,
+                    );
+                }
                 if let Expression::Literal(Literal::Int(n)) = right.as_ref() {
                     match operator.as_str() {
                         "*" if *n == 0 => self.push_warn(DiagnosticCode::W0007, "Multiplication by Zero", "multiplication by zero".to_string(), 1, 1, None),
@@ -512,6 +590,95 @@ impl WarningAnalyzer {
         });
         diag.help = help;
         self.diagnostics.push(diag);
+    }
+
+    fn warn_duplicate_literal_patterns(&mut self, cases: &[(Expression, Vec<Statement>)]) {
+        let mut seen = HashSet::new();
+        for (pat, _) in cases {
+            if let Some(key) = literal_pattern_key(pat) && !seen.insert(key.clone()) {
+                self.push_warn(
+                    DiagnosticCode::W0038,
+                    "Duplicate Match Pattern",
+                    format!("Duplicate literal pattern '{}' in match", key),
+                    1,
+                    1,
+                    None,
+                );
+            }
+        }
+    }
+}
+
+fn contains_explicit_return(statements: &[Statement]) -> bool {
+    for stmt in statements {
+        match stmt {
+            Statement::Return(_) => return true,
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                if contains_explicit_return(then_branch)
+                    || else_branch
+                        .as_ref()
+                        .is_some_and(|branch| contains_explicit_return(branch))
+                {
+                    return true;
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Find { body, .. }
+            | Statement::Function { body, .. }
+            | Statement::Unsafe { body }
+            | Statement::Module { body, .. } => {
+                if contains_explicit_return(body) {
+                    return true;
+                }
+            }
+            Statement::Match { cases, default, .. } => {
+                if cases
+                    .iter()
+                    .any(|(_, body)| contains_explicit_return(body))
+                    || contains_explicit_return(default)
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn literal_pattern_key(expr: &Expression) -> Option<String> {
+    match expr {
+        Expression::Literal(Literal::Int(v)) => Some(format!("int:{v}")),
+        Expression::Literal(Literal::Float(v)) => Some(format!("float:{v}")),
+        Expression::Literal(Literal::Bool(v)) => Some(format!("bool:{v}")),
+        Expression::Literal(Literal::Str(v)) => Some(format!("str:{v}")),
+        Expression::Literal(Literal::Char(v)) => Some(format!("char:{v}")),
+        Expression::Literal(Literal::None) => Some("none".to_string()),
+        _ => None,
+    }
+}
+
+fn expr_fingerprint(expr: &Expression) -> String {
+    match expr {
+        Expression::Identifier(id) => format!("id:{}", id.name),
+        Expression::Literal(Literal::Int(v)) => format!("int:{v}"),
+        Expression::Literal(Literal::Float(v)) => format!("float:{v}"),
+        Expression::Literal(Literal::Bool(v)) => format!("bool:{v}"),
+        Expression::Literal(Literal::Str(v)) => format!("str:{v}"),
+        Expression::Literal(Literal::Char(v)) => format!("char:{v}"),
+        Expression::Literal(Literal::None) => "none".to_string(),
+        Expression::MemberAccess { target, member, .. } => {
+            format!("member:{}:{}", expr_fingerprint(target), member)
+        }
+        Expression::Index { target, index, .. } => {
+            format!("index:{}:{}", expr_fingerprint(target), expr_fingerprint(index))
+        }
+        _ => format!("{expr:?}"),
     }
 }
 

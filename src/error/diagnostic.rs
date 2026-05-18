@@ -76,6 +76,13 @@ pub enum DiagnosticCode {
     W0031,
     W0032,
     W0033,
+    W0034,
+    W0035,
+    W0036,
+    W0037,
+    W0038,
+    W0039,
+    W0040,
 }
 
 impl DiagnosticCode {
@@ -129,6 +136,13 @@ impl DiagnosticCode {
             DiagnosticCode::W0031 => "W0031",
             DiagnosticCode::W0032 => "W0032",
             DiagnosticCode::W0033 => "W0033",
+            DiagnosticCode::W0034 => "W0034",
+            DiagnosticCode::W0035 => "W0035",
+            DiagnosticCode::W0036 => "W0036",
+            DiagnosticCode::W0037 => "W0037",
+            DiagnosticCode::W0038 => "W0038",
+            DiagnosticCode::W0039 => "W0039",
+            DiagnosticCode::W0040 => "W0040",
         }
     }
 
@@ -161,9 +175,16 @@ impl DiagnosticCode {
             | DiagnosticCode::W0029
             | DiagnosticCode::W0030
             | DiagnosticCode::W0031
-            | DiagnosticCode::W0032 => Some(WarningCategory::Logic),
+            | DiagnosticCode::W0032
+            | DiagnosticCode::W0036
+            | DiagnosticCode::W0038
+            | DiagnosticCode::W0040 => Some(WarningCategory::Logic),
             DiagnosticCode::W0025 => Some(WarningCategory::Memory),
             DiagnosticCode::W0010 => Some(WarningCategory::Deprecated),
+            DiagnosticCode::W0034 | DiagnosticCode::W0035 | DiagnosticCode::W0037 => {
+                Some(WarningCategory::Style)
+            }
+            DiagnosticCode::W0039 => Some(WarningCategory::Complexity),
             _ => None,
         }
     }

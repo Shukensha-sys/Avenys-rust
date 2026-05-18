@@ -18,6 +18,11 @@ All notable changes to Mire are documented in this file.
 - Migrated in-repo Mire sources/docs to `vec[T]` notation.
 - Extended lexer keyword set for lifecycle and ownership helpers: `new`, `own`, `move`, `drop`.
 - Incremental hashing/dependency tracking now covers lifecycle statements.
+- `match` validation now rejects duplicate enum arms and enforces exhaustive coverage for enum matches without `_`.
+- `match` parser now rejects multiple default (`_`) arms and rejects cases declared after default.
+- Lifecycle type rules hardened:
+  - `new::` now validates stack-construction targets (`arr/vec/map`).
+  - `own::` now validates heap-allocatable targets and reports precise type errors.
 - Version bump: `2.8.0` → `2.9.0`.
 
 ## [2.8.0] - 2026-05-11
