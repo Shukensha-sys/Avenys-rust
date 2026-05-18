@@ -839,15 +839,7 @@ impl<'a> BorrowChecker<'a> {
                 }
             }
             _ => {
-                if let Some(name) = Self::identifier_name(arg) {
-                    if Self::is_copy_like(expected) {
-                        return Ok(());
-                    }
-                    self.ensure_can_move(&name)?;
-                    if let Some(state) = self.lookup_binding_mut(&name) {
-                        state.is_moved = true;
-                    }
-                }
+                let _ = expected;
             }
         }
 
@@ -856,28 +848,6 @@ impl<'a> BorrowChecker<'a> {
 
     fn ownership_error(&self, kind: MssError) -> MireError {
         MireError::ownership_error(self.current_line.max(1), self.current_column.max(1), kind)
-    }
-
-    fn is_copy_like(data_type: &DataType) -> bool {
-        matches!(
-            data_type,
-            DataType::I8
-                | DataType::I16
-                | DataType::I32
-                | DataType::I64
-                | DataType::U8
-                | DataType::U16
-                | DataType::U32
-                | DataType::U64
-                | DataType::F32
-                | DataType::F64
-                | DataType::Bool
-                | DataType::Char
-                | DataType::None
-                | DataType::Array { .. }
-                | DataType::Ref { .. }
-                | DataType::RefMut { .. }
-        )
     }
 
     fn statement_location(statement: &Statement) -> (usize, usize) {
@@ -1325,32 +1295,24 @@ mod tests {
     }
 
     #[test]
-    fn passing_moved_type_by_value_consumes_binding() {
+    fn explicit_move_call_consumes_binding() {
         let program = Program {
             statements: vec![
-                Statement::Function {
-                    name: "consume".to_string(),
-                    params: vec![("name".to_string(), DataType::Str)],
-                    body: vec![],
-                    return_type: DataType::None,
-                    visibility: Visibility::Public,
-                    is_method: false,
-                },
                 Statement::Let {
-                    name: "name".to_string(),
-                    data_type: DataType::Str,
-                    value: Some(Expression::Literal(Literal::Str("mire".to_string()))),
+                    name: "item".to_string(),
+                    data_type: DataType::StructNamed("Item".to_string()),
+                    value: Some(Expression::Literal(Literal::None)),
                     is_constant: false,
                     is_mutable: false,
                     is_static: false,
                     visibility: Visibility::Public,
                 },
                 Statement::Expression(Expression::Call {
-                    name: "consume".to_string(),
-                    args: vec![ident("name")],
+                    name: "move::".to_string(),
+                    args: vec![ident("item")],
                     data_type: DataType::Unknown,
                 }),
-                Statement::Expression(ident("name")),
+                Statement::Expression(ident("item")),
             ],
         };
 
