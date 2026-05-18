@@ -2,6 +2,19 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.4.0] - 2026-05-18
+
+### Added
+- Generic impl method resolution for concrete receiver types:
+  - `impl[T] Box[T] { fn get: (self) :T { ... } }`
+  - calls like `b.get()` now resolve correctly when `b` is `Box[i64]`.
+- Nominal generic type propagation in constructor typing (`Box[i64](...)` keeps concrete nominal type).
+
+### Changed
+- Member access/type checking now normalizes nominal generic owners when resolving fields/methods.
+- Additional regression coverage for generic impl method resolution.
+- Version bump: `3.3.0` -> `3.4.0`.
+
 ## [3.3.0] - 2026-05-18
 
 ### Added

@@ -1700,8 +1700,21 @@ impl TypeChecker {
                         args,
                         &arg_types,
                     )?;
-                    *data_type = DataType::StructNamed(name.clone());
-                    return Ok(DataType::StructNamed(name.clone()));
+                    let typed_name = if nominal_type_args.is_empty() {
+                        name.clone()
+                    } else {
+                        format!(
+                            "{}[{}]",
+                            base_name,
+                            nominal_type_args
+                                .iter()
+                                .map(data_type_name_for_diag)
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        )
+                    };
+                    *data_type = DataType::StructNamed(typed_name.clone());
+                    return Ok(DataType::StructNamed(typed_name));
                 }
 
                 let canonical_variant = Self::canonical_enum_variant_name(name);
@@ -1831,11 +1844,17 @@ impl TypeChecker {
                         .struct_name_for_expr(target)
                         .or_else(|| target_type.struct_name().map(ToOwned::to_owned))
                     {
-                        if let Some(class_sig) = self.classes.get(&struct_name)
-                            && let Some(field) = class_sig.fields.iter().find(|f| f.name == *member)
-                        {
-                            *data_type = field.data_type.clone();
-                            return Ok(field.data_type.clone());
+                        let (base_name, type_args) = Self::split_nominal_type_args(&struct_name);
+                        if let Some(class_sig) = self.classes.get(base_name) {
+                            let bindings = self
+                                .bindings_for_nominal_type_args(&class_sig.type_params, &type_args)?;
+                            if let Some(field) = class_sig.fields.iter().find(|f| f.name == *member)
+                            {
+                                let resolved_field =
+                                    self.substitute_generics(&field.data_type, &bindings);
+                                *data_type = resolved_field.clone();
+                                return Ok(resolved_field);
+                            }
                         }
                         if let Some(fn_sig) =
                             self.functions.get(&format!("{}.{}", struct_name, member))
@@ -3013,6 +3032,14 @@ impl TypeChecker {
     }
 
     fn parse_nominal_type_args(inner: &str) -> Vec<DataType> {
+        fn parse_token(token: &str) -> DataType {
+            let parsed = DataType::parse_type(token);
+            if matches!(parsed, DataType::Unknown) {
+                DataType::Generic(token.to_string())
+            } else {
+                parsed
+            }
+        }
         let mut out = Vec::new();
         let mut current = String::new();
         let mut depth = 0usize;
@@ -3029,7 +3056,7 @@ impl TypeChecker {
                 ' ' if depth == 0 => {
                     let token = current.trim();
                     if !token.is_empty() {
-                        out.push(DataType::parse_type(token));
+                        out.push(parse_token(token));
                     }
                     current.clear();
                 }
@@ -3038,7 +3065,7 @@ impl TypeChecker {
         }
         let token = current.trim();
         if !token.is_empty() {
-            out.push(DataType::parse_type(token));
+            out.push(parse_token(token));
         }
         out
     }
@@ -4056,18 +4083,60 @@ impl TypeChecker {
             return Ok(None);
         };
         let full_name = format!("{}.{}", struct_name, method_name);
-        let Some(sig) = self.functions.get(&full_name) else {
-            return Err(type_error(format!(
-                "Struct '{}' has no method '{}'",
-                struct_name, method_name
-            )));
+        let (sig, bindings) = if let Some(sig) = self.functions.get(&full_name) {
+            (sig.clone(), HashMap::new())
+        } else {
+            let (receiver_base, receiver_type_args) = Self::split_nominal_type_args(&struct_name);
+            let mut found: Option<(FunctionSig, HashMap<String, DataType>)> = None;
+            for (candidate_name, candidate_sig) in &self.functions {
+                let Some((owner, method)) = candidate_name.split_once('.') else {
+                    continue;
+                };
+                if method != method_name {
+                    continue;
+                }
+                let (owner_base, owner_type_args) = Self::split_nominal_type_args(owner);
+                if owner_base != receiver_base {
+                    continue;
+                }
+                if owner_type_args.len() != receiver_type_args.len() {
+                    continue;
+                }
+                let mut bindings = HashMap::new();
+                let mut compatible = true;
+                for (ot, rt) in owner_type_args.iter().zip(receiver_type_args.iter()) {
+                    if let DataType::Generic(param) = ot {
+                        bindings.insert(param.clone(), rt.clone());
+                    } else if !self.is_assignable(ot, rt) || !self.is_assignable(rt, ot) {
+                        compatible = false;
+                        break;
+                    }
+                }
+                if compatible {
+                    found = Some((candidate_sig.clone(), bindings));
+                    break;
+                }
+            }
+            let Some(pair) = found else {
+                return Err(type_error(format!(
+                    "Struct '{}' has no method '{}'",
+                    struct_name, method_name
+                )));
+            };
+            pair
         };
 
         if !sig.params.first().is_some_and(DataType::is_struct_like) {
             return Ok(None);
         }
 
-        let expected_args = sig.params.get(1..).unwrap_or(&[]);
+        let expected_args: Vec<DataType> = sig
+            .params
+            .get(1..)
+            .unwrap_or(&[])
+            .iter()
+            .map(|ty| self.substitute_generics(ty, &bindings))
+            .collect();
 
         if expected_args.len() != arg_types.len() {
             return Err(type_error(format!(
@@ -4091,8 +4160,7 @@ impl TypeChecker {
                 )));
             }
         }
-
-        Ok(Some(sig.return_type.clone()))
+        Ok(Some(self.substitute_generics(&sig.return_type, &bindings)))
     }
 
     fn check_list_hof(
@@ -4252,6 +4320,30 @@ fn type_error_at(line: usize, column: usize, message: String) -> MireError {
 
 fn statements_contain_explicit_return(statements: &[Statement]) -> bool {
     statements.iter().any(statement_contains_explicit_return)
+}
+
+fn data_type_name_for_diag(data_type: &DataType) -> String {
+    match data_type {
+        DataType::Generic(name) | DataType::StructNamed(name) | DataType::EnumNamed(name) => {
+            name.clone()
+        }
+        DataType::I8 => "i8".to_string(),
+        DataType::I16 => "i16".to_string(),
+        DataType::I32 => "i32".to_string(),
+        DataType::I64 => "i64".to_string(),
+        DataType::U8 => "u8".to_string(),
+        DataType::U16 => "u16".to_string(),
+        DataType::U32 => "u32".to_string(),
+        DataType::U64 => "u64".to_string(),
+        DataType::F32 => "f32".to_string(),
+        DataType::F64 => "f64".to_string(),
+        DataType::Str => "str".to_string(),
+        DataType::Bool => "bool".to_string(),
+        DataType::Vector { element_type, .. } => {
+            format!("vec[{}]", data_type_name_for_diag(element_type))
+        }
+        _ => "unknown".to_string(),
+    }
 }
 
 fn statement_contains_explicit_return(statement: &Statement) -> bool {

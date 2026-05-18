@@ -2,6 +2,14 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.4.0] - 2026-05-18
+
+- Resolución estable de métodos en `impl` genéricos para receptores concretos.
+  - Ejemplo: `Box[i64]` ahora enlaza correctamente métodos definidos en `impl[T] Box[T]`.
+- El checker preserva y propaga tipo nominal genérico concreto en constructores.
+- Cobertura de regresión ampliada para validación de `impl` genérico con call-site concreto.
+- Bump de versión menor: `3.3.0` -> `3.4.0`.
+
 ## [3.3.0] - 2026-05-18
 
 - Soporte de encabezados `impl` genéricos: `impl[T] Type[T]`.

@@ -705,6 +705,7 @@ impl Parser {
     fn parse_impl_statement(&mut self) -> Result<Statement> {
         self.expect(TokenType::Impl)?;
         let (type_params, type_param_bounds) = self.parse_optional_type_params_with_bounds()?;
+        self.push_type_param_scope(type_params.clone());
         let first = self.parse_nominal_name_with_type_args()?;
         let (trait_name, type_name) = if self.check(TokenType::For) {
             self.advance();
@@ -712,7 +713,6 @@ impl Parser {
         } else {
             (None, first)
         };
-        self.push_type_param_scope(type_params.clone());
 
         self.expect_block_open()?;
         self.method_context += 1;
