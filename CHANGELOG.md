@@ -2,6 +2,25 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.2.0] - 2026-05-18
+
+### Added
+- Nominal generic type support in parser/type checker:
+  - generic type declarations: `type Box[T] { ... }`, `enum Option[T] { ... }`
+  - generic nominal type usage in annotations: `Box[i64]`, `Option[i64]`
+  - generic constructor/variant call paths:
+    - `Box[i64](...)`
+    - `Option[i64].Some(...)`
+- Type checker generic substitution for:
+  - constructor field type validation
+  - enum payload validation and match payload bindings
+
+### Changed
+- AST expanded:
+  - `Statement::Type.type_params`
+  - `Statement::Enum.type_params`
+- Version bump: `3.1.0` -> `3.2.0`.
+
 ## [3.1.0] - 2026-05-18
 
 ### Added

@@ -849,7 +849,7 @@ impl LlvmIrGen {
                 );
             }
             // First pass: collect enum definitions
-            if let Statement::Enum { name, variants } = stmt {
+            if let Statement::Enum { name, variants, .. } = stmt {
                 let mut max_payload_size = 1usize;
                 let mut variant_infos = HashMap::new();
                 for (idx, variant) in variants.iter().enumerate() {

@@ -141,6 +141,16 @@ set p = (Point x: 1, y: 2)
 set b = (Box width: 10, height: 20)
 ```
 
+### Generic Nominal Types
+
+```mire
+type Box[T] {
+    value :T
+}
+
+set b = Box[i64](42)
+```
+
 ### Field Access and Mutation
 
 ```mire
@@ -230,6 +240,15 @@ set c = Color.Red
 set m = Maybe.Some(value: 42)
 set r = Result.Ok(42)
 set s = Status.Loading(progress: 75, total: 100)
+```
+
+```mire
+enum Option[T] {
+    None
+    Some(value :T)
+}
+
+set o = Option[i64].Some(7)
 ```
 
 ### Match Patterns

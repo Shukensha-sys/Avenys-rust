@@ -529,6 +529,8 @@ pub enum Statement {
     },
     Type {
         name: String,
+        #[serde(default)]
+        type_params: Vec<String>,
         parent: Option<String>,
         fields: Vec<Statement>,
     },
@@ -601,6 +603,8 @@ pub enum Statement {
     },
     Enum {
         name: String,
+        #[serde(default)]
+        type_params: Vec<String>,
         variants: Vec<EnumVariantDef>,
     },
     DmireTable {

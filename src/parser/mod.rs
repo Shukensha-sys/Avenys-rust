@@ -500,6 +500,8 @@ impl Parser {
         let _ = visibility;
         self.expect(keyword)?;
         let name = self.expect_ident()?;
+        let type_params = self.parse_optional_type_params()?;
+        self.push_type_param_scope(type_params.clone());
 
         let parent = if self.check(TokenType::Extends) {
             self.advance();
@@ -545,9 +547,11 @@ impl Parser {
         }
 
         self.expect_block_close()?;
+        self.pop_type_param_scope();
         self.declare(&name);
         Ok(Statement::Type {
             name,
+            type_params,
             parent,
             fields,
         })
@@ -706,6 +710,8 @@ impl Parser {
         let _ = visibility;
         self.expect(TokenType::Enum)?;
         let enum_name = self.expect_ident()?;
+        let type_params = self.parse_optional_type_params()?;
+        self.push_type_param_scope(type_params.clone());
         self.expect_block_open()?;
         let mut variants = Vec::new();
 
@@ -747,9 +753,11 @@ impl Parser {
         }
 
         self.expect_block_close()?;
+        self.pop_type_param_scope();
         self.declare(&enum_name);
         Ok(Statement::Enum {
             name: enum_name,
+            type_params,
             variants,
         })
     }
@@ -1799,6 +1807,65 @@ impl Parser {
         false
     }
 
+    fn bracket_followed_by_dot(&self) -> bool {
+        if !self.check(TokenType::Lbracket) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut idx = self.pos;
+        while let Some(tok) = self.tokens.get(idx) {
+            match tok.ttype {
+                TokenType::Lbracket => depth += 1,
+                TokenType::Rbracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let next = self
+                            .tokens
+                            .get(idx + 1)
+                            .map(|t| t.ttype)
+                            .unwrap_or(TokenType::Eof);
+                        return next == TokenType::Dot;
+                    }
+                }
+                _ => {}
+            }
+            idx += 1;
+        }
+        false
+    }
+
+    fn bracket_followed_by_ident_colon(&self) -> bool {
+        if !self.check(TokenType::Lbracket) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut idx = self.pos;
+        while let Some(tok) = self.tokens.get(idx) {
+            match tok.ttype {
+                TokenType::Lbracket => depth += 1,
+                TokenType::Rbracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let next = self
+                            .tokens
+                            .get(idx + 1)
+                            .map(|t| t.ttype)
+                            .unwrap_or(TokenType::Eof);
+                        let next2 = self
+                            .tokens
+                            .get(idx + 2)
+                            .map(|t| t.ttype)
+                            .unwrap_or(TokenType::Eof);
+                        return next == TokenType::Ident && next2 == TokenType::Colon;
+                    }
+                }
+                _ => {}
+            }
+            idx += 1;
+        }
+        false
+    }
+
     fn parse_primary(&mut self) -> Result<Expression> {
         if self.check_lifecycle_expression_prefix() {
             return self.parse_lifecycle_expression();
@@ -1857,7 +1924,21 @@ impl Parser {
             }
             TokenType::Ident => {
                 let token = self.peek();
-                let name = self.advance().value.unwrap_or_default();
+                let base_name = self.advance().value.unwrap_or_default();
+                let name = if self.check(TokenType::Lbracket) && self.bracket_followed_by_dot() {
+                    let type_args = self.parse_type_args()?;
+                    format!(
+                        "{}[{}]",
+                        base_name,
+                        type_args
+                            .iter()
+                            .map(data_type_name)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                } else {
+                    base_name
+                };
                 if name == "type" && self.is_expression_start(self.peek().ttype) {
                     let expr = self.parse_expression()?;
                     return Ok(Expression::Call {
@@ -1880,7 +1961,7 @@ impl Parser {
 
                 // Parse qualified path if identifier names a declared enum.
                 if self.check(TokenType::Dot) && self.peek_n(1).ttype == TokenType::Ident {
-                    if self.enum_names.contains(&name) {
+                    if self.enum_names.contains(name.split('[').next().unwrap_or(&name)) {
                         self.advance();
                         let variant_name = self.advance().value.unwrap_or_default();
                         // Check if this is Result.Ok(42) - variant with payload
@@ -1922,10 +2003,28 @@ impl Parser {
 
                 // Check for method call pattern: (Type.method(args))
                 // Pattern: (Ident . Ident ...)
-                if self.check(TokenType::Ident) && self.peek_n(1).ttype == TokenType::Dot {
-                    let type_name = self.peek().value.clone().unwrap_or_default();
-                    if !type_name.is_empty() {
+                if self.check(TokenType::Ident) {
+                    let mut type_name = self.peek().value.clone().unwrap_or_default();
+                    if type_name.is_empty() {
+                        type_name = "".to_string();
+                    }
+                    let has_type_args =
+                        self.peek_n(1).ttype == TokenType::Lbracket && self.bracket_followed_by_dot();
+                    let dot_offset = if has_type_args { 0 } else { 1 };
+                    if !type_name.is_empty()
+                        && ((has_type_args && self.peek_n(0).ttype == TokenType::Ident)
+                            || self.peek_n(1).ttype == TokenType::Dot)
+                        && self.peek_n(1 + dot_offset).ttype == TokenType::Dot
+                    {
                         self.advance(); // consume type name
+                        if has_type_args {
+                            let targs = self.parse_type_args()?;
+                            type_name = format!(
+                                "{}[{}]",
+                                type_name,
+                                targs.iter().map(data_type_name).collect::<Vec<_>>().join(" ")
+                            );
+                        }
                         self.advance(); // consume dot
                         let method_name = self.expect_member_name()?;
                         let full_name = format!("{}.{}", type_name, method_name);
@@ -1947,15 +2046,25 @@ impl Parser {
                 // But NOT if first token contains '.' (qualified path / member access)
                 if self.check(TokenType::Ident) {
                     let first_token = self.peek();
-                    let type_name = first_token.value.clone().unwrap_or_default();
+                    let mut type_name = first_token.value.clone().unwrap_or_default();
 
                     // Skip if first token is a qualified path (contains '.')
                     if !type_name.contains('.') {
-                        // Look ahead: we need Ident followed by Colon
-                        if self.peek_n(1).ttype == TokenType::Ident
-                            && self.peek_n(2).ttype == TokenType::Colon
+                        let has_targs =
+                            self.peek_n(1).ttype == TokenType::Lbracket && self.bracket_followed_by_ident_colon();
+                        // Look ahead: we need Ident followed by Colon (after optional [T...])
+                        if (has_targs || self.peek_n(1).ttype == TokenType::Ident)
+                            && self.peek_n(if has_targs { 3 } else { 2 }).ttype == TokenType::Colon
                         {
                             self.advance(); // consume type name
+                            if has_targs {
+                                let targs = self.parse_type_args()?;
+                                type_name = format!(
+                                    "{}[{}]",
+                                    type_name,
+                                    targs.iter().map(data_type_name).collect::<Vec<_>>().join(" ")
+                                );
+                            }
 
                             let mut args = Vec::new();
 
@@ -2713,9 +2822,27 @@ impl Parser {
                             dynamic: true,
                         })
                     } else if self.nominal_type_names.contains(other) {
-                        Ok(DataType::StructNamed(other.to_string()))
+                        if self.check(TokenType::Lbracket) {
+                            let args = self.parse_type_args()?;
+                            Ok(DataType::StructNamed(format!(
+                                "{}[{}]",
+                                other,
+                                args.iter().map(data_type_name).collect::<Vec<_>>().join(" ")
+                            )))
+                        } else {
+                            Ok(DataType::StructNamed(other.to_string()))
+                        }
                     } else if self.enum_names.contains(other) {
-                        Ok(DataType::EnumNamed(other.to_string()))
+                        if self.check(TokenType::Lbracket) {
+                            let args = self.parse_type_args()?;
+                            Ok(DataType::EnumNamed(format!(
+                                "{}[{}]",
+                                other,
+                                args.iter().map(data_type_name).collect::<Vec<_>>().join(" ")
+                            )))
+                        } else {
+                            Ok(DataType::EnumNamed(other.to_string()))
+                        }
                     } else if self.is_type_param(other) {
                         Ok(DataType::Generic(other.to_string()))
                     } else {
@@ -3259,6 +3386,37 @@ fn identifier_expr_with_pos(name: &str, line: usize, column: usize) -> Expressio
 
 fn string_expr(value: &str) -> Expression {
     Expression::Literal(Literal::Str(value.to_string()))
+}
+
+fn data_type_name(data_type: &DataType) -> String {
+    match data_type {
+        DataType::I8 => "i8".to_string(),
+        DataType::I16 => "i16".to_string(),
+        DataType::I32 => "i32".to_string(),
+        DataType::I64 => "i64".to_string(),
+        DataType::U8 => "u8".to_string(),
+        DataType::U16 => "u16".to_string(),
+        DataType::U32 => "u32".to_string(),
+        DataType::U64 => "u64".to_string(),
+        DataType::F32 => "f32".to_string(),
+        DataType::F64 => "f64".to_string(),
+        DataType::Char => "char".to_string(),
+        DataType::Str => "str".to_string(),
+        DataType::Bool => "bool".to_string(),
+        DataType::None => "none".to_string(),
+        DataType::Vector { element_type, .. } => format!("vec[{}]", data_type_name(element_type)),
+        DataType::Map { key_type, value_type } => {
+            format!("map[{} {}]", data_type_name(key_type), data_type_name(value_type))
+        }
+        DataType::Array { element_type, size } => {
+            format!("arr[{} {}]", data_type_name(element_type), size)
+        }
+        DataType::Slice { element_type } => format!("slice[{}]", data_type_name(element_type)),
+        DataType::StructNamed(name) | DataType::EnumNamed(name) | DataType::Generic(name) => {
+            name.clone()
+        }
+        _ => "unknown".to_string(),
+    }
 }
 
 fn concat_expressions(mut parts: Vec<Expression>) -> Expression {

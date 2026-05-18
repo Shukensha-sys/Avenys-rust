@@ -28,11 +28,13 @@ struct ClassFieldSig {
 
 #[derive(Debug, Clone)]
 struct ClassSig {
+    type_params: Vec<String>,
     fields: Vec<ClassFieldSig>,
 }
 
 #[derive(Debug, Clone)]
 struct EnumVariantSig {
+    type_params: Vec<String>,
     payload_names: Vec<String>,
     payload_types: Vec<DataType>,
 }
@@ -705,10 +707,21 @@ impl TypeChecker {
                             _ => None,
                         })
                         .collect();
-                    self.classes.insert(name.clone(), ClassSig { fields });
+                    self.classes.insert(
+                        name.clone(),
+                        ClassSig {
+                            type_params: Vec::new(),
+                            fields,
+                        },
+                    );
                     self.collect_function_signatures(methods)?
                 }
-                Statement::Type { name, fields, .. } => {
+                Statement::Type {
+                    name,
+                    type_params,
+                    fields,
+                    ..
+                } => {
                     let type_fields = fields
                         .iter()
                         .filter_map(|statement| match statement {
@@ -728,6 +741,7 @@ impl TypeChecker {
                     self.classes.insert(
                         name.clone(),
                         ClassSig {
+                            type_params: type_params.clone(),
                             fields: type_fields,
                         },
                     );
@@ -737,12 +751,18 @@ impl TypeChecker {
                     // Code no longer supported
                 }
                 Statement::AddLib { path } => self.collect_library_signatures(path)?,
-                Statement::Enum { name, variants, .. } => {
+                Statement::Enum {
+                    name,
+                    type_params,
+                    variants,
+                    ..
+                } => {
                     for variant in variants {
                         let full_name = format!("{}.{}", name, variant.name);
                         self.enum_variants.insert(
                             full_name,
                             EnumVariantSig {
+                                type_params: type_params.clone(),
                                 payload_names: variant.payload_names.clone(),
                                 payload_types: variant.data_types.clone(),
                             },
@@ -1645,14 +1665,38 @@ impl TypeChecker {
                 // Check class constructors BEFORE enum variants.
                 // Associated methods use `Type::method(...)`, while direct constructors
                 // still use `(Type field: value, ...)`.
-                if let Some(class_sig) = self.classes.get(name).cloned() {
-                    self.check_class_constructor_call(name, &class_sig, args, &arg_types)?;
+                let (base_name, nominal_type_args_from_name) = Self::split_nominal_type_args(name);
+                let nominal_type_args = if !type_args.is_empty() {
+                    type_args.clone()
+                } else {
+                    nominal_type_args_from_name
+                };
+                if let Some(class_sig) = self.classes.get(base_name).cloned() {
+                    let bindings = self.bindings_for_nominal_type_args(&class_sig.type_params, &nominal_type_args)?;
+                    self.check_class_constructor_call_with_bindings(
+                        name,
+                        &class_sig,
+                        &bindings,
+                        args,
+                        &arg_types,
+                    )?;
                     *data_type = DataType::StructNamed(name.clone());
                     return Ok(DataType::StructNamed(name.clone()));
                 }
 
-                if let Some(variant_sig) = self.enum_variants.get(name).cloned() {
-                    self.check_enum_variant_call(name, &variant_sig, &arg_types)?;
+                let canonical_variant = Self::canonical_enum_variant_name(name);
+                if let Some(variant_sig) = self.enum_variants.get(&canonical_variant).cloned() {
+                    let call_type_args = name
+                        .split_once('.')
+                        .map(|(n, _)| Self::split_nominal_type_args(n).1)
+                        .unwrap_or_default();
+                    let bindings = self.bindings_for_nominal_type_args(&variant_sig.type_params, &call_type_args)?;
+                    self.check_enum_variant_call_with_bindings(
+                        name,
+                        &variant_sig,
+                        &bindings,
+                        &arg_types,
+                    )?;
                     let enum_name = name
                         .split_once('.')
                         .map(|(enum_name, _)| enum_name.to_string())
@@ -1809,7 +1853,7 @@ impl TypeChecker {
                 variant_name,
                 data_type,
             } => {
-                let full_name = format!("{}.{}", enum_name, variant_name);
+                let full_name = Self::canonical_enum_variant_name(&format!("{}.{}", enum_name, variant_name));
                 if !self.enum_variants.contains_key(&full_name) {
                     return Err(type_error(format!("Unknown enum variant '{}'", full_name)));
                 }
@@ -1822,12 +1866,14 @@ impl TypeChecker {
                 payloads,
                 data_type,
             } => {
-                let full_name = format!("{}.{}", enum_name, variant_name);
-                let variant_sig =
-                    self.enum_variants.get(&full_name).cloned().ok_or_else(|| {
-                        type_error(format!("Unknown enum variant '{}'", full_name))
-                    })?;
-                self.normalize_enum_variant_payloads(&full_name, &variant_sig, payloads)?;
+                let typed_name = format!("{}.{}", enum_name, variant_name);
+                let full_name = Self::canonical_enum_variant_name(&typed_name);
+                let variant_sig = self
+                    .enum_variants
+                    .get(&full_name)
+                    .cloned()
+                    .ok_or_else(|| type_error(format!("Unknown enum variant '{}'", typed_name)))?;
+                self.normalize_enum_variant_payloads(&typed_name, &variant_sig, payloads)?;
                 *data_type = DataType::EnumNamed(enum_name.clone());
                 Ok(DataType::EnumNamed(enum_name.clone()))
             }
@@ -2890,6 +2936,79 @@ impl TypeChecker {
         Ok(explicit_type_args.to_vec())
     }
 
+    fn split_nominal_type_args(name: &str) -> (&str, Vec<DataType>) {
+        if let Some(open) = name.find('[')
+            && name.ends_with(']')
+        {
+            let base = &name[..open];
+            let inner = &name[open + 1..name.len() - 1];
+            return (base, Self::parse_nominal_type_args(inner));
+        }
+        (name, Vec::new())
+    }
+
+    fn parse_nominal_type_args(inner: &str) -> Vec<DataType> {
+        let mut out = Vec::new();
+        let mut current = String::new();
+        let mut depth = 0usize;
+        for ch in inner.chars() {
+            match ch {
+                '[' => {
+                    depth += 1;
+                    current.push(ch);
+                }
+                ']' => {
+                    depth = depth.saturating_sub(1);
+                    current.push(ch);
+                }
+                ' ' if depth == 0 => {
+                    let token = current.trim();
+                    if !token.is_empty() {
+                        out.push(DataType::parse_type(token));
+                    }
+                    current.clear();
+                }
+                _ => current.push(ch),
+            }
+        }
+        let token = current.trim();
+        if !token.is_empty() {
+            out.push(DataType::parse_type(token));
+        }
+        out
+    }
+
+    fn bindings_for_nominal_type_args(
+        &self,
+        type_params: &[String],
+        type_args: &[DataType],
+    ) -> Result<HashMap<String, DataType>> {
+        if type_params.is_empty() {
+            return Ok(HashMap::new());
+        }
+        if type_params.len() != type_args.len() {
+            return Err(type_error(format!(
+                "Generic type arity mismatch: expected {}, got {}",
+                type_params.len(),
+                type_args.len()
+            )));
+        }
+        let mut bindings = HashMap::new();
+        for (k, v) in type_params.iter().zip(type_args.iter()) {
+            bindings.insert(k.clone(), v.clone());
+        }
+        Ok(bindings)
+    }
+
+    fn canonical_enum_variant_name(name: &str) -> String {
+        if let Some((enum_name, variant)) = name.split_once('.') {
+            let (base, _) = Self::split_nominal_type_args(enum_name);
+            format!("{}.{}", base, variant)
+        } else {
+            name.to_string()
+        }
+    }
+
     fn validate_explicit_nested_literal(expected: &DataType, expr: &Expression) -> Result<()> {
         match (expected, expr) {
             (
@@ -3070,6 +3189,41 @@ impl TypeChecker {
         Ok(())
     }
 
+    fn check_enum_variant_call_with_bindings(
+        &self,
+        variant_name: &str,
+        variant_sig: &EnumVariantSig,
+        bindings: &HashMap<String, DataType>,
+        arg_types: &[DataType],
+    ) -> Result<()> {
+        if variant_sig.payload_types.len() != arg_types.len() {
+            return Err(type_error(format!(
+                "Enum variant '{}' expects {} values, got {}",
+                variant_name,
+                variant_sig.payload_types.len(),
+                arg_types.len()
+            )));
+        }
+        for (index, (expected, actual)) in variant_sig
+            .payload_types
+            .iter()
+            .map(|ty| self.substitute_generics(ty, bindings))
+            .zip(arg_types.iter())
+            .enumerate()
+        {
+            if !self.is_assignable(&expected, actual) {
+                return Err(type_error(format!(
+                    "Enum variant '{}' value {} expects {:?}, got {:?}",
+                    variant_name,
+                    index + 1,
+                    expected,
+                    actual
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn normalize_enum_variant_payloads(
         &mut self,
         variant_name: &str,
@@ -3169,26 +3323,39 @@ impl TypeChecker {
                 payloads,
                 data_type,
             } => {
-                let full_name = format!("{}.{}", enum_name, variant_name);
+                let full_name =
+                    Self::canonical_enum_variant_name(&format!("{}.{}", enum_name, variant_name));
                 let variant_sig =
                     self.enum_variants.get(&full_name).cloned().ok_or_else(|| {
                         type_error(format!("Unknown enum variant '{}'", full_name))
                     })?;
+                let (_, call_type_args) = Self::split_nominal_type_args(enum_name);
+                let bindings =
+                    self.bindings_for_nominal_type_args(&variant_sig.type_params, &call_type_args)?;
                 let mut arg_types = Vec::with_capacity(payloads.len());
                 for (index, payload) in payloads.iter_mut().enumerate() {
                     if matches!(payload, Expression::Identifier(_)) {
                         arg_types.push(
-                            variant_sig
+                            self.substitute_generics(
+                                variant_sig
                                 .payload_types
                                 .get(index)
                                 .cloned()
-                                .unwrap_or(DataType::Unknown),
+                                .as_ref()
+                                .unwrap_or(&DataType::Unknown),
+                                &bindings,
+                            ),
                         );
                     } else {
                         arg_types.push(self.check_expression(payload)?);
                     }
                 }
-                self.check_enum_variant_call(&full_name, &variant_sig, &arg_types)?;
+                self.check_enum_variant_call_with_bindings(
+                    &full_name,
+                    &variant_sig,
+                    &bindings,
+                    &arg_types,
+                )?;
                 *data_type = DataType::EnumNamed(enum_name.clone());
                 Ok(DataType::EnumNamed(enum_name.clone()))
             }
@@ -3204,13 +3371,22 @@ impl TypeChecker {
             ..
         } = case_expr
         {
-            let full_name = format!("{}.{}", enum_name, variant_name);
+            let full_name =
+                Self::canonical_enum_variant_name(&format!("{}.{}", enum_name, variant_name));
             if let Some(variant_sig) = self.enum_variants.get(&full_name).cloned() {
+                let (_, call_type_args) = Self::split_nominal_type_args(enum_name);
+                let bindings = self
+                    .bindings_for_nominal_type_args(&variant_sig.type_params, &call_type_args)
+                    .unwrap_or_default();
                 for (payload_expr, payload_type) in
                     payloads.iter().zip(variant_sig.payload_types.iter())
                 {
                     if let Expression::Identifier(id) = payload_expr {
-                        self.insert_var(id.name.clone(), payload_type.clone(), true);
+                        self.insert_var(
+                            id.name.clone(),
+                            self.substitute_generics(payload_type, &bindings),
+                            true,
+                        );
                     }
                 }
             }
@@ -3353,10 +3529,11 @@ impl TypeChecker {
         }
     }
 
-    fn check_class_constructor_call(
+    fn check_class_constructor_call_with_bindings(
         &self,
         class_name: &str,
         class_sig: &ClassSig,
+        bindings: &HashMap<String, DataType>,
         args: &[Expression],
         arg_types: &[DataType],
     ) -> Result<()> {
@@ -3400,10 +3577,11 @@ impl TypeChecker {
                     })?;
 
                 let actual = arg_types.get(index).cloned().unwrap_or(DataType::Unknown);
-                if !self.is_assignable(&field.data_type, &actual) {
+                let expected = self.substitute_generics(&field.data_type, bindings);
+                if !self.is_assignable(&expected, &actual) {
                     return Err(type_error(format!(
                         "Constructor '{}.{}' expects {:?}, got {:?}",
-                        class_name, name, field.data_type, actual
+                        class_name, name, expected, actual
                     )));
                 }
             }
@@ -3430,10 +3608,11 @@ impl TypeChecker {
                 let Some(field) = class_sig.fields.get(index) else {
                     break;
                 };
-                if !self.is_assignable(&field.data_type, actual) {
+                let expected = self.substitute_generics(&field.data_type, bindings);
+                if !self.is_assignable(&expected, actual) {
                     return Err(type_error(format!(
                         "Constructor '{}.{}' expects {:?}, got {:?}",
-                        class_name, field.name, field.data_type, actual
+                        class_name, field.name, expected, actual
                     )));
                 }
             }
@@ -4435,6 +4614,7 @@ mod tests {
             statements: vec![
                 Statement::Type {
                     name: "PointType".to_string(),
+                    type_params: Vec::new(),
                     parent: None,
                     fields: vec![
                         Statement::Let {

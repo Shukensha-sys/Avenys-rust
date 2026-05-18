@@ -1981,6 +1981,20 @@ fn generic_identity_function_typechecks() {
 }
 
 #[test]
+fn generic_struct_constructor_typechecks() {
+    let source = "type Box[T] {\n    value :T\n}\n\npub fn main: () {\n    set b = Box[i64](42)\n    use dasu(b)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    analyze_program(&mut program, source).expect("generic struct constructor should type check");
+}
+
+#[test]
+fn generic_enum_variant_typechecks() {
+    let source = "enum Option[T] {\n    None\n    Some(value :T)\n}\n\npub fn main: () {\n    set o = Option[i64].Some(7)\n    use dasu(o)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    analyze_program(&mut program, source).expect("generic enum variants should type check");
+}
+
+#[test]
 fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");

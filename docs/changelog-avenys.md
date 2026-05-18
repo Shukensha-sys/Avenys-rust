@@ -2,6 +2,19 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.2.0] - 2026-05-18
+
+- Soporte nominal genérico ampliado:
+  - `type Name[T] { ... }`
+  - `enum Name[T] { ... }`
+  - uso de tipos `Name[T]` en anotaciones
+  - rutas de construcción `Name[T](...)` y `Enum[T].Variant(...)`
+- Type checker integra sustitución de genéricos nominales en:
+  - validación de constructores
+  - validación de payloads enum y bindings de `match`
+- AST extendido con `type_params` en `Type` y `Enum`.
+- Bump de versión menor: `3.1.0` -> `3.2.0`.
+
 ## [3.1.0] - 2026-05-18
 
 - Soporte estable de genéricos en funciones:

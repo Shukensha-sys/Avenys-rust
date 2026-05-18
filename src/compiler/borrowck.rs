@@ -1227,6 +1227,7 @@ mod tests {
             statements: vec![
                 Statement::Type {
                     name: "Point".to_string(),
+                    type_params: Vec::new(),
                     parent: None,
                     fields: vec![],
                 },
