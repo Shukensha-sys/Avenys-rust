@@ -138,6 +138,7 @@ mod tests {
                 type_name: "Point".to_string(),
                 methods: vec![Statement::Function {
                     name: "draw".to_string(),
+            type_params: Vec::new(),
                     params: vec![(
                         "self".to_string(),
                         DataType::StructNamed("Point".to_string()),

@@ -2,6 +2,24 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.1.0] - 2026-05-18
+
+### Added
+- Function-level generics syntax in parser/type system:
+  - generic declarations: `fn identity[T]: (x :T) :T { ... }`
+  - explicit call arguments: `identity[i64](42)`
+  - inferred call arguments: `identity("ok")`
+- Generic type node support in AST (`DataType::Generic`).
+- Type checker generic argument resolution for function calls (explicit + inferred) with
+  consistency validation.
+- Parser support for `find` keyword and lowering was retained stable while extending syntax.
+
+### Changed
+- `Expression::Call` now carries `type_args` in AST.
+- `Statement::Function` now carries `type_params` in AST.
+- Incremental hashing updated to include generic function parameters and call type arguments.
+- Version bump: `3.0.0` -> `3.1.0`.
+
 ## [3.0.0] - 2026-05-18
 
 ### Added

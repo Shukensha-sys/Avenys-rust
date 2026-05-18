@@ -97,6 +97,17 @@ set double = (x :i64) => x * 2
 set result = lists.map((x) => x * 2, [1 2 3])
 ```
 
+### Function Generics
+
+```mire
+fn identity[T]: (x :T) :T {
+    return x
+}
+
+set a = identity[i64](42)   # explicit generic argument
+set b = identity("ok")      # inferred as T = str
+```
+
 ---
 
 ## 4. Structs

@@ -1974,6 +1974,13 @@ fn bindings_const_and_compound_assignment_analyze() {
 }
 
 #[test]
+fn generic_identity_function_typechecks() {
+    let source = "pub fn identity[T]: (x :T) :T {\n    return x\n}\n\npub fn main: () {\n    set a = identity[i64](42) :i64\n    set b = identity(\"ok\") :str\n    use dasu(a)\n    use dasu(b)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    analyze_program(&mut program, source).expect("generic identity should type check");
+}
+
+#[test]
 fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");

@@ -1199,6 +1199,7 @@ mod tests {
         let program = Program {
             statements: vec![Statement::Function {
                 name: "bad".to_string(),
+            type_params: Vec::new(),
                 params: vec![],
                 body: vec![
                     let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1234,6 +1235,7 @@ mod tests {
                     type_name: "Point".to_string(),
                     methods: vec![Statement::Function {
                         name: "leak".to_string(),
+            type_params: Vec::new(),
                         params: vec![(
                             "self".to_string(),
                             DataType::StructNamed("Point".to_string()),
@@ -1266,6 +1268,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "mutate".to_string(),
+            type_params: Vec::new(),
                     params: vec![(
                         "value".to_string(),
                         DataType::mutable_ref(DataType::Unknown),
@@ -1284,6 +1287,7 @@ mod tests {
                         data_type: DataType::Unknown,
                         referenced_type: DataType::Unknown,
                     }],
+                    type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
             ],
@@ -1310,6 +1314,7 @@ mod tests {
                 Statement::Expression(Expression::Call {
                     name: "move::".to_string(),
                     args: vec![ident("item")],
+            type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(ident("item")),
@@ -1327,6 +1332,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "show".to_string(),
+            type_params: Vec::new(),
                     params: vec![("value".to_string(), DataType::I64)],
                     body: vec![],
                     return_type: DataType::None,
@@ -1337,6 +1343,7 @@ mod tests {
                 Statement::Expression(Expression::Call {
                     name: "show".to_string(),
                     args: vec![ident("x")],
+            type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(ident("x")),
@@ -1398,6 +1405,7 @@ mod tests {
                     methods: vec![
                         Statement::Function {
                             name: "good".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Expression(Expression::Literal(Literal::Int(1)))],
                             return_type: DataType::None,
@@ -1406,6 +1414,7 @@ mod tests {
                         },
                         Statement::Function {
                             name: "bad".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![
                                 let_stmt(
@@ -1455,6 +1464,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "leak".to_string(),
+            type_params: Vec::new(),
                     params: vec![],
                     body: vec![
                         let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1486,6 +1496,7 @@ mod tests {
                 type_name: "Point".to_string(),
                 methods: vec![Statement::Function {
                     name: "leak".to_string(),
+            type_params: Vec::new(),
                     params: vec![(
                         "self".to_string(),
                         DataType::StructNamed("Point".to_string()),

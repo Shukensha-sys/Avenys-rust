@@ -73,6 +73,7 @@ pub enum DataType {
     Result {
         ok: Box<DataType>,
     },
+    Generic(String),
 }
 
 impl DataType {
@@ -205,6 +206,8 @@ pub enum Expression {
     Call {
         name: String,
         args: Vec<Expression>,
+        #[serde(default)]
+        type_args: Vec<DataType>,
         data_type: DataType,
     },
     List {
@@ -486,6 +489,8 @@ pub enum Statement {
     },
     Function {
         name: String,
+        #[serde(default)]
+        type_params: Vec<String>,
         params: Vec<(String, DataType)>,
         body: Vec<Statement>,
         return_type: DataType,

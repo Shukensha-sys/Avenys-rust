@@ -1637,16 +1637,19 @@ impl LlvmIrGen {
                 name,
                 args,
                 data_type,
+                ..
             } if name == "ireru" => self.compile_input_expr(args, data_type),
             Expression::Call {
                 name,
                 args,
                 data_type,
+                ..
             } if name == "__if_expr" => self.compile_if_expr(args, data_type),
             Expression::Call {
                 name,
                 args,
                 data_type,
+                ..
             }
                 if name == "new::" || name == "move::"
             => {
@@ -1911,6 +1914,7 @@ impl LlvmIrGen {
                 name,
                 args,
                 data_type,
+                ..
             } => {
                 // Check if this is a struct constructor call
                 if data_type.is_struct_like() && self.user_structs.contains_key(name) {
@@ -2011,6 +2015,7 @@ impl LlvmIrGen {
                         name,
                         args,
                         data_type: _,
+                        ..
                     } => {
                         if name == "len" {
                             return self.compile_pipeline_len(input, input_val);
@@ -6489,7 +6494,9 @@ impl LlvmIrGen {
 
     fn map_type(&self, data_type: &DataType) -> Result<LlType> {
         match data_type {
-            DataType::I64 | DataType::Unknown | DataType::Anything => Ok(LlType::I64),
+            DataType::I64 | DataType::Unknown | DataType::Anything | DataType::Generic(_) => {
+                Ok(LlType::I64)
+            }
             DataType::I32 => Ok(LlType::I64),
             DataType::I8 | DataType::I16 => Ok(LlType::I64),
             DataType::U8 | DataType::U16 | DataType::U32 | DataType::U64 | DataType::Char => {

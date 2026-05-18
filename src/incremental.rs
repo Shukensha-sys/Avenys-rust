@@ -2252,6 +2252,7 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         }
         Statement::Function {
             name,
+            type_params,
             params,
             body,
             return_type,
@@ -2260,6 +2261,7 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         } => {
             hasher.write_u8(2);
             name.hash(hasher);
+            type_params.hash(hasher);
             hash_params(params, hasher);
             hash_statements(body, hasher);
             hash_data_type(return_type, hasher);
@@ -2541,11 +2543,15 @@ fn hash_expression(expr: &Expression, hasher: &mut FxHasher) {
         Expression::Call {
             name,
             args,
+            type_args,
             data_type,
         } => {
             hasher.write_u8(5);
             name.hash(hasher);
             hash_expressions(args, hasher);
+            for arg in type_args {
+                hash_data_type(arg, hasher);
+            }
             hash_data_type(data_type, hasher);
         }
         Expression::List {
@@ -2812,6 +2818,10 @@ fn hash_data_type(data_type: &DataType, hasher: &mut FxHasher) {
         DataType::Result { ok } => {
             hasher.write_u8(34);
             hash_data_type(ok, hasher);
+        }
+        DataType::Generic(name) => {
+            hasher.write_u8(35);
+            name.hash(hasher);
         }
     }
 }
@@ -3185,6 +3195,7 @@ mod tests {
         Program {
             statements: vec![Statement::Function {
                 name: name.to_string(),
+            type_params: Vec::new(),
                 params: Vec::new(),
                 body: Vec::new(),
                 return_type: crate::parser::ast::DataType::None,
@@ -3597,6 +3608,7 @@ mod tests {
                     parent: None,
                     methods: vec![Statement::Function {
                         name: "good".to_string(),
+            type_params: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3609,6 +3621,7 @@ mod tests {
                     type_name: "PointCode".to_string(),
                     methods: vec![Statement::Function {
                         name: "draw".to_string(),
+            type_params: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3621,6 +3634,7 @@ mod tests {
                     type_name: "PointImpl".to_string(),
                     methods: vec![Statement::Function {
                         name: "new".to_string(),
+            type_params: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3648,6 +3662,7 @@ mod tests {
     fn stable_statement_hash_is_deterministic_for_same_statement() {
         let stmt = Statement::Function {
             name: "main".to_string(),
+            type_params: Vec::new(),
             params: vec![("x".to_string(), DataType::I64)],
             body: vec![Statement::Return(Some(Expression::BinaryOp {
                 left: Box::new(Expression::Identifier(Identifier {
@@ -3675,6 +3690,7 @@ mod tests {
     fn stable_statement_hash_changes_when_statement_changes() {
         let stmt_a = Statement::Function {
             name: "main".to_string(),
+            type_params: Vec::new(),
             params: Vec::new(),
             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(1))))],
             return_type: DataType::I64,
@@ -3683,6 +3699,7 @@ mod tests {
         };
         let stmt_b = Statement::Function {
             name: "main".to_string(),
+            type_params: Vec::new(),
             params: Vec::new(),
             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(2))))],
             return_type: DataType::I64,
@@ -3890,6 +3907,7 @@ mod tests {
                 },
                 Statement::Function {
                     name: "main".to_string(),
+            type_params: Vec::new(),
                     params: vec![],
                     body: vec![Statement::Expression(Expression::MemberAccess {
                         target: Box::new(Expression::Identifier(Identifier {

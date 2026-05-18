@@ -2,6 +2,20 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.1.0] - 2026-05-18
+
+- Soporte estable de genéricos en funciones:
+  - `fn name[T]: (...) :T`
+  - llamadas explícitas `name[T](...)`
+  - inferencia de tipo genérico desde argumentos en call-site
+- AST extendido:
+  - `Statement::Function.type_params`
+  - `Expression::Call.type_args`
+  - `DataType::Generic`
+- Type checker amplía validación de calls genéricas (arity, inferencia y coherencia de tipos).
+- Hash incremental actualizado para considerar parámetros de tipo y type-args.
+- Bump de versión menor: `3.0.0` -> `3.1.0`.
+
 ## [3.0.0] - 2026-05-18
 
 - Implementación completa de `find` en el pipeline compilador:

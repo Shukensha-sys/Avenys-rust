@@ -14,6 +14,7 @@ use crate::parser::ast::{
 
 #[derive(Debug, Clone)]
 struct FunctionSig {
+    type_params: Vec<String>,
     params: Vec<DataType>,
     return_type: DataType,
 }
@@ -612,6 +613,7 @@ impl TypeChecker {
             match statement {
                 Statement::Function {
                     name,
+                    type_params,
                     params,
                     return_type,
                     ..
@@ -619,6 +621,7 @@ impl TypeChecker {
                     self.functions.insert(
                         name.clone(),
                         FunctionSig {
+                            type_params: type_params.clone(),
                             params: params.iter().map(|(_, t)| t.clone()).collect(),
                             return_type: return_type.clone(),
                         },
@@ -633,6 +636,7 @@ impl TypeChecker {
                     self.functions.insert(
                         name.clone(),
                         FunctionSig {
+                            type_params: Vec::new(),
                             params: params.iter().map(|(_, t)| t.clone()).collect(),
                             return_type: return_type.clone(),
                         },
@@ -658,6 +662,7 @@ impl TypeChecker {
                             self.functions.insert(
                                 format!("{}.{}", type_name, name),
                                 FunctionSig {
+                                    type_params: Vec::new(),
                                     params: full_params.iter().map(|(_, t)| t.clone()).collect(),
                                     return_type: return_type.clone(),
                                 },
@@ -895,6 +900,7 @@ impl TypeChecker {
                                 let struct_constructor = Expression::Call {
                                     name: struct_name.clone(),
                                     args: new_fields,
+                                    type_args: Vec::new(),
                                     data_type: owner_type.clone(),
                                 };
 
@@ -923,6 +929,7 @@ impl TypeChecker {
             }
             Statement::Function {
                 name,
+                type_params,
                 params,
                 body,
                 return_type,
@@ -931,6 +938,7 @@ impl TypeChecker {
                 self.functions.insert(
                     name.clone(),
                     FunctionSig {
+                        type_params: type_params.clone(),
                         params: params.iter().map(|(_, t)| t.clone()).collect(),
                         return_type: return_type.clone(),
                     },
@@ -1383,6 +1391,7 @@ impl TypeChecker {
             Expression::Call {
                 name,
                 args,
+                type_args,
                 data_type,
             } => {
                 // `ireru(...) :Type` propagates the explicit type annotation to the call node.
@@ -1588,10 +1597,21 @@ impl TypeChecker {
                         )));
                     }
 
-                    for (idx, (expected, actual)) in
-                        sig.params.iter().zip(arg_types.iter()).enumerate()
+                    let resolved_type_args = if sig.type_params.is_empty() {
+                        Vec::new()
+                    } else {
+                        self.resolve_generic_type_args(&sig, type_args, &arg_types)?
+                    };
+                    let generic_bindings = self.generic_bindings_from_args(&sig, &resolved_type_args);
+
+                    for (idx, (expected, actual)) in sig
+                        .params
+                        .iter()
+                        .map(|param| self.substitute_generics(param, &generic_bindings))
+                        .zip(arg_types.iter())
+                        .enumerate()
                     {
-                        if !self.is_assignable(expected, actual) {
+                        if !self.is_assignable(&expected, actual) {
                             return Err(type_error(format!(
                                 "Function '{}' argument {} expects {:?}, got {:?}",
                                 name,
@@ -1602,8 +1622,12 @@ impl TypeChecker {
                         }
                     }
 
-                    *data_type = sig.return_type.clone();
-                    return Ok(sig.return_type);
+                    if !resolved_type_args.is_empty() {
+                        *type_args = resolved_type_args;
+                    }
+                    let ret = self.substitute_generics(&sig.return_type, &generic_bindings);
+                    *data_type = ret.clone();
+                    return Ok(ret);
                 }
 
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
@@ -2619,6 +2643,9 @@ impl TypeChecker {
     }
 
     fn is_assignable(&self, expected: &DataType, actual: &DataType) -> bool {
+        if matches!(expected, DataType::Generic(_)) || matches!(actual, DataType::Generic(_)) {
+            return true;
+        }
         if expected == actual {
             return true;
         }
@@ -2718,6 +2745,149 @@ impl TypeChecker {
         }
 
         Self::is_numeric(expected) && Self::is_numeric(actual)
+    }
+
+    fn generic_bindings_from_args(
+        &self,
+        sig: &FunctionSig,
+        resolved_type_args: &[DataType],
+    ) -> HashMap<String, DataType> {
+        let mut bindings = HashMap::new();
+        for (idx, param_name) in sig.type_params.iter().enumerate() {
+            if let Some(arg) = resolved_type_args.get(idx) {
+                bindings.insert(param_name.clone(), arg.clone());
+            }
+        }
+        bindings
+    }
+
+    fn substitute_generics(
+        &self,
+        data_type: &DataType,
+        bindings: &HashMap<String, DataType>,
+    ) -> DataType {
+        match data_type {
+            DataType::Generic(name) => bindings.get(name).cloned().unwrap_or(DataType::Unknown),
+            DataType::Vector {
+                element_type,
+                dynamic,
+            } => DataType::Vector {
+                element_type: Box::new(self.substitute_generics(element_type, bindings)),
+                dynamic: *dynamic,
+            },
+            DataType::Map {
+                key_type,
+                value_type,
+            } => DataType::Map {
+                key_type: Box::new(self.substitute_generics(key_type, bindings)),
+                value_type: Box::new(self.substitute_generics(value_type, bindings)),
+            },
+            DataType::Array { element_type, size } => DataType::Array {
+                element_type: Box::new(self.substitute_generics(element_type, bindings)),
+                size: *size,
+            },
+            DataType::Slice { element_type } => DataType::Slice {
+                element_type: Box::new(self.substitute_generics(element_type, bindings)),
+            },
+            DataType::Ref { inner } => DataType::Ref {
+                inner: Box::new(self.substitute_generics(inner, bindings)),
+            },
+            DataType::RefMut { inner } => DataType::RefMut {
+                inner: Box::new(self.substitute_generics(inner, bindings)),
+            },
+            DataType::Result { ok } => DataType::Result {
+                ok: Box::new(self.substitute_generics(ok, bindings)),
+            },
+            other => other.clone(),
+        }
+    }
+
+    fn infer_generic_from_pair(
+        &self,
+        param_type: &DataType,
+        arg_type: &DataType,
+        inferred: &mut HashMap<String, DataType>,
+    ) -> Result<()> {
+        match (param_type, arg_type) {
+            (DataType::Generic(name), actual) => {
+                if let Some(existing) = inferred.get(name) {
+                    if !self.is_assignable(existing, actual) || !self.is_assignable(actual, existing)
+                    {
+                        return Err(type_error(format!(
+                            "Conflicting inference for generic '{}': {:?} vs {:?}",
+                            name, existing, actual
+                        )));
+                    }
+                } else {
+                    inferred.insert(name.clone(), actual.clone());
+                }
+                Ok(())
+            }
+            (
+                DataType::Vector {
+                    element_type: a, ..
+                },
+                DataType::Vector {
+                    element_type: b, ..
+                },
+            )
+            | (
+                DataType::Array { element_type: a, .. },
+                DataType::Array { element_type: b, .. },
+            )
+            | (
+                DataType::Slice { element_type: a },
+                DataType::Slice { element_type: b },
+            ) => self.infer_generic_from_pair(a, b, inferred),
+            (
+                DataType::Map {
+                    key_type: ak,
+                    value_type: av,
+                },
+                DataType::Map {
+                    key_type: bk,
+                    value_type: bv,
+                },
+            ) => {
+                self.infer_generic_from_pair(ak, bk, inferred)?;
+                self.infer_generic_from_pair(av, bv, inferred)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn resolve_generic_type_args(
+        &self,
+        sig: &FunctionSig,
+        explicit_type_args: &[DataType],
+        arg_types: &[DataType],
+    ) -> Result<Vec<DataType>> {
+        if explicit_type_args.is_empty() {
+            let mut inferred = HashMap::new();
+            for (param, arg) in sig.params.iter().zip(arg_types.iter()) {
+                self.infer_generic_from_pair(param, arg, &mut inferred)?;
+            }
+            let mut resolved = Vec::with_capacity(sig.type_params.len());
+            for param in &sig.type_params {
+                let inferred_type = inferred.get(param).cloned().ok_or_else(|| {
+                    type_error(format!(
+                        "Could not infer generic type '{}'; specify it explicitly",
+                        param
+                    ))
+                })?;
+                resolved.push(inferred_type);
+            }
+            return Ok(resolved);
+        }
+
+        if explicit_type_args.len() != sig.type_params.len() {
+            return Err(type_error(format!(
+                "Function generic arity mismatch: expected {}, got {}",
+                sig.type_params.len(),
+                explicit_type_args.len()
+            )));
+        }
+        Ok(explicit_type_args.to_vec())
     }
 
     fn validate_explicit_nested_literal(expected: &DataType, expr: &Expression) -> Result<()> {
@@ -3575,6 +3745,7 @@ impl TypeChecker {
             Expression::Call {
                 name,
                 args,
+                type_args: _,
                 data_type,
             } => {
                 let arg_types: Vec<DataType> = std::iter::once(Ok(input_type.clone()))
@@ -3955,6 +4126,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "sum".to_string(),
+            type_params: Vec::new(),
                     params: vec![
                         ("a".to_string(), DataType::I64),
                         ("b".to_string(), DataType::I64),
@@ -3985,6 +4157,7 @@ mod tests {
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
                     ],
+                    type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
             ],
@@ -4050,6 +4223,7 @@ mod tests {
                 Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str("hello".to_string()))],
+            type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(Expression::Call {
@@ -4058,6 +4232,7 @@ mod tests {
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
                     ]))],
+                    type_args: Vec::new(),
                     data_type: DataType::Unknown,
                 }),
             ],
@@ -4209,6 +4384,7 @@ mod tests {
                 methods: vec![
                     Statement::Function {
                         name: "good".to_string(),
+            type_params: Vec::new(),
                         params: vec![],
                         body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                             1,
@@ -4219,6 +4395,7 @@ mod tests {
                     },
                     Statement::Function {
                         name: "bad".to_string(),
+            type_params: Vec::new(),
                         params: vec![],
                         body: vec![Statement::Return(Some(Expression::Identifier(
                             Identifier {
@@ -4291,6 +4468,7 @@ mod tests {
                     methods: vec![
                         Statement::Function {
                             name: "good".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                                 1,
@@ -4301,6 +4479,7 @@ mod tests {
                         },
                         Statement::Function {
                             name: "bad".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Identifier(
                                 Identifier {
@@ -4322,6 +4501,7 @@ mod tests {
                     methods: vec![
                         Statement::Function {
                             name: "draw".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                                 1,
@@ -4332,6 +4512,7 @@ mod tests {
                         },
                         Statement::Function {
                             name: "broken".to_string(),
+            type_params: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Identifier(
                                 Identifier {
@@ -4526,6 +4707,7 @@ mod tests {
             statements: vec![
                 Statement::Function {
                     name: "bump".to_string(),
+            type_params: Vec::new(),
                     params: vec![(
                         "value".to_string(),
                         DataType::RefMut {
@@ -4539,6 +4721,7 @@ mod tests {
                 },
                 Statement::Function {
                     name: "main".to_string(),
+            type_params: Vec::new(),
                     params: vec![],
                     body: vec![
                         Statement::Let {
@@ -4577,6 +4760,7 @@ mod tests {
                                 line: 0,
                                 column: 0,
                             })],
+                            type_args: Vec::new(),
                             data_type: DataType::Unknown,
                         }),
                     ],

@@ -23,6 +23,7 @@ pub struct Parser {
     enum_variant_owners: HashMap<String, String>,
     nominal_type_names: HashSet<String>,
     method_context: usize,
+    type_param_scopes: Vec<HashSet<String>>,
 }
 
 #[derive(Clone, Copy)]
@@ -43,6 +44,7 @@ impl Parser {
             enum_variant_owners,
             nominal_type_names,
             method_context: 0,
+            type_param_scopes: vec![HashSet::new()],
         }
     }
 
@@ -437,8 +439,10 @@ impl Parser {
     fn parse_fn_statement(&mut self, visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Fn)?;
         let name = self.expect_ident()?;
+        let type_params = self.parse_optional_type_params()?;
         self.expect(TokenType::Colon)?;
         self.expect(TokenType::Lparen)?;
+        self.push_type_param_scope(type_params.clone());
         let params = self.parse_param_list()?;
         self.expect(TokenType::Rparen)?;
 
@@ -457,16 +461,35 @@ impl Parser {
         let body = self.parse_block()?;
         self.pop_scope();
         self.expect_block_close()?;
+        self.pop_type_param_scope();
         self.declare(&name);
 
         Ok(Statement::Function {
             name,
+            type_params,
             params,
             body,
             return_type,
             visibility,
             is_method: self.method_context > 0,
         })
+    }
+
+    fn parse_optional_type_params(&mut self) -> Result<Vec<String>> {
+        if !self.check(TokenType::Lbracket) {
+            return Ok(Vec::new());
+        }
+        self.expect(TokenType::Lbracket)?;
+        let mut params = Vec::new();
+        while !self.check(TokenType::Rbracket) && !self.is_at_end() {
+            if self.check(TokenType::Comma) {
+                self.advance();
+                continue;
+            }
+            params.push(self.expect_ident()?);
+        }
+        self.expect(TokenType::Rbracket)?;
+        Ok(params)
     }
 
     fn parse_nominal_type_statement(
@@ -1123,6 +1146,7 @@ impl Parser {
                     capture: Vec::new(),
                 },
             ],
+            type_args: Vec::new(),
             data_type: DataType::None,
         }))
     }
@@ -1392,6 +1416,7 @@ impl Parser {
                 expr = Expression::Call {
                     name: "__is".to_string(),
                     args: vec![expr, right],
+            type_args: Vec::new(),
                     data_type: DataType::Bool,
                 };
             } else {
@@ -1494,6 +1519,7 @@ impl Parser {
                 expr = Expression::Call {
                     name: "__type_matches".to_string(),
                     args: vec![expr, string_expr(&ty)],
+            type_args: Vec::new(),
                     data_type: DataType::Bool,
                 };
             } else if self.check(TokenType::At) {
@@ -1510,6 +1536,7 @@ impl Parser {
                 expr = Expression::Call {
                     name: "range".to_string(),
                     args: vec![expr, right],
+            type_args: Vec::new(),
                     data_type: DataType::List,
                 };
             } else {
@@ -1664,6 +1691,27 @@ impl Parser {
         let mut expr = self.parse_primary()?;
 
         loop {
+            if self.check(TokenType::Lbracket) && self.bracket_followed_by_lparen() {
+                let call_target = match &expr {
+                    Expression::Identifier(Identifier { name, .. }) => Some(name.clone()),
+                    _ => None,
+                };
+                if let Some(name) = call_target {
+                    let type_args = self.parse_type_args()?;
+                    if !self.check(TokenType::Lparen) {
+                        return Err(self.error("Generic call requires '(...)' after type arguments"));
+                    }
+                    let args = self.parse_call_arguments()?;
+                    expr = Expression::Call {
+                        name,
+                        args,
+                        type_args,
+                        data_type: DataType::Unknown,
+                    };
+                    continue;
+                }
+            }
+
             if self.check(TokenType::Dot) {
                 self.advance();
                 let member = self.expect_member_name()?;
@@ -1700,6 +1748,7 @@ impl Parser {
                         expr = Expression::Call {
                             name,
                             args,
+                            type_args: Vec::new(),
                             data_type: DataType::Unknown,
                         };
                     }
@@ -1710,6 +1759,7 @@ impl Parser {
                     expr = Expression::Call {
                         name: "call".to_string(),
                         args: call_args,
+                        type_args: Vec::new(),
                         data_type: DataType::Unknown,
                     };
                 }
@@ -1720,6 +1770,33 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn bracket_followed_by_lparen(&self) -> bool {
+        if !self.check(TokenType::Lbracket) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut idx = self.pos;
+        while let Some(tok) = self.tokens.get(idx) {
+            match tok.ttype {
+                TokenType::Lbracket => depth += 1,
+                TokenType::Rbracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let next = self
+                            .tokens
+                            .get(idx + 1)
+                            .map(|t| t.ttype)
+                            .unwrap_or(TokenType::Eof);
+                        return next == TokenType::Lparen;
+                    }
+                }
+                _ => {}
+            }
+            idx += 1;
+        }
+        false
     }
 
     fn parse_primary(&mut self) -> Result<Expression> {
@@ -1786,6 +1863,7 @@ impl Parser {
                     return Ok(Expression::Call {
                         name: "type".to_string(),
                         args: vec![expr],
+            type_args: Vec::new(),
                         data_type: DataType::Str,
                     });
                 }
@@ -1858,6 +1936,7 @@ impl Parser {
                         return Ok(Expression::Call {
                             name: full_name,
                             args,
+                            type_args: Vec::new(),
                             data_type: DataType::Unknown,
                         });
                     }
@@ -1908,6 +1987,7 @@ impl Parser {
                             return Ok(Expression::Call {
                                 name: type_name,
                                 args,
+                                type_args: Vec::new(),
                                 data_type: DataType::Unknown,
                             });
                         }
@@ -1972,6 +2052,7 @@ impl Parser {
         Ok(Expression::Call {
             name,
             args,
+            type_args: Vec::new(),
             data_type: DataType::Unknown,
         })
     }
@@ -2032,6 +2113,7 @@ impl Parser {
                     capture: Vec::new(),
                 },
             ],
+            type_args: Vec::new(),
             data_type: DataType::Unknown,
         })
     }
@@ -2045,6 +2127,7 @@ impl Parser {
             Expression::Call {
                 name: ident.name.clone(),
                 args: Vec::new(),
+            type_args: Vec::new(),
                 data_type: DataType::Unknown,
             }
         } else {
@@ -2314,6 +2397,7 @@ impl Parser {
         parser.enum_variant_owners = self.enum_variant_owners.clone();
         parser.nominal_type_names = self.nominal_type_names.clone();
         parser.method_context = self.method_context;
+        parser.type_param_scopes = self.type_param_scopes.clone();
         parser
     }
 
@@ -2405,6 +2489,7 @@ impl Parser {
         Ok(Expression::Call {
             name,
             args,
+            type_args: Vec::new(),
             data_type,
         })
     }
@@ -2507,6 +2592,7 @@ impl Parser {
             return Ok(Expression::Call {
                 name: "__mire_fmt".to_string(),
                 args: vec![expr, string_expr(&spec)],
+            type_args: Vec::new(),
                 data_type: DataType::Str,
             });
         }
@@ -2519,6 +2605,7 @@ impl Parser {
         Ok(Expression::Call {
             name: "str".to_string(),
             args: vec![expr],
+            type_args: Vec::new(),
             data_type: DataType::Str,
         })
     }
@@ -2629,6 +2716,8 @@ impl Parser {
                         Ok(DataType::StructNamed(other.to_string()))
                     } else if self.enum_names.contains(other) {
                         Ok(DataType::EnumNamed(other.to_string()))
+                    } else if self.is_type_param(other) {
+                        Ok(DataType::Generic(other.to_string()))
                     } else {
                         Ok(DataType::parse_type(other))
                     }
@@ -2637,6 +2726,20 @@ impl Parser {
         }
 
         Err(self.error("Expected type"))
+    }
+
+    fn parse_type_args(&mut self) -> Result<Vec<DataType>> {
+        self.expect(TokenType::Lbracket)?;
+        let mut args = Vec::new();
+        while !self.check(TokenType::Rbracket) && !self.is_at_end() {
+            if self.check(TokenType::Comma) {
+                self.advance();
+                continue;
+            }
+            args.push(self.parse_type()?);
+        }
+        self.expect(TokenType::Rbracket)?;
+        Ok(args)
     }
 
     fn parse_type_name_string(&mut self) -> Result<String> {
@@ -3070,6 +3173,27 @@ impl Parser {
         self.scopes.iter().rev().any(|scope| scope.contains(name))
     }
 
+    fn push_type_param_scope(&mut self, type_params: Vec<String>) {
+        let mut scope = HashSet::new();
+        for param in type_params {
+            scope.insert(param);
+        }
+        self.type_param_scopes.push(scope);
+    }
+
+    fn pop_type_param_scope(&mut self) {
+        if self.type_param_scopes.len() > 1 {
+            self.type_param_scopes.pop();
+        }
+    }
+
+    fn is_type_param(&self, name: &str) -> bool {
+        self.type_param_scopes
+            .iter()
+            .rev()
+            .any(|scope| scope.contains(name))
+    }
+
     fn token_surface(&self, token: Token) -> String {
         match token.ttype {
             TokenType::Ident
@@ -3321,6 +3445,7 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
         Expression::Call {
             name,
             args,
+            type_args,
             data_type,
         } => Expression::Call {
             name,
@@ -3328,6 +3453,7 @@ fn replace_self_placeholder(expr: Expression, replacement: &Expression) -> Expre
                 .into_iter()
                 .map(|arg| replace_self_placeholder(arg, replacement))
                 .collect(),
+            type_args,
             data_type,
         },
         Expression::List {
@@ -3490,6 +3616,17 @@ mod tests {
         let source = "find item in [1 2 3] {\n    use dasu(item)\n}\n";
         let program = parse(source).expect("parse should succeed");
         assert!(matches!(program.statements[0], Statement::Find { .. }));
+    }
+
+    #[test]
+    fn parses_function_generics_and_explicit_type_args() {
+        let source =
+            "fn identity[T]: (x :T) :T { return x }\npub fn main: () { set a = identity[i64](42) }\n";
+        let program = parse(source).expect("parse should succeed");
+        let Statement::Function { type_params, .. } = &program.statements[0] else {
+            panic!("expected function statement");
+        };
+        assert_eq!(type_params, &vec!["T".to_string()]);
     }
 
     #[test]
