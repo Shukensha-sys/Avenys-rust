@@ -2,6 +2,15 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.6.0] - 2026-05-18
+
+### Changed
+- Generic call validation is now strict for non-generic functions:
+  - explicit type arguments on non-generic functions now produce a type error
+  - avoids silent acceptance of invalid generic syntax at call-site
+- Added regression coverage for the non-generic explicit type-args rejection path.
+- Version bump: `3.5.0` -> `3.6.0`.
+
 ## [3.5.0] - 2026-05-18
 
 ### Added

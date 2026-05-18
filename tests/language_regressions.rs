@@ -2055,6 +2055,16 @@ fn generic_impl_method_codegen_builds_for_concrete_type() {
 }
 
 #[test]
+fn nongeneric_function_rejects_explicit_type_args() {
+    let source = "fn plain: (x :i64) :i64 {\n    return x\n}\n\npub fn main: () {\n    set x = plain[i64](42)\n    use dasu(x)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    let err = analyze_program(&mut program, source).expect_err("nongeneric function must reject type args");
+    assert!(err
+        .to_string()
+        .contains("is not generic; remove explicit type arguments"));
+}
+
+#[test]
 fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");

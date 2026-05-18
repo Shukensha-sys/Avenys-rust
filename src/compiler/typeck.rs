@@ -1644,6 +1644,12 @@ impl TypeChecker {
                     }
 
                     let resolved_type_args = if sig.type_params.is_empty() {
+                        if !type_args.is_empty() {
+                            return Err(type_error(format!(
+                                "Function '{}' is not generic; remove explicit type arguments",
+                                name
+                            )));
+                        }
                         Vec::new()
                     } else {
                         self.resolve_generic_type_args(&sig, type_args, &arg_types)?

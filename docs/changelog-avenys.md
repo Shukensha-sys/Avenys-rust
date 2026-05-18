@@ -2,6 +2,14 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.6.0] - 2026-05-18
+
+- Hardening de validación genérica en llamadas:
+  - funciones no genéricas ya no aceptan `type args` explícitos
+  - se emite error de tipo claro para evitar falsas aceptaciones
+- Nueva regresión para proteger ese contrato del checker.
+- Bump de versión menor: `3.5.0` -> `3.6.0`.
+
 ## [3.5.0] - 2026-05-18
 
 - Backend ahora genera símbolos monomórficos estables por call-site genérico (wrappers LLVM).
