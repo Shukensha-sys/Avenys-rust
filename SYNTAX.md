@@ -106,6 +106,20 @@ fn identity[T]: (x :T) :T {
 
 set a = identity[i64](42)   # explicit generic argument
 set b = identity("ok")      # inferred as T = str
+
+trait Show {
+    fn show: (self) :str
+}
+
+fn print_it[T: Show]: (x :T) {
+    use dasu("ok")
+}
+
+impl[T] Box[T] {
+    fn get: (self) :T {
+        return self.value
+    }
+}
 ```
 
 ---

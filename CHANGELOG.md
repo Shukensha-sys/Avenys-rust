@@ -2,6 +2,25 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.3.0] - 2026-05-18
+
+### Added
+- Generic `impl` headers in syntax:
+  - `impl[T] Box[T] { ... }`
+- Generic trait bounds in function type parameters:
+  - `fn print_it[T: Show]: (x :T) { ... }`
+- Type checker enforcement for generic bounds:
+  - validates declared bound trait existence
+  - rejects call sites where inferred/explicit generic type does not satisfy bound
+
+### Changed
+- AST expanded:
+  - `Statement::Function.type_param_bounds`
+  - `Statement::Impl.type_params`
+  - `Statement::Impl.type_param_bounds`
+- Incremental hashing updated to account for new generic metadata.
+- Version bump: `3.2.0` -> `3.3.0`.
+
 ## [3.2.0] - 2026-05-18
 
 ### Added

@@ -15,6 +15,7 @@ use crate::parser::ast::{
 #[derive(Debug, Clone)]
 struct FunctionSig {
     type_params: Vec<String>,
+    type_param_bounds: Vec<(String, Vec<String>)>,
     params: Vec<DataType>,
     return_type: DataType,
 }
@@ -104,6 +105,7 @@ struct TypeChecker {
     classes: HashMap<String, ClassSig>,
     enum_variants: HashMap<String, EnumVariantSig>,
     traits: HashMap<String, TraitSig>,
+    impl_traits: HashMap<String, HashSet<String>>,
     builtin_returns: HashMap<String, DataType>,
     return_type_stack: Vec<DataType>,
     visited_libs: HashSet<String>,
@@ -130,6 +132,7 @@ impl TypeChecker {
             classes: HashMap::new(),
             enum_variants: HashMap::new(),
             traits: HashMap::new(),
+            impl_traits: HashMap::new(),
             builtin_returns: Self::default_builtin_returns(),
             return_type_stack: Vec::new(),
             visited_libs: HashSet::new(),
@@ -616,6 +619,7 @@ impl TypeChecker {
                 Statement::Function {
                     name,
                     type_params,
+                    type_param_bounds,
                     params,
                     return_type,
                     ..
@@ -624,6 +628,7 @@ impl TypeChecker {
                         name.clone(),
                         FunctionSig {
                             type_params: type_params.clone(),
+                            type_param_bounds: type_param_bounds.clone(),
                             params: params.iter().map(|(_, t)| t.clone()).collect(),
                             return_type: return_type.clone(),
                         },
@@ -639,14 +644,24 @@ impl TypeChecker {
                         name.clone(),
                         FunctionSig {
                             type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             params: params.iter().map(|(_, t)| t.clone()).collect(),
                             return_type: return_type.clone(),
                         },
                     );
                 }
                 Statement::Impl {
-                    type_name, methods, ..
+                    trait_name,
+                    type_name,
+                    methods,
+                    ..
                 } => {
+                    if let Some(trait_name) = trait_name {
+                        self.impl_traits
+                            .entry(type_name.clone())
+                            .or_default()
+                            .insert(trait_name.clone());
+                    }
                     for method in methods {
                         if let Statement::Function {
                             name,
@@ -665,6 +680,7 @@ impl TypeChecker {
                                 format!("{}.{}", type_name, name),
                                 FunctionSig {
                                     type_params: Vec::new(),
+                                    type_param_bounds: Vec::new(),
                                     params: full_params.iter().map(|(_, t)| t.clone()).collect(),
                                     return_type: return_type.clone(),
                                 },
@@ -950,6 +966,7 @@ impl TypeChecker {
             Statement::Function {
                 name,
                 type_params,
+                type_param_bounds,
                 params,
                 body,
                 return_type,
@@ -959,6 +976,7 @@ impl TypeChecker {
                     name.clone(),
                     FunctionSig {
                         type_params: type_params.clone(),
+                        type_param_bounds: type_param_bounds.clone(),
                         params: params.iter().map(|(_, t)| t.clone()).collect(),
                         return_type: return_type.clone(),
                     },
@@ -1214,6 +1232,7 @@ impl TypeChecker {
                 trait_name,
                 type_name,
                 methods,
+                ..
             } => {
                 self.validate_impl_method_declarations(type_name, methods)?;
                 if let Some(trait_name) = trait_name {
@@ -1622,6 +1641,7 @@ impl TypeChecker {
                     } else {
                         self.resolve_generic_type_args(&sig, type_args, &arg_types)?
                     };
+                    self.validate_generic_bounds(name, &sig, &resolved_type_args)?;
                     let generic_bindings = self.generic_bindings_from_args(&sig, &resolved_type_args);
 
                     for (idx, (expected, actual)) in sig
@@ -2934,6 +2954,51 @@ impl TypeChecker {
             )));
         }
         Ok(explicit_type_args.to_vec())
+    }
+
+    fn validate_generic_bounds(
+        &self,
+        fn_name: &str,
+        sig: &FunctionSig,
+        resolved_type_args: &[DataType],
+    ) -> Result<()> {
+        if sig.type_param_bounds.is_empty() {
+            return Ok(());
+        }
+        let bindings = self.generic_bindings_from_args(sig, resolved_type_args);
+        for (param, bounds) in &sig.type_param_bounds {
+            let actual = bindings.get(param).cloned().unwrap_or(DataType::Unknown);
+            for bound in bounds {
+                if !self.traits.contains_key(bound) {
+                    return Err(type_error(format!(
+                        "Function '{}' generic bound refers to unknown trait '{}'",
+                        fn_name, bound
+                    )));
+                }
+                let type_name = match &actual {
+                    DataType::StructNamed(name) | DataType::EnumNamed(name) => {
+                        Self::split_nominal_type_args(name).0.to_string()
+                    }
+                    _ => {
+                        return Err(type_error(format!(
+                            "Function '{}' requires '{}' to implement trait '{}'",
+                            fn_name, param, bound
+                        )))
+                    }
+                };
+                let ok = self
+                    .impl_traits
+                    .get(&type_name)
+                    .is_some_and(|set| set.contains(bound));
+                if !ok {
+                    return Err(type_error(format!(
+                        "Function '{}' requires '{}' to implement trait '{}'",
+                        fn_name, param, bound
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn split_nominal_type_args(name: &str) -> (&str, Vec<DataType>) {
@@ -4306,6 +4371,7 @@ mod tests {
                 Statement::Function {
                     name: "sum".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                     params: vec![
                         ("a".to_string(), DataType::I64),
                         ("b".to_string(), DataType::I64),
@@ -4560,10 +4626,13 @@ mod tests {
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),
+            type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                 methods: vec![
                     Statement::Function {
                         name: "good".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                             1,
@@ -4575,6 +4644,7 @@ mod tests {
                     Statement::Function {
                         name: "bad".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![Statement::Return(Some(Expression::Identifier(
                             Identifier {
@@ -4649,6 +4719,7 @@ mod tests {
                         Statement::Function {
                             name: "good".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                                 1,
@@ -4660,6 +4731,7 @@ mod tests {
                         Statement::Function {
                             name: "bad".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Identifier(
                                 Identifier {
@@ -4682,6 +4754,7 @@ mod tests {
                         Statement::Function {
                             name: "draw".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                                 1,
@@ -4693,6 +4766,7 @@ mod tests {
                         Statement::Function {
                             name: "broken".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Identifier(
                                 Identifier {
@@ -4888,6 +4962,7 @@ mod tests {
                 Statement::Function {
                     name: "bump".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                     params: vec![(
                         "value".to_string(),
                         DataType::RefMut {
@@ -4902,6 +4977,7 @@ mod tests {
                 Statement::Function {
                     name: "main".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                     params: vec![],
                     body: vec![
                         Statement::Let {

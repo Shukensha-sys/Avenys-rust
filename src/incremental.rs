@@ -2253,6 +2253,7 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         Statement::Function {
             name,
             type_params,
+            type_param_bounds,
             params,
             body,
             return_type,
@@ -2262,6 +2263,7 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             hasher.write_u8(2);
             name.hash(hasher);
             type_params.hash(hasher);
+            type_param_bounds.hash(hasher);
             hash_params(params, hasher);
             hash_statements(body, hasher);
             hash_data_type(return_type, hasher);
@@ -2375,10 +2377,14 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             trait_name,
             type_name,
             methods,
+            type_params,
+            type_param_bounds,
         } => {
             hasher.write_u8(17);
             trait_name.hash(hasher);
             type_name.hash(hasher);
+            type_params.hash(hasher);
+            type_param_bounds.hash(hasher);
             hash_statements(methods, hasher);
         }
         Statement::ExternLib { name, path } => {
@@ -3203,6 +3209,7 @@ mod tests {
             statements: vec![Statement::Function {
                 name: name.to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                 params: Vec::new(),
                 body: Vec::new(),
                 return_type: crate::parser::ast::DataType::None,
@@ -3617,6 +3624,7 @@ mod tests {
                     methods: vec![Statement::Function {
                         name: "good".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3630,6 +3638,7 @@ mod tests {
                     methods: vec![Statement::Function {
                         name: "draw".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3640,9 +3649,12 @@ mod tests {
                 Statement::Impl {
                     trait_name: None,
                     type_name: "PointImpl".to_string(),
+            type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                     methods: vec![Statement::Function {
                         name: "new".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3671,6 +3683,7 @@ mod tests {
         let stmt = Statement::Function {
             name: "main".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params: vec![("x".to_string(), DataType::I64)],
             body: vec![Statement::Return(Some(Expression::BinaryOp {
                 left: Box::new(Expression::Identifier(Identifier {
@@ -3699,6 +3712,7 @@ mod tests {
         let stmt_a = Statement::Function {
             name: "main".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params: Vec::new(),
             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(1))))],
             return_type: DataType::I64,
@@ -3708,6 +3722,7 @@ mod tests {
         let stmt_b = Statement::Function {
             name: "main".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params: Vec::new(),
             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(2))))],
             return_type: DataType::I64,
@@ -3917,6 +3932,7 @@ mod tests {
                 Statement::Function {
                     name: "main".to_string(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
                     params: vec![],
                     body: vec![Statement::Expression(Expression::MemberAccess {
                         target: Box::new(Expression::Identifier(Identifier {

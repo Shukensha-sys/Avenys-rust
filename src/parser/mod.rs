@@ -439,7 +439,7 @@ impl Parser {
     fn parse_fn_statement(&mut self, visibility: Visibility) -> Result<Statement> {
         self.expect(TokenType::Fn)?;
         let name = self.expect_ident()?;
-        let type_params = self.parse_optional_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_optional_type_params_with_bounds()?;
         self.expect(TokenType::Colon)?;
         self.expect(TokenType::Lparen)?;
         self.push_type_param_scope(type_params.clone());
@@ -467,6 +467,7 @@ impl Parser {
         Ok(Statement::Function {
             name,
             type_params,
+            type_param_bounds,
             params,
             body,
             return_type,
@@ -476,20 +477,46 @@ impl Parser {
     }
 
     fn parse_optional_type_params(&mut self) -> Result<Vec<String>> {
+        let (params, _) = self.parse_optional_type_params_with_bounds()?;
+        Ok(params)
+    }
+
+    fn parse_optional_type_params_with_bounds(
+        &mut self,
+    ) -> Result<(Vec<String>, Vec<(String, Vec<String>)>)> {
         if !self.check(TokenType::Lbracket) {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
         self.expect(TokenType::Lbracket)?;
         let mut params = Vec::new();
+        let mut bounds = Vec::new();
         while !self.check(TokenType::Rbracket) && !self.is_at_end() {
             if self.check(TokenType::Comma) {
                 self.advance();
                 continue;
             }
-            params.push(self.expect_ident()?);
+            let pname = self.expect_ident()?;
+            let mut pbounds = Vec::new();
+            if self.check(TokenType::Colon) {
+                self.advance();
+                while !self.check(TokenType::Comma)
+                    && !self.check(TokenType::Rbracket)
+                    && !self.is_at_end()
+                {
+                    if self.check(TokenType::Plus) {
+                        self.advance();
+                        continue;
+                    }
+                    pbounds.push(self.expect_ident()?);
+                }
+            }
+            if !pbounds.is_empty() {
+                bounds.push((pname.clone(), pbounds));
+            }
+            params.push(pname);
         }
         self.expect(TokenType::Rbracket)?;
-        Ok(params)
+        Ok((params, bounds))
     }
 
     fn parse_nominal_type_statement(
@@ -677,13 +704,15 @@ impl Parser {
 
     fn parse_impl_statement(&mut self) -> Result<Statement> {
         self.expect(TokenType::Impl)?;
-        let first = self.expect_ident()?;
+        let (type_params, type_param_bounds) = self.parse_optional_type_params_with_bounds()?;
+        let first = self.parse_nominal_name_with_type_args()?;
         let (trait_name, type_name) = if self.check(TokenType::For) {
             self.advance();
-            (Some(first), self.expect_ident()?)
+            (Some(first), self.parse_nominal_name_with_type_args()?)
         } else {
             (None, first)
         };
+        self.push_type_param_scope(type_params.clone());
 
         self.expect_block_open()?;
         self.method_context += 1;
@@ -698,12 +727,28 @@ impl Parser {
         }
         self.method_context = self.method_context.saturating_sub(1);
         self.expect_block_close()?;
+        self.pop_type_param_scope();
 
         Ok(Statement::Impl {
             trait_name,
             type_name,
+            type_params,
+            type_param_bounds,
             methods,
         })
+    }
+
+    fn parse_nominal_name_with_type_args(&mut self) -> Result<String> {
+        let base = self.expect_ident()?;
+        if self.check(TokenType::Lbracket) {
+            let args = self.parse_type_args()?;
+            return Ok(format!(
+                "{}[{}]",
+                base,
+                args.iter().map(data_type_name).collect::<Vec<_>>().join(" ")
+            ));
+        }
+        Ok(base)
     }
 
     fn parse_enum_statement(&mut self, visibility: Visibility) -> Result<Statement> {
@@ -3783,6 +3828,16 @@ mod tests {
         let program = parse(source).expect("parse should succeed");
         let Statement::Function { type_params, .. } = &program.statements[0] else {
             panic!("expected function statement");
+        };
+        assert_eq!(type_params, &vec!["T".to_string()]);
+    }
+
+    #[test]
+    fn parses_generic_impl_header() {
+        let source = "type Box[T] { value :T }\nimpl[T] Box[T] {\n    fn get: (self) :T { return self.value }\n}\n";
+        let program = parse(source).expect("parse should succeed");
+        let Statement::Impl { type_params, .. } = &program.statements[1] else {
+            panic!("expected impl statement");
         };
         assert_eq!(type_params, &vec!["T".to_string()]);
     }

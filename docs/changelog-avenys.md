@@ -2,6 +2,14 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.3.0] - 2026-05-18
+
+- Soporte de encabezados `impl` genéricos: `impl[T] Type[T]`.
+- Soporte de trait bounds en genéricos de función: `fn f[T: Trait]: (...)`.
+- Type checker ahora valida bounds en call-site (inferencia o type args explícitos).
+- AST y hashing incremental ampliados para metadata de bounds/type-params en `Function` e `Impl`.
+- Bump de versión menor: `3.2.0` -> `3.3.0`.
+
 ## [3.2.0] - 2026-05-18
 
 - Soporte nominal genérico ampliado:

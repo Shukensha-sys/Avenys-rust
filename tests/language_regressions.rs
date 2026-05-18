@@ -1995,6 +1995,18 @@ fn generic_enum_variant_typechecks() {
 }
 
 #[test]
+fn generic_trait_bound_is_enforced() {
+    let ok_source = "trait Show {\n    fn show: (self) :str\n}\n\ntype Num {\n    value :i64\n}\n\nimpl Show for Num {\n    fn show: (self) :str { return \"num\" }\n}\n\nfn print_it[T: Show]: (x :T) {\n    use dasu(\"ok\")\n}\n\npub fn main: () {\n    set n = Num(1)\n    print_it(n)\n}\n";
+    let mut ok_program = parse(ok_source).expect("ok source should parse");
+    analyze_program(&mut ok_program, ok_source).expect("bound should be satisfied");
+
+    let bad_source = "trait Show {\n    fn show: (self) :str\n}\n\nfn print_it[T: Show]: (x :T) {\n    use dasu(x)\n}\n\npub fn main: () {\n    print_it(42)\n}\n";
+    let mut bad_program = parse(bad_source).expect("bad source should parse");
+    let err = analyze_program(&mut bad_program, bad_source).expect_err("bound must fail");
+    assert!(err.to_string().contains("requires 'T' to implement trait 'Show'"));
+}
+
+#[test]
 fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");

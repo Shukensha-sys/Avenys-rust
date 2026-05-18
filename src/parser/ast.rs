@@ -491,6 +491,8 @@ pub enum Statement {
         name: String,
         #[serde(default)]
         type_params: Vec<String>,
+        #[serde(default)]
+        type_param_bounds: Vec<(String, Vec<String>)>,
         params: Vec<(String, DataType)>,
         body: Vec<Statement>,
         return_type: DataType,
@@ -555,6 +557,10 @@ pub enum Statement {
     Impl {
         trait_name: Option<String>,
         type_name: String,
+        #[serde(default)]
+        type_params: Vec<String>,
+        #[serde(default)]
+        type_param_bounds: Vec<(String, Vec<String>)>,
         methods: Vec<Statement>,
     },
     ExternLib {
