@@ -30,12 +30,14 @@ struct ClassFieldSig {
 #[derive(Debug, Clone)]
 struct ClassSig {
     type_params: Vec<String>,
+    type_param_bounds: Vec<(String, Vec<String>)>,
     fields: Vec<ClassFieldSig>,
 }
 
 #[derive(Debug, Clone)]
 struct EnumVariantSig {
     type_params: Vec<String>,
+    type_param_bounds: Vec<(String, Vec<String>)>,
     payload_names: Vec<String>,
     payload_types: Vec<DataType>,
 }
@@ -727,6 +729,7 @@ impl TypeChecker {
                         name.clone(),
                         ClassSig {
                             type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             fields,
                         },
                     );
@@ -735,6 +738,7 @@ impl TypeChecker {
                 Statement::Type {
                     name,
                     type_params,
+                    type_param_bounds,
                     fields,
                     ..
                 } => {
@@ -758,6 +762,7 @@ impl TypeChecker {
                         name.clone(),
                         ClassSig {
                             type_params: type_params.clone(),
+                            type_param_bounds: type_param_bounds.clone(),
                             fields: type_fields,
                         },
                     );
@@ -770,6 +775,7 @@ impl TypeChecker {
                 Statement::Enum {
                     name,
                     type_params,
+                    type_param_bounds,
                     variants,
                     ..
                 } => {
@@ -779,6 +785,7 @@ impl TypeChecker {
                             full_name,
                             EnumVariantSig {
                                 type_params: type_params.clone(),
+                                type_param_bounds: type_param_bounds.clone(),
                                 payload_names: variant.payload_names.clone(),
                                 payload_types: variant.data_types.clone(),
                             },
@@ -1693,6 +1700,11 @@ impl TypeChecker {
                 };
                 if let Some(class_sig) = self.classes.get(base_name).cloned() {
                     let bindings = self.bindings_for_nominal_type_args(&class_sig.type_params, &nominal_type_args)?;
+                    self.validate_nominal_generic_bounds(
+                        base_name,
+                        &class_sig.type_param_bounds,
+                        &bindings,
+                    )?;
                     self.check_class_constructor_call_with_bindings(
                         name,
                         &class_sig,
@@ -1724,6 +1736,15 @@ impl TypeChecker {
                         .map(|(n, _)| Self::split_nominal_type_args(n).1)
                         .unwrap_or_default();
                     let bindings = self.bindings_for_nominal_type_args(&variant_sig.type_params, &call_type_args)?;
+                    let enum_base = canonical_variant
+                        .split_once('.')
+                        .map(|(e, _)| e)
+                        .unwrap_or(canonical_variant.as_str());
+                    self.validate_nominal_generic_bounds(
+                        enum_base,
+                        &variant_sig.type_param_bounds,
+                        &bindings,
+                    )?;
                     self.check_enum_variant_call_with_bindings(
                         name,
                         &variant_sig,
@@ -3013,6 +3034,47 @@ impl TypeChecker {
                     return Err(type_error(format!(
                         "Function '{}' requires '{}' to implement trait '{}'",
                         fn_name, param, bound
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_nominal_generic_bounds(
+        &self,
+        nominal_name: &str,
+        bounds: &[(String, Vec<String>)],
+        bindings: &HashMap<String, DataType>,
+    ) -> Result<()> {
+        for (param, trait_bounds) in bounds {
+            let actual = bindings.get(param).cloned().unwrap_or(DataType::Unknown);
+            for bound in trait_bounds {
+                if !self.traits.contains_key(bound) {
+                    return Err(type_error(format!(
+                        "Type '{}' generic bound refers to unknown trait '{}'",
+                        nominal_name, bound
+                    )));
+                }
+                let type_name = match &actual {
+                    DataType::StructNamed(name) | DataType::EnumNamed(name) => {
+                        Self::split_nominal_type_args(name).0.to_string()
+                    }
+                    _ => {
+                        return Err(type_error(format!(
+                            "Type '{}' requires '{}' to implement trait '{}'",
+                            nominal_name, param, bound
+                        )))
+                    }
+                };
+                let ok = self
+                    .impl_traits
+                    .get(&type_name)
+                    .is_some_and(|set| set.contains(bound));
+                if !ok {
+                    return Err(type_error(format!(
+                        "Type '{}' requires '{}' to implement trait '{}'",
+                        nominal_name, param, bound
                     )));
                 }
             }
@@ -4777,6 +4839,7 @@ mod tests {
                 Statement::Type {
                     name: "PointType".to_string(),
                     type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     parent: None,
                     fields: vec![
                         Statement::Let {

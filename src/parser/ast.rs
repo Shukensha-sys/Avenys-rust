@@ -533,6 +533,8 @@ pub enum Statement {
         name: String,
         #[serde(default)]
         type_params: Vec<String>,
+        #[serde(default)]
+        type_param_bounds: Vec<(String, Vec<String>)>,
         parent: Option<String>,
         fields: Vec<Statement>,
     },
@@ -611,6 +613,8 @@ pub enum Statement {
         name: String,
         #[serde(default)]
         type_params: Vec<String>,
+        #[serde(default)]
+        type_param_bounds: Vec<(String, Vec<String>)>,
         variants: Vec<EnumVariantDef>,
     },
     DmireTable {

@@ -476,11 +476,6 @@ impl Parser {
         })
     }
 
-    fn parse_optional_type_params(&mut self) -> Result<Vec<String>> {
-        let (params, _) = self.parse_optional_type_params_with_bounds()?;
-        Ok(params)
-    }
-
     fn parse_optional_type_params_with_bounds(
         &mut self,
     ) -> Result<(Vec<String>, Vec<(String, Vec<String>)>)> {
@@ -527,7 +522,7 @@ impl Parser {
         let _ = visibility;
         self.expect(keyword)?;
         let name = self.expect_ident()?;
-        let type_params = self.parse_optional_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_optional_type_params_with_bounds()?;
         self.push_type_param_scope(type_params.clone());
 
         let parent = if self.check(TokenType::Extends) {
@@ -579,6 +574,7 @@ impl Parser {
         Ok(Statement::Type {
             name,
             type_params,
+            type_param_bounds,
             parent,
             fields,
         })
@@ -755,7 +751,7 @@ impl Parser {
         let _ = visibility;
         self.expect(TokenType::Enum)?;
         let enum_name = self.expect_ident()?;
-        let type_params = self.parse_optional_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_optional_type_params_with_bounds()?;
         self.push_type_param_scope(type_params.clone());
         self.expect_block_open()?;
         let mut variants = Vec::new();
@@ -803,6 +799,7 @@ impl Parser {
         Ok(Statement::Enum {
             name: enum_name,
             type_params,
+            type_param_bounds,
             variants,
         })
     }

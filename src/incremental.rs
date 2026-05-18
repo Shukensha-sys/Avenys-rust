@@ -2334,12 +2334,14 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         Statement::Type {
             name,
             type_params,
+            type_param_bounds,
             parent,
             fields,
         } => {
             hasher.write_u8(12);
             name.hash(hasher);
             type_params.hash(hasher);
+            type_param_bounds.hash(hasher);
             parent.hash(hasher);
             hash_statements(fields, hasher);
         }
@@ -2462,11 +2464,13 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
         Statement::Enum {
             name,
             type_params,
+            type_param_bounds,
             variants,
         } => {
             hasher.write_u8(27);
             name.hash(hasher);
             type_params.hash(hasher);
+            type_param_bounds.hash(hasher);
             hash_enum_variants(variants, hasher);
         }
         Statement::DmireTable {
@@ -3607,6 +3611,7 @@ mod tests {
                 Statement::Type {
                     name: "PointType".to_string(),
                     type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     parent: None,
                     fields: vec![Statement::Let {
                         name: "x".to_string(),
@@ -3918,6 +3923,7 @@ mod tests {
                 Statement::Type {
                     name: "Point".to_string(),
                     type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     parent: None,
                     fields: vec![Statement::Let {
                         name: "x".to_string(),

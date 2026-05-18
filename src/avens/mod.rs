@@ -795,6 +795,7 @@ struct LlvmIrGen {
     current_column: usize,
     next_tmp: usize,
     next_label: usize,
+    emitted_monomorph_wrappers: HashSet<String>,
 }
 
 impl LlvmIrGen {
@@ -815,6 +816,7 @@ impl LlvmIrGen {
             current_column: 1,
             next_tmp: 0,
             next_label: 0,
+            emitted_monomorph_wrappers: HashSet::new(),
         }
     }
 
@@ -1914,6 +1916,7 @@ impl LlvmIrGen {
                 name,
                 args,
                 data_type,
+                type_args,
                 ..
             } => {
                 // Check if this is a struct constructor call
@@ -1993,10 +1996,12 @@ impl LlvmIrGen {
                 }
                 let tmp = self.tmp();
                 let ret_ty = fn_info.ret.clone();
+                let call_llvm_name =
+                    self.resolve_monomorph_call_symbol(&resolved_name, &fn_info, type_args);
                 self.body.push(format!(
                     "  {tmp} = call {} {}({})",
                     self.ty(ret_ty.clone()),
-                    fn_info.llvm_name,
+                    call_llvm_name,
                     rendered_args.join(", ")
                 ));
                 Ok(LlValue {
@@ -6548,6 +6553,60 @@ impl LlvmIrGen {
             DataType::Result { .. } => 8,
             _ => 1,
         }
+    }
+
+    fn resolve_monomorph_call_symbol(
+        &mut self,
+        resolved_name: &str,
+        fn_info: &FnInfo,
+        type_args: &[DataType],
+    ) -> String {
+        if type_args.is_empty() {
+            return fn_info.llvm_name.clone();
+        }
+
+        let suffix = type_args
+            .iter()
+            .map(|ty| sanitize_symbol(&format!("{ty:?}").to_lowercase()))
+            .collect::<Vec<_>>()
+            .join("_");
+        let wrapper_name = format!(
+            "@fn_{}__mono_{}",
+            sanitize_symbol(resolved_name),
+            sanitize_symbol(&suffix)
+        );
+
+        if self.emitted_monomorph_wrappers.insert(wrapper_name.clone()) {
+            let params_sig = fn_info
+                .params
+                .iter()
+                .enumerate()
+                .map(|(idx, ty)| format!("{} %arg_{idx}", self.ty(ty.clone())))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let args_sig = fn_info
+                .params
+                .iter()
+                .enumerate()
+                .map(|(idx, ty)| format!("{} %arg_{idx}", self.ty(ty.clone())))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let ret = self.ty(fn_info.ret.clone());
+            let body = if fn_info.ret == LlType::I64 && !fn_info.returns_value {
+                format!(
+                    "define {ret} {wrapper_name}({params_sig}) {{\n  call {ret} {}({args_sig})\n  ret i64 0\n}}\n",
+                    fn_info.llvm_name
+                )
+            } else {
+                format!(
+                    "define {ret} {wrapper_name}({params_sig}) {{\n  %mono_ret = call {ret} {}({args_sig})\n  ret {ret} %mono_ret\n}}\n",
+                    fn_info.llvm_name
+                )
+            };
+            self.functions.push(body);
+        }
+
+        wrapper_name
     }
 
     fn element_size(&self, data_type: &DataType) -> i64 {
