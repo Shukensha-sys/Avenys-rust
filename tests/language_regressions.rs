@@ -1,6 +1,6 @@
 use mire::parser::ast::{DataType, Expression, Statement};
 use mire::{
-    BuildMode, BuildOptions, ErrorKind, MireError, analyze_program, cache_file_path,
+    BuildMode, BuildOptions, ErrorKind, MireError, OptLevel, analyze_program, cache_file_path,
     check_program_types, compile_file_with_avenys, load_program_from_file,
     load_program_with_metadata, parse,
 };
@@ -27,6 +27,7 @@ fn expect_compile_error_from_source(test_name: &str, filename: &str, source: &st
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -183,6 +184,7 @@ fn compile_attributes_imported_type_error_to_imported_file() {
         &main_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -319,6 +321,7 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -408,6 +411,7 @@ fn if_expression_infers_branch_type_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -472,6 +476,7 @@ fn match_expression_with_default_infers_string_branch_type_and_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -511,6 +516,7 @@ fn match_expression_can_be_returned_directly_from_function() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -549,6 +555,7 @@ fn enum_match_without_default_returns_second_variant_string() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Release,
+            opt_level: OptLevel::O3,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -585,6 +592,7 @@ fn incremental_recompile_keeps_enum_match_string_result_consistent() {
             &source_path,
             &BuildOptions {
                 mode: BuildMode::Release,
+            opt_level: OptLevel::O3,
                 debug_dump: false,
                 output: None,
                 emit_binary: true,
@@ -652,6 +660,7 @@ fn instance_method_call_resolves_and_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -691,6 +700,7 @@ fn direct_template_member_access_prints_field_values() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -733,6 +743,7 @@ fn direct_struct_field_assignment_updates_mutable_binding() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -784,6 +795,7 @@ fn struct_with_array_field_declaration_and_construction_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -814,7 +826,7 @@ fn static_impl_method_call_resolves_and_runs() {
     .expect("write project");
     fs::write(
         &source_path,
-        "struct Point {\n    x :i64\n    y :i64\n}\n\nimpl Point {\n    fn new: (x: i64, y: i64) :Point {\n        return (Point x: x, y: y)\n    }\n}\n\npub fn main: () {\n    set p = Point::new(10, 20)\n    use dasu(p.x)\n    use dasu(p.y)\n}\n",
+        "struct Point {\n    x :i64\n    y :i64\n}\n\nimpl Point {\n    fn new: (x :i64 y :i64) :Point {\n        return (Point x: x, y: y)\n    }\n}\n\npub fn main: () {\n    set p = Point::new(10 20)\n    use dasu(p.x)\n    use dasu(p.y)\n}\n",
     )
     .expect("write source");
 
@@ -822,6 +834,7 @@ fn static_impl_method_call_resolves_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -862,6 +875,7 @@ fn implicit_self_method_return_still_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -982,6 +996,7 @@ fn runtime_division_by_zero_exits_with_error() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1021,6 +1036,7 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1060,6 +1076,7 @@ fn float_arithmetic_with_typed_float_variable_executes() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1083,7 +1100,7 @@ fn float_arithmetic_with_typed_float_variable_executes() {
 #[test]
 fn nested_vector_type_is_preserved_for_lists_push() {
     let err = expect_analysis_error(
-        "import std\n\npub fn main: () {\n    set nested = [[1 2] [3 4]] :vec![vec![i64]]\n    set bad = lists.push(nested, [\"x\"])\n    use dasu(bad)\n}\n",
+        "import std\n\npub fn main: () {\n    set nested = [[1 2] [3 4]] :vec[vec[i64]]\n    set bad = lists.push(nested [\"x\"])\n    use dasu(bad)\n}\n",
     );
 
     assert!(
@@ -1113,6 +1130,7 @@ fn secondary_for_loop_binding_compiles_and_uses_index() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1152,6 +1170,7 @@ fn advanced_literals_compile_and_run() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1192,6 +1211,7 @@ fn unsafe_block_compiles_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1230,6 +1250,7 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1261,6 +1282,7 @@ fn runtime_out_of_bounds_exits_with_error() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1312,6 +1334,7 @@ fn strings_split_returns_list_and_works_with_join() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1351,6 +1374,7 @@ fn strings_split_supports_multi_char_delimiter() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1393,6 +1417,7 @@ fn strings_split_preserves_empty_segments() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1430,6 +1455,7 @@ fn syntax_reference_prototype_compiles_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1471,6 +1497,7 @@ fn array_index_assignment_mutates_elements_in_place() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1502,7 +1529,7 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
     .expect("write project");
     fs::write(
         &source_path,
-        "import std\n\nstruct Matrix {\n    data :arr[i64 4]\n    cols :i64\n}\n\nimpl Matrix {\n    fn new: () :Matrix {\n        return (Matrix data: [0 0 0 0] :arr[i64 4], cols: 2)\n    }\n\n    fn update: (self, row :i64, col :i64, val :i64) {\n        set idx = row * self.cols + col\n        set self.data at idx = val\n    }\n\n    fn get: (self, row :i64, col :i64) :i64 {\n        set idx = row * self.cols + col\n        return self.data at idx\n    }\n}\n\npub fn main: () {\n    set m = Matrix::new()\n    m.update(0 1 7)\n    m.update(1 0 9)\n    use dasu(\"{m.get(0 1)} {m.get(1 0)}\")\n}\n",
+        "import std\n\nstruct Matrix {\n    data :arr[i64 4]\n    cols :i64\n}\n\nimpl Matrix {\n    fn new: () :Matrix {\n        return (Matrix data: [0 0 0 0] :arr[i64 4], cols: 2)\n    }\n\n    fn update: (self row :i64 col :i64 val :i64) {\n        set idx = row * self.cols + col\n        set self.data at idx = val\n    }\n\n    fn get: (self row :i64 col :i64) :i64 {\n        set idx = row * self.cols + col\n        return self.data at idx\n    }\n}\n\npub fn main: () {\n    set m = Matrix::new()\n    m.update(0 1 7)\n    m.update(1 0 9)\n    use dasu(\"{m.get(0 1)} {m.get(1 0)}\")\n}\n",
     )
     .expect("write source");
 
@@ -1510,6 +1537,7 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1549,6 +1577,7 @@ fn shared_reference_lowering_compiles_and_runs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1588,6 +1617,7 @@ fn impl_method_can_mutate_self_field_and_run() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1746,6 +1776,7 @@ fn enum_match_payload_statement_body_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1777,6 +1808,7 @@ fn enum_match_multiple_payloads_compile() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1808,6 +1840,7 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1839,6 +1872,7 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1865,6 +1899,7 @@ fn pipeline_len_builtin_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1891,6 +1926,7 @@ fn nested_output_pipeline_compiles() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -1922,6 +1958,7 @@ fn debug_build_persists_ir_on_disk() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2019,6 +2056,7 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2041,6 +2079,7 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2087,6 +2126,7 @@ fn incremental_build_invalidates_on_local_import_change() {
         &main_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2113,6 +2153,7 @@ fn incremental_build_invalidates_on_local_import_change() {
         &main_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2150,6 +2191,7 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2171,6 +2213,7 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2215,6 +2258,7 @@ fn list_hofs_infer_closure_params_and_execute() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2255,6 +2299,7 @@ fn nested_map_string_render_executes_without_runtime_errors() {
         &source_path,
         &BuildOptions {
             mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
             debug_dump: false,
             output: None,
             emit_binary: true,
@@ -2289,7 +2334,7 @@ fn enum_match_statement_requires_exhaustive_coverage_without_default() {
 
 #[test]
 fn enum_match_expression_rejects_duplicate_variant_arms() {
-    let source = "enum State {\n    Idle\n    Busy\n}\n\npub fn main: () {\n    set state = State.Idle\n    set code = match state {\n        State.Idle { 1 }\n        State.Idle { 2 }\n        _ { 3 }\n    } :i64\n    use dasu(code)\n}\n";
+    let source = "enum State {\n    Idle\n    Busy\n}\n\npub fn main: () {\n    set state = State.Idle\n    match state {\n        State.Idle { use dasu(1) }\n        State.Idle { use dasu(2) }\n        _ { use dasu(3) }\n    }\n}\n";
     let mut program = parse(source).expect("source should parse");
     let err = check_program_types(&mut program, source).expect_err("typecheck should fail");
     let rendered = err.to_string();

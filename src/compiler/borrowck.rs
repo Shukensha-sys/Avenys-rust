@@ -461,6 +461,32 @@ impl<'a> BorrowChecker<'a> {
                 self.check_expression(value)?;
             }
             Expression::Call { name, args, .. } => {
+                if name == "move::" {
+                    if let Some(first) = args.first() {
+                        self.check_expression(first)?;
+                        if let Some(source) = Self::identifier_name(first) {
+                            self.ensure_can_move(&source)?;
+                            if let Some(state) = self.lookup_binding_mut(&source) {
+                                state.is_moved = true;
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
+                if name == "drop::" {
+                    for arg in args {
+                        self.check_expression(arg)?;
+                        if let Some(source) = Self::identifier_name(arg) {
+                            self.ensure_can_drop(&source)?;
+                            if let Some(state) = self.lookup_binding_mut(&source) {
+                                state.is_moved = true;
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
                 for (index, arg) in args.iter().enumerate() {
                     self.check_expression(arg)?;
                     self.check_call_argument(name, index, arg)?;
@@ -814,10 +840,13 @@ impl<'a> BorrowChecker<'a> {
             }
             _ => {
                 if let Some(name) = Self::identifier_name(arg) {
-                    // Calls are non-consuming by default. Explicit ownership transfer
-                    // should use `move::(...)` so call sites stay readable and Owl/CLI
-                    // orchestration code can pass strings/paths safely.
-                    let _ = name;
+                    if Self::is_copy_like(expected) {
+                        return Ok(());
+                    }
+                    self.ensure_can_move(&name)?;
+                    if let Some(state) = self.lookup_binding_mut(&name) {
+                        state.is_moved = true;
+                    }
                 }
             }
         }
@@ -827,6 +856,28 @@ impl<'a> BorrowChecker<'a> {
 
     fn ownership_error(&self, kind: MssError) -> MireError {
         MireError::ownership_error(self.current_line.max(1), self.current_column.max(1), kind)
+    }
+
+    fn is_copy_like(data_type: &DataType) -> bool {
+        matches!(
+            data_type,
+            DataType::I8
+                | DataType::I16
+                | DataType::I32
+                | DataType::I64
+                | DataType::U8
+                | DataType::U16
+                | DataType::U32
+                | DataType::U64
+                | DataType::F32
+                | DataType::F64
+                | DataType::Bool
+                | DataType::Char
+                | DataType::None
+                | DataType::Array { .. }
+                | DataType::Ref { .. }
+                | DataType::RefMut { .. }
+        )
     }
 
     fn statement_location(statement: &Statement) -> (usize, usize) {

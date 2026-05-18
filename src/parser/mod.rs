@@ -1770,7 +1770,7 @@ impl Parser {
                         data_type: DataType::Str,
                     });
                 }
-                if self.check_double_colon() && self.peek_n(2).ttype == TokenType::Ident {
+                if self.check_double_colon() && Self::is_member_name_token(self.peek_n(2).ttype) {
                     self.advance();
                     self.advance();
                     let member = self.expect_member_name()?;
@@ -2758,10 +2758,25 @@ impl Parser {
     }
 
     fn expect_ident(&mut self) -> Result<String> {
-        if self.check(TokenType::Ident) {
-            Ok(self.advance().value.unwrap_or_default())
-        } else {
-            Err(self.error("Expected identifier"))
+        match self.peek().ttype {
+            TokenType::Ident => Ok(self.advance().value.unwrap_or_default()),
+            TokenType::NewKw => {
+                self.advance();
+                Ok("new".to_string())
+            }
+            TokenType::DropKw => {
+                self.advance();
+                Ok("drop".to_string())
+            }
+            TokenType::MoveKw => {
+                self.advance();
+                Ok("move".to_string())
+            }
+            TokenType::OwnKw => {
+                self.advance();
+                Ok("own".to_string())
+            }
+            _ => Err(self.error("Expected identifier")),
         }
     }
 
@@ -2991,6 +3006,17 @@ impl Parser {
 
     fn check_double_colon(&self) -> bool {
         self.check(TokenType::Colon) && self.peek_n(1).ttype == TokenType::Colon
+    }
+
+    fn is_member_name_token(ttype: TokenType) -> bool {
+        matches!(
+            ttype,
+            TokenType::Ident
+                | TokenType::NewKw
+                | TokenType::DropKw
+                | TokenType::MoveKw
+                | TokenType::OwnKw
+        )
     }
 
     fn is_at_end(&self) -> bool {

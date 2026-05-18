@@ -1374,8 +1374,13 @@ impl LlvmIrGen {
             Statement::Drop { value } => {
                 let dropped = self.compile_expr(value)?;
                 if dropped.ty == LlType::Ptr {
-                    self.body
-                        .push(format!("  call void @mire_string_free(ptr {})", dropped.repr));
+                    let dropped_ty = self.expression_data_type(value);
+                    if dropped_ty == DataType::Str {
+                        self.body
+                            .push(format!("  call void @mire_string_free(ptr {})", dropped.repr));
+                    } else {
+                        self.body.push(format!("  call void @free(ptr {})", dropped.repr));
+                    }
                 }
                 Ok(())
             }
@@ -1638,7 +1643,7 @@ impl LlvmIrGen {
                 args,
                 data_type,
             }
-                if name == "new::" || name == "own::" || name == "move::"
+                if name == "new::" || name == "move::"
             => {
                 if let Some(first) = args.first() {
                     self.compile_expr(first)
@@ -1647,9 +1652,30 @@ impl LlvmIrGen {
                     Ok(self.default_value(ll_ty))
                 }
             }
+            Expression::Call { name, args, .. } if name == "own::" => {
+                let source = if let Some(first) = args.first() {
+                    self.compile_expr(first)?
+                } else {
+                    LlValue {
+                        ty: LlType::I64,
+                        repr: "0".to_string(),
+                        owned: false,
+                    }
+                };
+                self.heap_box_value(source)
+            }
             Expression::Call { name, args, .. } if name == "drop::" => {
-                if let Some(first) = args.first() {
-                    let _ = self.compile_expr(first)?;
+                for arg in args {
+                    let dropped = self.compile_expr(arg)?;
+                    if dropped.ty == LlType::Ptr {
+                        let dropped_ty = self.expression_data_type(arg);
+                        if dropped_ty == DataType::Str {
+                            self.body
+                                .push(format!("  call void @mire_string_free(ptr {})", dropped.repr));
+                        } else {
+                            self.body.push(format!("  call void @free(ptr {})", dropped.repr));
+                        }
+                    }
                 }
                 Ok(self.default_value(LlType::I64))
             }
@@ -5665,6 +5691,27 @@ impl LlvmIrGen {
             ty: LlType::I1,
             repr: result,
             owned: false,
+        })
+    }
+
+    fn heap_box_value(&mut self, value: LlValue) -> Result<LlValue> {
+        let (size, store_ty, store_repr) = match value.ty {
+            LlType::I1 => (1, "i1", self.cast_to_i1(value)?.repr),
+            LlType::I64 => (8, "i64", self.cast_to_i64(value)?.repr),
+            LlType::F64 => (8, "double", value.repr),
+            LlType::Ptr => (8, "ptr", self.cast_to_type(value, LlType::Ptr)?.repr),
+        };
+
+        let boxed = self.tmp();
+        self.body
+            .push(format!("  {boxed} = call ptr @malloc(i64 {size})"));
+        self.body
+            .push(format!("  store {store_ty} {store_repr}, ptr {boxed}"));
+
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: boxed,
+            owned: true,
         })
     }
 
