@@ -1958,6 +1958,11 @@ fn collect_statement_dependencies(statement: &Statement, deps: &mut Vec<String>)
         Statement::Expression(expr) | Statement::Drop { value: expr } => {
             collect_expression_dependencies(expr, deps);
         }
+        Statement::New { value, .. } | Statement::Own { value, .. } => {
+            if let Some(value) = value {
+                collect_expression_dependencies(value, deps);
+            }
+        }
         Statement::Move { target, value } => {
             deps.push(target.clone());
             collect_expression_dependencies(value, deps);
@@ -2430,6 +2435,19 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             hasher.write_u8(26);
             target.hash(hasher);
             hash_expression(value, hasher);
+        }
+        Statement::New {
+            value,
+            declared_type,
+        } => {
+            hasher.write_u8(32);
+            hash_option_expr(value, hasher);
+            hash_data_type(declared_type, hasher);
+        }
+        Statement::Own { value, inner_type } => {
+            hasher.write_u8(33);
+            hash_option_expr(value, hasher);
+            hash_data_type(inner_type, hasher);
         }
         Statement::Enum { name, variants } => {
             hasher.write_u8(27);

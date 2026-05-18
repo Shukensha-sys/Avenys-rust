@@ -1,6 +1,6 @@
 import lists
 
-set arr = [] :vec![i64] mut
+set arr = [] :vec[i64] mut
 set i = 0 :i64 mut
 
 while i < 1000 {

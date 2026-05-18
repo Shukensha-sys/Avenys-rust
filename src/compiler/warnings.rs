@@ -235,7 +235,17 @@ impl WarningAnalyzer {
         self.current_column = column;
         match stmt {
             Statement::Expression(expr) => self.scan_expr(expr),
-            Statement::Assignment { value, .. } => self.scan_expr(value),
+            Statement::Assignment { value, .. } => {
+                self.scan_expr(value);
+                self.push_warn(
+                    DiagnosticCode::W0029,
+                    "Implicit Copy",
+                    "implicit copy detected".to_string(),
+                    1,
+                    1,
+                    None,
+                );
+            }
             Statement::Return(expr) => {
                 if let Some(expr) = expr {
                     self.scan_expr(expr);
@@ -292,6 +302,46 @@ impl WarningAnalyzer {
                     self.scan_usage(s);
                 }
                 self.loop_depth -= 1;
+            }
+            Statement::Move { value, .. } => {
+                self.scan_expr(value);
+                if !matches!(value, Expression::Call { name, .. } if name == "move::") {
+                    self.push_warn(
+                        DiagnosticCode::W0028,
+                        "Implicit Move",
+                        "implicit move; consider move::(x)".to_string(),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+            }
+            Statement::Drop { value } => {
+                self.scan_expr(value);
+                if !matches!(value, Expression::Call { name, .. } if name == "drop::") {
+                    self.push_warn(
+                        DiagnosticCode::W0030,
+                        "Implicit Drop",
+                        "implicit drop; consider drop::(x)".to_string(),
+                        1,
+                        1,
+                        None,
+                    );
+                }
+            }
+            Statement::New { value, .. } | Statement::Own { value, .. } => {
+                if let Some(value) = value {
+                    self.scan_expr(value);
+                } else {
+                    self.push_warn(
+                        DiagnosticCode::W0031,
+                        "Unclear Ownership",
+                        "explicit initialization can make ownership intent clearer".to_string(),
+                        1,
+                        1,
+                        None,
+                    );
+                }
             }
             Statement::Break | Statement::Continue => {
                 if self.loop_depth == 0 {
@@ -473,6 +523,12 @@ fn statement_location(statement: &Statement) -> (usize, usize) {
         | Statement::Assignment { value, .. }
         | Statement::Expression(value)
         | Statement::Drop { value }
+        | Statement::New {
+            value: Some(value), ..
+        }
+        | Statement::Own {
+            value: Some(value), ..
+        }
         | Statement::Move { value, .. } => expression_location(value),
         Statement::Return(Some(value)) => expression_location(value),
         Statement::If { condition, .. } | Statement::While { condition, .. } => {

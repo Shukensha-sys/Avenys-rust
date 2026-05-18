@@ -1,7 +1,7 @@
 import lists as lists
 import math as math
 
-fn find_max: (xs:vec![i64]) :i64 {
+fn find_max: (xs:vec[i64]) :i64 {
 set max_val = lists.get(xs 0)
 set i = 1 :i64 mut
 while i < len(xs) {
@@ -15,7 +15,7 @@ set i = i + 1
 return max_val
 }
 pub fn main: () {
-set xs = [] :vec![i64] mut
+set xs = [] :vec[i64] mut
 set xs = lists.push(xs 5)
 set xs = lists.push(xs 12)
 set xs = lists.push(xs 3)

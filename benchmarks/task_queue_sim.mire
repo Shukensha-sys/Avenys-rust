@@ -2,7 +2,7 @@ import lists as lists
 import math as math
 import strings as strings
 
-set queue = [] :vec![i64] mut
+set queue = [] :vec[i64] mut
 set total = 0 :i64 mut
 set digest = "" :str mut
 set i = 0 :i64 mut

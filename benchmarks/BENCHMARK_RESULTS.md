@@ -39,7 +39,7 @@
 ## What Works in Mire
 
 - **59 benchmarks compile and run**
-- Built-in types: i64, i32, i16, i8, u64, u32, u16, u8, str, bool, vec![T], map[K V], arr[T N]
+- Built-in types: i64, i32, i16, i8, u64, u32, u16, u8, str, bool, vec[T], map[K V], arr[T N]
 - Builtins: time, cpu, mem, gpu, dicts, lists, math, strings, dasu
 - Control flow: if/else, while, for/in, do/while, break, continue
 - Functions with typed parameters and return types

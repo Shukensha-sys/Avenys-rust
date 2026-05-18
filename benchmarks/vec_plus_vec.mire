@@ -2,7 +2,7 @@ import time as time
 import mem as mem
 
 pub fn main: () {
-    set xs = []  :vec![i64] mut
+    set xs = []  :vec[i64] mut
     set i = 0 :i64 mut
     
     while i < 100 {

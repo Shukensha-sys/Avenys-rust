@@ -1,7 +1,7 @@
 import lists as lists
 
 pub fn main: () {
-set xs = [] :vec![i64] mut
+set xs = [] :vec[i64] mut
 set xs = lists.push(xs 10)
 set xs = lists.push(xs 20)
 set xs = lists.push(xs 30)

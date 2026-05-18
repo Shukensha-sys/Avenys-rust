@@ -3,10 +3,10 @@ import mem as mem
 
 set wall = time.mark() :i64 mut
 
-set matrix = []  :vec![vec![i64]] mut
+set matrix = []  :vec[vec[i64]] mut
 set i = 0 :i64 mut
 while i < 100 {
-    set row = []  :vec![i64] mut
+    set row = []  :vec[i64] mut
     set j = 0 :i64 mut
     while j < 100 {
         set val = i * 100 + j

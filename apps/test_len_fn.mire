@@ -1,11 +1,11 @@
 import lists as lists
 
-fn double_len: (xs:vec![i64]) :i64 {
+fn double_len: (xs:vec[i64]) :i64 {
 set l = len(xs)
 return l
 }
 pub fn main: () {
-set xs = [] :vec![i64] mut
+set xs = [] :vec[i64] mut
 set xs = lists.push(xs 100)
 set xs = lists.push(xs 200)
 set xs = lists.push(xs 300)

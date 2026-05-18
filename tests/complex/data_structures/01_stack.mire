@@ -1,13 +1,13 @@
 import std
 
 struct Stack {
-    items :vec![i64] mut
+    items :vec[i64] mut
     top :i64
 }
 
 impl Stack {
     fn new: () :Stack {
-        return (Stack items: [] :vec![i64] mut, top: -1)
+        return (Stack items: [] :vec[i64] mut, top: -1)
     }
 
     fn push: (self, val :i64) {

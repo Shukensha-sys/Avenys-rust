@@ -218,6 +218,10 @@ impl Parser {
             TokenType::For => self.parse_for_statement(),
             TokenType::Do => self.parse_do_while_statement(),
             TokenType::Match => self.parse_match_statement(),
+            TokenType::NewKw => self.parse_new_statement(),
+            TokenType::OwnKw => self.parse_own_statement(),
+            TokenType::MoveKw => self.parse_move_statement(),
+            TokenType::DropKw => self.parse_drop_statement(),
             TokenType::Return => self.parse_return_statement(),
             TokenType::Break => {
                 self.advance();
@@ -724,6 +728,94 @@ impl Parser {
             name: enum_name,
             variants,
         })
+    }
+
+    fn parse_lifecycle_call_args(&mut self) -> Result<Vec<Expression>> {
+        self.expect(TokenType::Colon)?;
+        self.expect(TokenType::Colon)?;
+        self.expect(TokenType::Lparen)?;
+        let mut args = Vec::new();
+        while !self.check(TokenType::Rparen) && !self.is_at_end() {
+            if self.check(TokenType::Comma) {
+                self.advance();
+                continue;
+            }
+            args.push(self.parse_expression()?);
+            if self.check(TokenType::Comma) {
+                self.advance();
+            }
+        }
+        self.expect(TokenType::Rparen)?;
+        Ok(args)
+    }
+
+    fn parse_new_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::NewKw)?;
+        let mut args = self.parse_lifecycle_call_args()?;
+        self.expect(TokenType::Colon)?;
+        let declared_type = self.parse_type()?;
+        let value = if args.is_empty() {
+            None
+        } else if args.len() == 1 {
+            Some(args.remove(0))
+        } else {
+            Some(Expression::Tuple {
+                elements: args,
+                data_type: DataType::Unknown,
+            })
+        };
+        Ok(Statement::New {
+            value,
+            declared_type,
+        })
+    }
+
+    fn parse_own_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::OwnKw)?;
+        let mut args = self.parse_lifecycle_call_args()?;
+        self.expect(TokenType::Colon)?;
+        let inner_type = self.parse_type()?;
+        let value = if args.is_empty() {
+            None
+        } else if args.len() == 1 {
+            Some(args.remove(0))
+        } else {
+            Some(Expression::Tuple {
+                elements: args,
+                data_type: DataType::Unknown,
+            })
+        };
+        Ok(Statement::Own { value, inner_type })
+    }
+
+    fn parse_move_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::MoveKw)?;
+        let mut args = self.parse_lifecycle_call_args()?;
+        if args.len() != 1 {
+            return Err(self.error("move:: expects exactly one source expression"));
+        }
+        self.expect(TokenType::To)?;
+        let target = self.expect_ident()?;
+        Ok(Statement::Move {
+            target,
+            value: args.remove(0),
+        })
+    }
+
+    fn parse_drop_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::DropKw)?;
+        let mut args = self.parse_lifecycle_call_args()?;
+        let value = if args.is_empty() {
+            return Err(self.error("drop:: expects at least one expression"));
+        } else if args.len() == 1 {
+            args.remove(0)
+        } else {
+            Expression::Tuple {
+                elements: args,
+                data_type: DataType::Unknown,
+            }
+        };
+        Ok(Statement::Drop { value })
     }
 
     fn parse_if_statement(&mut self) -> Result<Statement> {
@@ -1602,6 +1694,9 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Expression> {
+        if self.check_lifecycle_expression_prefix() {
+            return self.parse_lifecycle_expression();
+        }
         match self.peek().ttype {
             TokenType::Use => self.parse_use_expr(),
             TokenType::If => self.parse_if_expression(),
@@ -1822,6 +1917,34 @@ impl Parser {
             TokenType::Lbrace => self.parse_brace_literal(),
             _ => Err(self.error("Unexpected token in expression")),
         }
+    }
+
+    fn check_lifecycle_expression_prefix(&self) -> bool {
+        matches!(
+            self.peek().ttype,
+            TokenType::NewKw
+                | TokenType::OwnKw
+                | TokenType::MoveKw
+                | TokenType::DropKw
+        ) && self.check_double_colon()
+            && self.peek_n(2).ttype == TokenType::Lparen
+    }
+
+    fn parse_lifecycle_expression(&mut self) -> Result<Expression> {
+        let name = match self.advance().ttype {
+            TokenType::NewKw => "new::",
+            TokenType::OwnKw => "own::",
+            TokenType::MoveKw => "move::",
+            TokenType::DropKw => "drop::",
+            _ => return Err(self.error("Expected lifecycle keyword")),
+        }
+        .to_string();
+        let args = self.parse_lifecycle_call_args()?;
+        Ok(Expression::Call {
+            name,
+            args,
+            data_type: DataType::Unknown,
+        })
     }
 
     fn try_parse_signature_closure(&mut self) -> Result<Option<Expression>> {
@@ -2432,18 +2555,12 @@ impl Parser {
                     Ok(DataType::Array { element_type, size })
                 }
                 "vec" => {
-                    let dynamic = if self.check(TokenType::Bang) {
-                        self.advance();
-                        true
-                    } else {
-                        false
-                    };
                     self.expect(TokenType::Lbracket)?;
                     let element_type = Box::new(self.parse_type()?);
                     self.expect(TokenType::Rbracket)?;
                     Ok(DataType::Vector {
                         element_type,
-                        dynamic,
+                        dynamic: true,
                     })
                 }
                 "map" => {
@@ -2917,6 +3034,10 @@ impl Parser {
             TokenType::In => "in".to_string(),
             TokenType::Of => "of".to_string(),
             TokenType::To => "to".to_string(),
+            TokenType::NewKw => "new".to_string(),
+            TokenType::DropKw => "drop".to_string(),
+            TokenType::MoveKw => "move".to_string(),
+            TokenType::OwnKw => "own".to_string(),
             TokenType::Question => "?".to_string(),
             TokenType::Lparen => "(".to_string(),
             TokenType::Rparen => ")".to_string(),
@@ -3083,6 +3204,9 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
             .iter()
             .any(|(_, expr)| contains_self_placeholder(expr)),
         Statement::Drop { value } => contains_self_placeholder(value),
+        Statement::New { value, .. } | Statement::Own { value, .. } => {
+            value.as_ref().is_some_and(contains_self_placeholder)
+        }
         Statement::Move { value, .. } => contains_self_placeholder(value),
         Statement::DmireDlist { data, .. } => data.iter().any(contains_self_placeholder),
         Statement::Query { .. }
@@ -3273,10 +3397,27 @@ mod tests {
     use crate::parser::ast::{DataType, Expression, Literal, Statement};
 
     #[test]
-    fn parses_dynamic_vector_type_annotation() {
-        let source = "set xs = [] :vec![i64]\n";
+    fn parses_vector_type_annotation_without_bang() {
+        let source = "set xs = [] :vec[i64]\n";
         let program = parse(source);
         assert!(program.is_ok(), "{program:?}");
+    }
+
+    #[test]
+    fn rejects_legacy_vec_bang_type_annotation() {
+        let source = "set xs = [] :vec![i64]\n";
+        let program = parse(source);
+        assert!(program.is_err(), "legacy vec! syntax must fail");
+    }
+
+    #[test]
+    fn parses_lifecycle_statements() {
+        let source = "new::() :vec[i64]\nown::(42) :i64\nmove::(x) to y\ndrop::(a, b)\n";
+        let program = parse(source).expect("parse should succeed");
+        assert!(matches!(program.statements[0], Statement::New { .. }));
+        assert!(matches!(program.statements[1], Statement::Own { .. }));
+        assert!(matches!(program.statements[2], Statement::Move { .. }));
+        assert!(matches!(program.statements[3], Statement::Drop { .. }));
     }
 
     #[test]

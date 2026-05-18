@@ -62,7 +62,7 @@ April 2026
 
 **Mire** (from docs):
 - Expected: ~0.113ms
-- vec![i64] push + iterate
+- vec[i64] push + iterate
 
 **Rust** (`benchmarks/mirevsrust/fair_benchmark.rs`):
 - Wall time: 0ms

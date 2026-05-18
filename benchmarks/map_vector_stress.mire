@@ -7,22 +7,22 @@ import lists as lists
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
 
-set left = []  :vec![i64] mut
+set left = []  :vec[i64] mut
 set left = lists.push(left 2)
 set left = lists.push(left 4)
 set left = lists.push(left 6)
 
-set right = []  :vec![i64] mut
+set right = []  :vec[i64] mut
 set right = lists.push(right 3)
 set right = lists.push(right 5)
 set right = lists.push(right 7)
 
-set empty_vec = []  :vec![i64] mut
-set groups = [] :map[str vec![i64]] mut
+set empty_vec = []  :vec[i64] mut
+set groups = [] :map[str vec[i64]] mut
 set groups = dicts.set(groups "left" left) mut
 set groups = dicts.set(groups "right" right) mut
 
-set picked = dicts.get(groups "right" empty_vec)  :vec![i64] mut
+set picked = dicts.get(groups "right" empty_vec)  :vec[i64] mut
 set total = lists.get(dicts.get(groups "left" empty_vec) 0) + lists.get(dicts.get(groups "left" empty_vec) 1) + lists.get(dicts.get(groups "left" empty_vec) 2) + lists.get(picked 0) + lists.get(picked 1) + lists.get(picked 2)
 set edge = lists.get(picked 2)
 

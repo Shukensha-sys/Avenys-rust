@@ -1083,7 +1083,7 @@ fn float_arithmetic_with_typed_float_variable_executes() {
 #[test]
 fn nested_vector_type_is_preserved_for_lists_push() {
     let err = expect_analysis_error(
-        "import std\n\npub fn main: () {\n    set nested = [[1 2] [3 4]] :vec[vec[i64]]\n    set bad = lists.push(nested, [\"x\"])\n    use dasu(bad)\n}\n",
+        "import std\n\npub fn main: () {\n    set nested = [[1 2] [3 4]] :vec![vec![i64]]\n    set bad = lists.push(nested, [\"x\"])\n    use dasu(bad)\n}\n",
     );
 
     assert!(

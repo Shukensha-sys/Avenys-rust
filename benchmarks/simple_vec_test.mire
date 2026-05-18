@@ -1,4 +1,4 @@
 pub fn main: () {
-    set data = []  :vec![i64] mut
+    set data = []  :vec[i64] mut
     use dasu("len {len(data")})
 }

@@ -7,5 +7,5 @@ pub fn elapsed_ns: (mark :i64) :i64
 pub fn count: () :i64
 pub fn freq_mhz: () :i64
 pub fn cycles_est: (mark :i64) :i64
-pub fn loadavg: () :vec![f64]
+pub fn loadavg: () :vec[f64]
 pub fn snapshot: () :map[str i64]

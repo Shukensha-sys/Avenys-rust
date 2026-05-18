@@ -10,7 +10,7 @@ fn filter_fn: (x:i64) :bool {
 }
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
-set numbers = []  :vec![i64] mut
+set numbers = []  :vec[i64] mut
 
 set i = 0 :i64 mut
 while i < 5000 {

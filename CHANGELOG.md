@@ -2,6 +2,24 @@
 
 All notable changes to Mire are documented in this file.
 
+## [2.9.0] - 2026-05-18
+
+### Added
+- Lifecycle syntax parsing and analysis surface:
+  - `new::(...)`
+  - `own::(...)`
+  - `move::(...) to target`
+  - `drop::(...)`
+- New AST variants for lifecycle operations: `Statement::New`, `Statement::Own`.
+- New warning diagnostic codes `W0028`–`W0033` for explicit ownership guidance in Owl/check workflows.
+
+### Changed
+- Removed legacy `vec![T]` type syntax support from parser; canonical vector type is now `vec[T]`.
+- Migrated in-repo Mire sources/docs to `vec[T]` notation.
+- Extended lexer keyword set for lifecycle and ownership helpers: `new`, `own`, `move`, `drop`.
+- Incremental hashing/dependency tracking now covers lifecycle statements.
+- Version bump: `2.8.0` → `2.9.0`.
+
 ## [2.8.0] - 2026-05-11
 
 ### Changed

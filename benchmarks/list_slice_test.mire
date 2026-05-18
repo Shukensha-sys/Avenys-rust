@@ -4,7 +4,7 @@ import lists as lists
 
 set wall = time.mark()
 
-set xs = []  :vec![i64] mut
+set xs = []  :vec[i64] mut
 set i = 0 :i64 mut
 while i < 10000 {
     set xs = lists.push(xs i)

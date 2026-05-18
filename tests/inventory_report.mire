@@ -3,7 +3,7 @@ import math as math
 import strings as strings
 
 pub fn main: () {
-set counts = [] :vec![i64] mut
+set counts = [] :vec[i64] mut
 set counts = lists.push(counts 4)
 set counts = lists.push(counts 7)
 set counts = lists.push(counts 9)

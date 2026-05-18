@@ -421,6 +421,11 @@ impl SemanticModelBuilder {
                     self.model.drop_statements += 1;
                 }
             }
+            Statement::New { value, .. } | Statement::Own { value, .. } => {
+                if let Some(value) = value {
+                    self.visit_expression(value);
+                }
+            }
             Statement::Move { target, value } => {
                 self.visit_expression(value);
                 self.model.move_facts.push(MoveFact {

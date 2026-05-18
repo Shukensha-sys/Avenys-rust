@@ -6,8 +6,8 @@ set wall = time.mark()
 fn is_even: (n:i64) :bool {
     return n % 2 == 0
 }
-set nums = [1 2 3 4 5 6 7 8 9 10]  :vec![i64] mut
-set filtered = []  :vec![i64] mut
+set nums = [1 2 3 4 5 6 7 8 9 10]  :vec[i64] mut
+set filtered = []  :vec[i64] mut
 set i = 0 :i64 mut
 while i < len(nums) {
     set n = lists.get(nums i)

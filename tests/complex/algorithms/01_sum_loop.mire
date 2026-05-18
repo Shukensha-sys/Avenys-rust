@@ -1,7 +1,7 @@
 import std
 
 pub fn main: () {
-    set nums = [] :vec![i64] mut
+    set nums = [] :vec[i64] mut
     set nums = lists.push(nums 1)
     set nums = lists.push(nums 2)
     set nums = lists.push(nums 3)

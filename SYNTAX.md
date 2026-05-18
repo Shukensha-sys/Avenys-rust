@@ -15,7 +15,7 @@ Complete language syntax derived from test files and working examples.
 7. [Collections](#7-collections)
 8. [Control Flow](#8-control-flow)
 9. [Unsafe, Asm, Extern](#9-unsafe-asm-extern)
-10. [Move, Drop](#10-move-drop)
+10. [Lifecycle Operations](#10-lifecycle-operations)
 11. [Pipeline Operator](#11-pipeline-operator)
 12. [String Interpolation](#12-string-interpolation)
 13. [Imports](#13-imports)
@@ -47,7 +47,7 @@ set name = "mire" :str
 set ready = true :bool
 set total = 0 :i64 mut
 set immutable = "constant" :str const
-set counts = [] :vec![i64] mut
+set counts = [] :vec[i64] mut
 set counts = lists.push(counts 4)
 ```
 
@@ -251,7 +251,7 @@ set arr at 1 = 99
 ### Vectors (dynamic)
 
 ```mire
-set counts = [] :vec![i64] mut
+set counts = [] :vec[i64] mut
 set counts = lists.push(counts 4)
 set first = lists.get(counts 0)
 ```
@@ -410,27 +410,27 @@ extern fn puts: (msg :*const i8) :i32 lib "c"
 
 ---
 
-## 10. Move, Drop
+## 10. Lifecycle Operations
 
-### Move
-
-Transfers ownership of a value to a binding:
+Lifecycle operations provide explicit ownership intent:
 
 ```mire
-set source = "hello" :str
-set target = move source
-# source is now invalid
+new::() :vec[i64]
+new::([1 2 3]) :arr[i64 3]
+
+own::(42) :i64
+
+move::(source) to target
+
+drop::(value)
+drop::(a, b, c)
 ```
 
-### Drop
-
-Explicitly drops a value, freeing its resources:
-
-```mire
-set s = "world" :str
-drop s
-# s is no longer usable
-```
+Notes:
+- `new::()` requires a type annotation (`:T`).
+- `own::()` allocates with explicit ownership intent.
+- `move::(...) to ...` invalidates source ownership after transfer.
+- `drop::(...)` can destroy one or many values explicitly.
 
 ---
 
@@ -644,7 +644,7 @@ set raw3 = r##"hello "world" with ##"## # raw with double delimiter
 | Type | Syntax | Example |
 |------|--------|---------|
 | Array | `arr[T N]` | `arr[i64 10]` |
-| Vector | `vec![T]` | `vec![i64]` |
+| Vector | `vec[T]` | `vec[i64]` |
 | Map | `map[K V]` | `map[str i64]` |
 | Slice | `slice[T]` | `slice[i64]` |
 

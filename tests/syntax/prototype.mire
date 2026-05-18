@@ -38,7 +38,7 @@ pub fn main: () {
     set arr = [1 2 3] :arr[i64 3] mut
     set arr at 1 = 9
 
-    set nums = [] :vec![i64] mut
+    set nums = [] :vec[i64] mut
     set nums = lists.push(nums 4)
     set nums = lists.push(nums 7)
 

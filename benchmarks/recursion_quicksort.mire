@@ -2,13 +2,13 @@ import time as time
 import mem as mem
 import cpu as cpu
 
-fn quicksort: (arr:vec![i64] len:i64) :vec![i64] {
+fn quicksort: (arr:vec[i64] len:i64) :vec[i64] {
     if len <= 1 {
         return arr
     }
     set pivot = arr at 0
-    set left = []  :vec![i64] mut
-    set right = []  :vec![i64] mut
+    set left = []  :vec[i64] mut
+    set right = []  :vec[i64] mut
     set i = 1 :i64 mut
     while i < len {
         set val = arr at i
@@ -26,7 +26,7 @@ fn quicksort: (arr:vec![i64] len:i64) :vec![i64] {
 }
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
-set arr = [5 3 8 1 9 2 7 4 6 0 11 13 12 10 14]  :vec![i64] mut
+set arr = [5 3 8 1 9 2 7 4 6 0 11 13 12 10 14]  :vec[i64] mut
 
 set sorted = quicksort(arr len(arr))
 set first = sorted at 0

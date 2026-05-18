@@ -582,6 +582,14 @@ pub enum Statement {
     Drop {
         value: Expression,
     },
+    New {
+        value: Option<Expression>,
+        declared_type: DataType,
+    },
+    Own {
+        value: Option<Expression>,
+        inner_type: DataType,
+    },
     Move {
         target: String,
         value: Expression,

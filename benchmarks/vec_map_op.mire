@@ -5,8 +5,8 @@ import math as math
 
 set wall = time.mark() :i64 mut
 
-set nums = [1 2 3 4 5 6 7 8 9 10]  :vec![i64] mut
-set squared = []  :vec![i64] mut
+set nums = [1 2 3 4 5 6 7 8 9 10]  :vec[i64] mut
+set squared = []  :vec[i64] mut
 set i = 0 :i64 mut
 while i < len(nums) {
     set val = nums at i

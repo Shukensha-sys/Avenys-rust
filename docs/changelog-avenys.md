@@ -2,6 +2,12 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [2.9.0] - 2026-05-18
+
+- Integración de sintaxis lifecycle (`new::`, `own::`, `move::`, `drop::`) en lexer/parser y validadores.
+- Eliminación de `vec![T]` como sintaxis de tipo; estándar consolidado en `vec[T]`.
+- Refuerzo de diagnósticos orientados a ownership explícito (`W0028`-`W0033`), alineado con flujos Owl.
+
 ## [2.8.0] - 2026-05-11
 
 - Precisión de diagnósticos reforzada en type checker, borrow checker y backend.

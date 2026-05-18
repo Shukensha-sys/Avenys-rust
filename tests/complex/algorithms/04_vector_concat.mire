@@ -1,19 +1,19 @@
 import std
 
 pub fn main: () {
-    set v1 = [] :vec![i64] mut
+    set v1 = [] :vec[i64] mut
     set v1 = lists.push(v1 10)
     set v1 = lists.push(v1 20)
     set v1 = lists.push(v1 30)
     set v1 = lists.push(v1 40)
     set v1 = lists.push(v1 50)
 
-    set v2 = [] :vec![i64] mut
+    set v2 = [] :vec[i64] mut
     set v2 = lists.push(v2 5)
     set v2 = lists.push(v2 15)
     set v2 = lists.push(v2 25)
 
-    set combined = [] :vec![i64] mut
+    set combined = [] :vec[i64] mut
     set i = 0 :i64 mut
     while i < 5 {
         set combined = lists.push(combined lists.get(v1 i))

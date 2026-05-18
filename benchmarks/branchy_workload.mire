@@ -8,7 +8,7 @@ import strings as strings
 
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
-set samples = []  :vec![i64] mut
+set samples = []  :vec[i64] mut
 set trace = "" :str mut
 set i = 0 :i64 mut
 set total = 0 :i64 mut

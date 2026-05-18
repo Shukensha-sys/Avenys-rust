@@ -1,13 +1,13 @@
 import std
 
-fn reverse_array: (arr :arr[i64 5]) :vec![i64] {
+fn reverse_array: (arr :arr[i64 5]) :vec[i64] {
     set a0 = arr at 0
     set a1 = arr at 1
     set a2 = arr at 2
     set a3 = arr at 3
     set a4 = arr at 4
 
-    set result = [a4 a3 a2 a1 a0] :vec![i64] mut
+    set result = [a4 a3 a2 a1 a0] :vec[i64] mut
     return result
 }
 

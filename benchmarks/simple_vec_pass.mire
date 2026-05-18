@@ -1,5 +1,5 @@
 pub fn main: () {
-    set data = []  :vec![i64] mut
+    set data = []  :vec[i64] mut
     set data = data + [1]
     set data = data + [2]
     set len = len(data)

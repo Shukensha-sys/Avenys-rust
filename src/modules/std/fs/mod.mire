@@ -6,7 +6,7 @@ pub fn size: (path :str) :i64
 pub fn copy: (src :str, dst :str)
 pub fn move: (src :str, dst :str)
 pub fn drop: (path :str)
-pub fn list: (path :str) :vec![str]
+pub fn list: (path :str) :vec[str]
 pub fn mkdir: (path :str)
 pub fn rmdir: (path :str)
 pub fn join: (a :str, b :str) :str

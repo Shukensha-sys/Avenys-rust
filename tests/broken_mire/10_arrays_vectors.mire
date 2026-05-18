@@ -5,7 +5,7 @@ pub fn main: () {
     set val = arr at 0
     use dasu("val: {val}")
     
-    set vec = [] :vec![i64] mut
+    set vec = [] :vec[i64] mut
     set vec = lists.push(vec 10)
     set vec = lists.push(vec 20)
     set first = lists.get(vec 0)

@@ -3,7 +3,7 @@ import mem as mem
 import cpu as cpu
 import lists as lists
 
-fn sum_all: (xs:vec![i64]) :i64 {
+fn sum_all: (xs:vec[i64]) :i64 {
     set total = 0 :i64 mut
     set i = 0 :i64 mut
     while i < len(xs) {
@@ -14,7 +14,7 @@ fn sum_all: (xs:vec![i64]) :i64 {
 }
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
-set data = []  :vec![i64] mut
+set data = []  :vec[i64] mut
 
 set i = 0 :i64 mut
 while i < 5000 {

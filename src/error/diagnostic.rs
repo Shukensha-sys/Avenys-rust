@@ -70,6 +70,12 @@ pub enum DiagnosticCode {
     W0025,
     W0026,
     W0027,
+    W0028,
+    W0029,
+    W0030,
+    W0031,
+    W0032,
+    W0033,
 }
 
 impl DiagnosticCode {
@@ -117,6 +123,12 @@ impl DiagnosticCode {
             DiagnosticCode::W0025 => "W0025",
             DiagnosticCode::W0026 => "W0026",
             DiagnosticCode::W0027 => "W0027",
+            DiagnosticCode::W0028 => "W0028",
+            DiagnosticCode::W0029 => "W0029",
+            DiagnosticCode::W0030 => "W0030",
+            DiagnosticCode::W0031 => "W0031",
+            DiagnosticCode::W0032 => "W0032",
+            DiagnosticCode::W0033 => "W0033",
         }
     }
 
@@ -130,7 +142,8 @@ impl DiagnosticCode {
             DiagnosticCode::W0007
             | DiagnosticCode::W0008
             | DiagnosticCode::W0009
-            | DiagnosticCode::W0027 => Some(WarningCategory::Performance),
+            | DiagnosticCode::W0027
+            | DiagnosticCode::W0033 => Some(WarningCategory::Performance),
             DiagnosticCode::W0006
             | DiagnosticCode::W0012
             | DiagnosticCode::W0013
@@ -143,7 +156,12 @@ impl DiagnosticCode {
             DiagnosticCode::W0015
             | DiagnosticCode::W0016
             | DiagnosticCode::W0017
-            | DiagnosticCode::W0019 => Some(WarningCategory::Logic),
+            | DiagnosticCode::W0019
+            | DiagnosticCode::W0028
+            | DiagnosticCode::W0029
+            | DiagnosticCode::W0030
+            | DiagnosticCode::W0031
+            | DiagnosticCode::W0032 => Some(WarningCategory::Logic),
             DiagnosticCode::W0025 => Some(WarningCategory::Memory),
             DiagnosticCode::W0010 => Some(WarningCategory::Deprecated),
             _ => None,

@@ -514,6 +514,10 @@ impl TypeChecker {
         builtins.insert("__do_while".to_string(), DataType::None);
         builtins.insert("__type_matches".to_string(), DataType::Bool);
         builtins.insert("__is".to_string(), DataType::Bool);
+        builtins.insert("new::".to_string(), DataType::Unknown);
+        builtins.insert("own::".to_string(), DataType::Box);
+        builtins.insert("move::".to_string(), DataType::Unknown);
+        builtins.insert("drop::".to_string(), DataType::None);
 
         builtins
     }
@@ -1123,6 +1127,31 @@ impl TypeChecker {
             Statement::Drop { value } => {
                 self.check_expression(value)?;
             }
+            Statement::New {
+                value,
+                declared_type,
+            } => {
+                if let Some(initial) = value {
+                    let initial_ty = self.check_expression(initial)?;
+                    if !self.is_assignable(declared_type, &initial_ty) {
+                        return Err(type_error(format!(
+                            "new:: value type mismatch: declared {:?}, got {:?}",
+                            declared_type, initial_ty
+                        )));
+                    }
+                }
+            }
+            Statement::Own { value, inner_type } => {
+                if let Some(initial) = value {
+                    let initial_ty = self.check_expression(initial)?;
+                    if !self.is_assignable(inner_type, &initial_ty) {
+                        return Err(type_error(format!(
+                            "own:: value type mismatch: declared {:?}, got {:?}",
+                            inner_type, initial_ty
+                        )));
+                    }
+                }
+            }
             Statement::Move { target, value } => {
                 let moved_type = self.check_expression(value)?;
                 self.insert_var(target.clone(), moved_type.clone(), true);
@@ -1389,6 +1418,49 @@ impl TypeChecker {
                     let resolved = Self::unify_types(&then_type, &else_type)?;
                     *data_type = resolved.clone();
                     return Ok(resolved);
+                }
+
+                if name == "new::" {
+                    if args.is_empty() {
+                        if *data_type == DataType::Unknown {
+                            return Err(type_error(
+                                "new::() requires a type annotation (:T)".to_string(),
+                            ));
+                        }
+                        return Ok(data_type.clone());
+                    }
+                    if args.len() == 1 {
+                        *data_type = arg_types[0].clone();
+                        return Ok(arg_types[0].clone());
+                    }
+                }
+
+                if name == "own::" {
+                    if args.is_empty() {
+                        if *data_type == DataType::Unknown {
+                            return Err(type_error(
+                                "own::() requires a type annotation (:T)".to_string(),
+                            ));
+                        }
+                        *data_type = DataType::Box;
+                        return Ok(DataType::Box);
+                    }
+                    if args.len() == 1 {
+                        *data_type = DataType::Box;
+                        return Ok(DataType::Box);
+                    }
+                }
+
+                if name == "move::" {
+                    if let Some(first) = arg_types.first() {
+                        *data_type = first.clone();
+                        return Ok(first.clone());
+                    }
+                }
+
+                if name == "drop::" {
+                    *data_type = DataType::None;
+                    return Ok(DataType::None);
                 }
 
                 if let Some(resolved) = self.resolve_instance_method_call(name, &arg_types)? {
@@ -3526,13 +3598,19 @@ impl TypeChecker {
 
     fn statement_location(statement: &Statement) -> (usize, usize) {
         match statement {
-            Statement::Let {
-                value: Some(value), ..
-            }
-            | Statement::Assignment { value, .. }
-            | Statement::Expression(value)
-            | Statement::Drop { value }
-            | Statement::Move { value, .. } => Self::expression_location(value),
+        Statement::Let {
+            value: Some(value), ..
+        }
+        | Statement::Assignment { value, .. }
+        | Statement::Expression(value)
+        | Statement::Drop { value }
+        | Statement::New {
+            value: Some(value), ..
+        }
+        | Statement::Own {
+            value: Some(value), ..
+        }
+        | Statement::Move { value, .. } => Self::expression_location(value),
             Statement::Return(Some(value)) => Self::expression_location(value),
             Statement::If { condition, .. } | Statement::While { condition, .. } => {
                 Self::expression_location(condition)

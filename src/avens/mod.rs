@@ -1379,6 +1379,12 @@ impl LlvmIrGen {
                 }
                 Ok(())
             }
+            Statement::New { value, .. } | Statement::Own { value, .. } => {
+                if let Some(value) = value {
+                    let _ = self.compile_expr(value)?;
+                }
+                Ok(())
+            }
             Statement::Move { target, value } => {
                 let var = self.vars.get(target).cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
@@ -1627,6 +1633,26 @@ impl LlvmIrGen {
                 args,
                 data_type,
             } if name == "__if_expr" => self.compile_if_expr(args, data_type),
+            Expression::Call {
+                name,
+                args,
+                data_type,
+            }
+                if name == "new::" || name == "own::" || name == "move::"
+            => {
+                if let Some(first) = args.first() {
+                    self.compile_expr(first)
+                } else {
+                    let ll_ty = self.map_type(data_type)?;
+                    Ok(self.default_value(ll_ty))
+                }
+            }
+            Expression::Call { name, args, .. } if name == "drop::" => {
+                if let Some(first) = args.first() {
+                    let _ = self.compile_expr(first)?;
+                }
+                Ok(self.default_value(LlType::I64))
+            }
             Expression::Match {
                 value,
                 cases,
@@ -2102,6 +2128,12 @@ impl LlvmIrGen {
             | Statement::Assignment { value, .. }
             | Statement::Expression(value)
             | Statement::Drop { value }
+            | Statement::New {
+                value: Some(value), ..
+            }
+            | Statement::Own {
+                value: Some(value), ..
+            }
             | Statement::Move { value, .. } => Self::expression_location(value),
             Statement::Return(Some(value)) => Self::expression_location(value),
             Statement::If { condition, .. } | Statement::While { condition, .. } => {

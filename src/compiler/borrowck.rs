@@ -369,6 +369,11 @@ impl<'a> BorrowChecker<'a> {
                     }
                 }
             }
+            Statement::New { value, .. } | Statement::Own { value, .. } => {
+                if let Some(value) = value {
+                    self.check_expression(value)?;
+                }
+            }
             Statement::Move { target, value } => {
                 self.check_expression(value)?;
                 if let Some(source) = Self::identifier_name(value) {
@@ -846,6 +851,12 @@ impl<'a> BorrowChecker<'a> {
             | Statement::Assignment { value, .. }
             | Statement::Expression(value)
             | Statement::Drop { value }
+            | Statement::New {
+                value: Some(value), ..
+            }
+            | Statement::Own {
+                value: Some(value), ..
+            }
             | Statement::Move { value, .. } => Self::expression_location(value),
             Statement::Return(Some(value)) => Self::expression_location(value),
             Statement::If { condition, .. } | Statement::While { condition, .. } => {

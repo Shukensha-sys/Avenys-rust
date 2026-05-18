@@ -8,7 +8,7 @@ import math as math
 
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
-set xs = []  :vec![i64] mut
+set xs = []  :vec[i64] mut
 set i = 0 :i64 mut
 set text = "seed" :str mut
 

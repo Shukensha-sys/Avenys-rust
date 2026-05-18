@@ -149,7 +149,7 @@ set count = len(s.items)
 
 ```mire
 # FUNCIONA:
-set nums = [1 2 3 4 5]  :vec![i64] mut
+set nums = [1 2 3 4 5]  :vec[i64] mut
 set doubled = nums => (x => x * 2)
 # Produces: [2, 4, 6, 8, 10]
 ```
@@ -393,7 +393,7 @@ use dasu(s)        # prints 3.14
 | Pipeline typing | ✅ Works | uses elem_type as fallback |
 | Reference types | ✅ Works | Preserves inner type, `&x`/`*ref` lowering, typed params like `:&i64`, and now type unification `&T`↔`T` in type checker |
 | String interpolation | ✅ Works | supports nested function calls {func(x)} |
-| Empty vec literal | ✅ Works | `[] :vec![i64]` now works with `lists.push` |
+| Empty vec literal | ✅ Works | `[] :vec[i64]` now works with `lists.push` |
 | Empty dict literal | ✅ Works | `{} :map![str,i64]` now works with dict operations |
 
 ---
@@ -401,11 +401,11 @@ use dasu(s)        # prints 3.14
 ## 🆕 Empty Vec Literal with Type Annotation
 
 **Description:**
-Empty vec literals `[]` with type annotation `[] :vec![i64]` now work with `lists.push`.
+Empty vec literals `[]` with type annotation `[] :vec[i64]` now work with `lists.push`.
 
 ```mire
 # NOW WORKS:
-set arr = [] :vec![i64] mut
+set arr = [] :vec[i64] mut
 set arr = lists.push(arr 1)
 set arr = lists.push(arr 2)
 ```

@@ -6,7 +6,7 @@ import lists as lists
 set wall = time.mark() :i64 mut
 set proc = cpu.mark() :i64 mut
 
-set data = []  :vec![i64] mut
+set data = []  :vec[i64] mut
 set i = 0 :i64 mut
 while i < 10000 {
     set data = lists.push(data i)

@@ -1,7 +1,7 @@
 pub fn upper: (s :str) :str
 pub fn lower: (s :str) :str
 pub fn strip: (s :str) :str
-pub fn split: (s :str, sep :str) :vec![str]
+pub fn split: (s :str, sep :str) :vec[str]
 pub fn replace: (s :str, old :str, new :str) :str
 pub fn contains: (s :str, sub :str) :bool
 pub fn startswith: (s :str, prefix :str) :bool
