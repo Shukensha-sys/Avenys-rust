@@ -2,6 +2,17 @@
 
 Este archivo consolida el historial operativo principal del compilador Avenys.
 
+## [3.0.0] - 2026-05-18
+
+- Implementación completa de `find` en el pipeline compilador:
+  - lexer: keyword `find`
+  - parser: `find item in iterable { ... }`
+  - backend: lowering activo (deja de fallar con error de backend limitation)
+- Cobertura de regresión ampliada para:
+  - compilación/lowering de `find`
+  - bindings `const` con operadores compuestos
+- Bump de versión mayor: `2.9.0` -> `3.0.0`.
+
 ## [2.9.0] - 2026-05-18
 
 - Integración de sintaxis lifecycle (`new::`, `own::`, `move::`, `drop::`) en lexer/parser y validadores.

@@ -1940,6 +1940,40 @@ fn nested_output_pipeline_compiles() {
 }
 
 #[test]
+fn find_statement_compiles_and_lowers() {
+    let root = make_temp_project_root("mire_find_statement");
+    let source_path = root.join("find_statement.mire");
+    fs::write(
+        &source_path,
+        "import std\npub fn main: () {\n    find item in [1 2 3] {\n        use dasu(item)\n    }\n}\n",
+    )
+    .expect("write source");
+
+    compile_file_with_avenys(
+        &source_path,
+        &BuildOptions {
+            mode: BuildMode::Debug,
+            opt_level: OptLevel::O0,
+            debug_dump: false,
+            output: None,
+            emit_binary: true,
+            persist_ir: true,
+            cache: Default::default(),
+            warning_filter: mire::error::diagnostic::WarningFilter::Default,
+            deny_warnings: std::collections::HashSet::new(),
+        },
+    )
+    .expect("find statement should compile and lower");
+}
+
+#[test]
+fn bindings_const_and_compound_assignment_analyze() {
+    let source = "pub fn main: () {\n    set base = 10 :i64 const\n    set acc = 5 :i64 mut\n    set acc += base\n    set acc -= 1\n    set acc *= 2\n    set acc /= 2\n    set acc %= 3\n    use dasu(acc)\n}\n";
+    let mut program = parse(source).expect("source should parse");
+    analyze_program(&mut program, source).expect("const + compound assignment should analyze");
+}
+
+#[test]
 fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");

@@ -216,6 +216,7 @@ impl Parser {
             TokenType::If => self.parse_if_statement(),
             TokenType::While => self.parse_while_statement(),
             TokenType::For => self.parse_for_statement(),
+            TokenType::Find => self.parse_find_statement(),
             TokenType::Do => self.parse_do_while_statement(),
             TokenType::Match => self.parse_match_statement(),
             TokenType::NewKw => self.parse_new_statement(),
@@ -925,6 +926,24 @@ impl Parser {
         Ok(Statement::For {
             variable: first,
             index: second,
+            iterable,
+            body,
+        })
+    }
+
+    fn parse_find_statement(&mut self) -> Result<Statement> {
+        self.expect(TokenType::Find)?;
+        let variable = self.expect_ident()?;
+        self.expect(TokenType::In)?;
+        let iterable = self.parse_expression_until_block_open()?;
+        self.expect_block_open()?;
+        self.push_scope();
+        self.declare(&variable);
+        let body = self.parse_block()?;
+        self.pop_scope();
+        self.expect_block_close()?;
+        Ok(Statement::Find {
+            variable,
             iterable,
             body,
         })
@@ -3464,6 +3483,13 @@ mod tests {
         assert!(matches!(program.statements[1], Statement::Own { .. }));
         assert!(matches!(program.statements[2], Statement::Move { .. }));
         assert!(matches!(program.statements[3], Statement::Drop { .. }));
+    }
+
+    #[test]
+    fn parses_find_statement() {
+        let source = "find item in [1 2 3] {\n    use dasu(item)\n}\n";
+        let program = parse(source).expect("parse should succeed");
+        assert!(matches!(program.statements[0], Statement::Find { .. }));
     }
 
     #[test]

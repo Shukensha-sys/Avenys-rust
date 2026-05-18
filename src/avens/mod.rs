@@ -1250,6 +1250,11 @@ impl LlvmIrGen {
                 iterable,
                 body,
             } => self.compile_for_range(variable, index.as_deref(), iterable, body),
+            Statement::Find {
+                variable,
+                iterable,
+                body,
+            } => self.compile_for_range(variable, None, iterable, body),
             Statement::If {
                 condition,
                 then_branch,
@@ -1361,7 +1366,7 @@ impl LlvmIrGen {
             | Statement::DmireColumn { .. }
             | Statement::DmireDlist { .. }
             | Statement::Query { .. }
-            | Statement::Find { .. } => Err(MireError::new(ErrorKind::Backend {
+            => Err(MireError::new(ErrorKind::Backend {
                 message: "Avenys statement is parsed/typechecked but not lowered in backend yet"
                     .to_string(),
             })),

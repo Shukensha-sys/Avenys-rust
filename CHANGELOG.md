@@ -2,6 +2,20 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.0.0] - 2026-05-18
+
+### Added
+- `find` control-flow statement is now fully implemented end-to-end:
+  - lexer keyword support (`find`)
+  - parser support (`find <item> in <iterable> { ... }`)
+  - backend lowering support (no longer rejected as backend limitation)
+- New regression coverage for:
+  - `find` parse/lower/compile path
+  - `const` bindings + compound assignment analysis path
+
+### Changed
+- Version bump: `2.9.0` -> `3.0.0`.
+
 ## [2.9.0] - 2026-05-18
 
 ### Added

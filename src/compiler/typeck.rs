@@ -1547,7 +1547,7 @@ impl TypeChecker {
                         },
                         other => {
                             return Err(type_error(format!(
-                                "lists.push expects vec![T], got {:?}",
+                                "lists.push expects vec[T], got {:?}",
                                 other
                             )));
                         }
@@ -4407,7 +4407,7 @@ mod tests {
 
     #[test]
     fn pipeline_closure_infers_vector_of_return_type() {
-        let source = "pub fn main: () {\n    set nums = [1 2 3] :vec![i64]\n    set doubled = nums => (x => x * 2)\n}\n";
+        let source = "pub fn main: () {\n    set nums = [1 2 3] :vec[i64]\n    set doubled = nums => (x => x * 2)\n}\n";
         let mut program = parse(source).expect("source should parse");
 
         check_program_types(&mut program, source).expect("pipeline should type check");
