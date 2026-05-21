@@ -1,0 +1,11 @@
+pub fn clear: () {
+    use dasu("\n\n\n\n\n\n\n\n\n\n")
+}
+
+pub fn style: (text: str, s: str) :str {
+    return text
+}
+
+pub fn hr: () :str {
+    return "────────────────────────────────────────"
+}

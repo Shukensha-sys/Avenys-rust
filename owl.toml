@@ -1,0 +1,9 @@
+[project]
+name = "mire"
+version = "3.6.0"
+entry = "main.mire"
+
+[cache]
+max_units = 256
+analysis_cache = true
+compression = false

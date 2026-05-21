@@ -1,0 +1,6 @@
+import kioto: (math)
+
+pub fn main: () {
+    set n = math.abs(5)
+    use dasu(n)
+}

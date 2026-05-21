@@ -1,0 +1,5 @@
+import kioto: (strings)
+
+pub fn main: () {
+    use dasu(strings.to_upper("hello"))
+}

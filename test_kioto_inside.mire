@@ -1,0 +1,6 @@
+import kioto: (env)
+
+pub fn main: () {
+    set cwd_path = env.cwd()
+    use dasu(cwd_path)
+}

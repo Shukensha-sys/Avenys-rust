@@ -1,0 +1,15 @@
+import kioto: (fs env proc time cpu mem math strings lists dicts term)
+
+pub fn main: () {
+    set t = time.mark()
+    set dt = time.elapsed(t)
+    set m = cpu.mark()
+    set dc = cpu.elapsed(m)
+    set total = dt + dc
+    use dasu(total)
+    use dasu(env.cwd())
+    use dasu(strings.to_upper("ok"))
+    use dasu(math.abs(5))
+    use dasu(lists.len(["a" "b"]))
+    use dasu(fs.read("Cargo.toml"))
+}

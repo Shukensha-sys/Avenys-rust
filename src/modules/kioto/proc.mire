@@ -1,0 +1,27 @@
+pub fn run: (cmd: str) :str {
+    return proc_run(cmd)
+}
+
+pub fn exec: (cmd: str) :str {
+    return proc_exec(cmd)
+}
+
+pub fn shell: (cmd: str) :str {
+    return proc_shell(cmd)
+}
+
+pub fn wait: (pid: i64) :i64 {
+    return proc_wait(pid)
+}
+
+pub fn kill: (pid: i64) {
+    use proc_kill(pid)
+}
+
+pub fn exit: (status: i64) {
+    use proc_exit(status)
+}
+
+pub fn exists: (pid: i64) :bool {
+    return proc_exists(pid)
+}

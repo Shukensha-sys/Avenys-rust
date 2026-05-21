@@ -1,0 +1,67 @@
+pub fn to_upper: (s: str) :str {
+    return strings.to_upper(s)
+}
+
+pub fn to_lower: (s: str) :str {
+    return strings.to_lower(s)
+}
+
+pub fn trim: (s: str) :str {
+    return strings.trim(s)
+}
+
+pub fn strip: (s: str) :str {
+    return strings.strip(s)
+}
+
+pub fn ltrim: (s: str) :str {
+    return strings.ltrim(s)
+}
+
+pub fn rtrim: (s: str) :str {
+    return strings.rtrim(s)
+}
+
+pub fn replace: (s: str, old: str, replacement: str) :str {
+    return strings.replace(s, old, replacement)
+}
+
+pub fn replace_first: (s: str, old: str, replacement: str) :str {
+    return strings.replace_first(s, old, replacement)
+}
+
+pub fn contains: (s: str, sub: str) :bool {
+    return strings.contains(s, sub)
+}
+
+pub fn starts_with: (s: str, prefix: str) :bool {
+    return strings.starts_with(s, prefix)
+}
+
+pub fn ends_with: (s: str, suffix: str) :bool {
+    return strings.ends_with(s, suffix)
+}
+
+pub fn len: (s: str) :i64 {
+    return strings.len(s)
+}
+
+pub fn split: (s: str, sep: str) :vec[str] {
+    return strings.split(s, sep)
+}
+
+pub fn join: (list, sep: str) :str {
+    return strings.join(list, sep)
+}
+
+pub fn substr: (s: str, start: i64, len: i64) :str {
+    return strings.substr(s, start, len)
+}
+
+pub fn pad_left: (s: str, n: i64, pad: str) :str {
+    return strings.pad_left(s, n, pad)
+}
+
+pub fn pad_right: (s: str, n: i64, pad: str) :str {
+    return strings.pad_right(s, n, pad)
+}

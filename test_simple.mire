@@ -1,0 +1,6 @@
+import kioto: (proc)
+
+pub fn main: () {
+    set code = proc.exit_code()
+    use dasu(code)
+}

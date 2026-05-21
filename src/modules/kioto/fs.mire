@@ -1,7 +1,59 @@
-pub fn read: () {
-    use dasu("reading from kioto.fs")
+pub fn read: (path: str) :str {
+    return fs_read(path)
 }
 
-pub fn write: (data: str) {
-    use dasu("writing to kioto.fs")
+pub fn write: (path: str, data: str) {
+    use fs_write(path, data)
+}
+
+pub fn append: (path: str, data: str) {
+    use fs_append(path, data)
+}
+
+pub fn exists: (path: str) :bool {
+    return fs_exists(path)
+}
+
+pub fn size: (path: str) :i64 {
+    return fs_size(path)
+}
+
+pub fn copy: (src: str, dst: str) {
+    use fs_copy(src, dst)
+}
+
+pub fn rename: (src: str, dst: str) {
+    use fs_move(src, dst)
+}
+
+pub fn delete: (path: str) {
+    use fs_drop(path)
+}
+
+pub fn list: (path: str) :vec[str] {
+    return fs_list(path)
+}
+
+pub fn mkdir: (path: str) {
+    use fs_mkdir(path)
+}
+
+pub fn rmdir: (path: str) {
+    use fs_rmdir(path)
+}
+
+pub fn join: (a: str, b: str) :str {
+    return fs_join(a, b)
+}
+
+pub fn dir: (path: str) :str {
+    return fs_dir(path)
+}
+
+pub fn name: (path: str) :str {
+    return fs_name(path)
+}
+
+pub fn ext: (path: str) :str {
+    return fs_ext(path)
 }

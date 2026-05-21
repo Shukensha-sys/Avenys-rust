@@ -1,0 +1,13 @@
+import kioto: (math env strings fs time cpu)
+
+pub fn main: () {
+    set n = math.abs(5)
+    use dasu(n)
+    use dasu(env.cwd())
+    use dasu(strings.to_upper("hello"))
+    use dasu(fs.read("Cargo.toml"))
+    set t = time.mark()
+    use dasu(time.elapsed(t))
+    set m = cpu.mark()
+    use dasu(cpu.elapsed(m))
+}

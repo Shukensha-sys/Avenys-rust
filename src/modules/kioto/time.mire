@@ -1,0 +1,7 @@
+pub fn mark: () :i64 {
+    return time_mark()
+}
+
+pub fn elapsed: (m: i64) :i64 {
+    return time_elapsed_ns(m)
+}

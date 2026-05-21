@@ -1,0 +1,15 @@
+pub fn get: (dict, key) :anything {
+    return dicts.get(dict, key)
+}
+
+pub fn put: (dict, key, value) :map[anything anything] {
+    return dicts.set(dict, key, value)
+}
+
+pub fn keys: (dict) :vec[anything] {
+    return dicts.keys(dict)
+}
+
+pub fn values: (dict) :vec[anything] {
+    return dicts.values(dict)
+}

@@ -1,0 +1,11 @@
+pub fn mark: () :i64 {
+    return cpu_mark()
+}
+
+pub fn elapsed: (m: i64) :i64 {
+    return cpu_elapsed_ns(m)
+}
+
+pub fn cycles_est: (m: i64) :i64 {
+    return cpu_cycles_est(m)
+}

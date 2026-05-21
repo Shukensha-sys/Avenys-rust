@@ -227,7 +227,7 @@ impl ImportResolver {
                 direct_dependencies,
             },
         );
-        self.expanded_cache.insert(canonical, expanded.clone());
+        self.expanded_cache.insert(canonical.clone(), expanded.clone());
         Ok(expanded)
     }
 
@@ -452,7 +452,7 @@ impl ImportResolver {
             let prefix = if item == "lib" {
                 module_name.to_string()
             } else {
-                format!("{}.{}", module_name, item)
+                item.to_string()
             };
             result.extend(loaded.into_iter().map(|mut stmt| {
                 stmt.statement = prefix_statement_name(&stmt.statement, &prefix);
@@ -473,9 +473,7 @@ fn prefix_statement_name(statement: &Statement, prefix: &str) -> Statement {
         | Statement::Trait { name, .. }
         | Statement::Skill { name, .. }
         | Statement::Module { name, .. }
-        | Statement::Enum { name, .. }
-        | Statement::ExternLib { name, .. }
-        | Statement::ExternFunction { name, .. } => Some(name),
+        | Statement::Enum { name, .. } => Some(name),
         _ => None,
     };
     if let Some(name) = name {

@@ -1876,16 +1876,37 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "time.mark" => {
                 self.compile_time_mark(args)
             }
+            Expression::Call { name, args, .. } if name == "time_mark" => {
+                self.compile_time_mark(args)
+            }
             Expression::Call { name, args, .. } if name == "time.elapsed_ms" => {
                 self.compile_time_elapsed_ms(args)
             }
+            Expression::Call { name, args, .. } if name == "time_elapsed_ms" => {
+                self.compile_time_elapsed_ms_i64(args)
+            }
+            Expression::Call { name, args, .. } if name == "time_elapsed_ns" => {
+                self.compile_time_elapsed_ms_i64(args)
+            }
             Expression::Call { name, args, .. } if name == "cpu.mark" => {
+                self.compile_cpu_mark(args)
+            }
+            Expression::Call { name, args, .. } if name == "cpu_mark" => {
                 self.compile_cpu_mark(args)
             }
             Expression::Call { name, args, .. } if name == "cpu.elapsed_ms" => {
                 self.compile_cpu_elapsed_ms(args)
             }
+            Expression::Call { name, args, .. } if name == "cpu_elapsed_ms" => {
+                self.compile_cpu_elapsed_ms_i64(args)
+            }
+            Expression::Call { name, args, .. } if name == "cpu_elapsed_ns" => {
+                self.compile_cpu_elapsed_ms_i64(args)
+            }
             Expression::Call { name, args, .. } if name == "cpu.cycles_est" => {
+                self.compile_cpu_cycles_est(args)
+            }
+            Expression::Call { name, args, .. } if name == "cpu_cycles_est" => {
                 self.compile_cpu_cycles_est(args)
             }
             Expression::Call { name, args, .. } if name == "gpu.snapshot" => {
@@ -4600,6 +4621,25 @@ impl LlvmIrGen {
         })
     }
 
+    fn compile_time_elapsed_ms_i64(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys time_elapsed_ms expects 1 argument".to_string(),
+            }));
+        }
+        let mark = self.compile_expr(&args[0])?;
+        let diff = self.tmp();
+        self.body.push(format!(
+            "  {diff} = call i64 @mire_wall_elapsed_ms(i64 {})",
+            mark.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: diff,
+            owned: false,
+        })
+    }
+
     fn compile_cpu_mark(&mut self, _args: &[Expression]) -> Result<LlValue> {
         let result = self.tmp();
         self.body
@@ -4627,6 +4667,25 @@ impl LlvmIrGen {
             ty: LlType::Ptr,
             repr: diff,
             owned: true,
+        })
+    }
+
+    fn compile_cpu_elapsed_ms_i64(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "Avenys cpu_elapsed_ms expects 1 argument".to_string(),
+            }));
+        }
+        let mark = self.compile_expr(&args[0])?;
+        let diff = self.tmp();
+        self.body.push(format!(
+            "  {diff} = call i64 @mire_cpu_elapsed_ms(i64 {})",
+            mark.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: diff,
+            owned: false,
         })
     }
 
