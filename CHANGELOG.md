@@ -2,6 +2,21 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.7.0] - 2026-05-21
+
+### Added
+- Namespace call compatibility for Rust-style module paths:
+  - parser accepts chained `::` calls like `kioto::fs::read(...)`
+  - type checker resolves root-qualified aliases to imported module symbols when needed
+  - backend call resolution mirrors the same alias fallback for codegen compatibility
+
+### Changed
+- Module namespace syntax is now dual-compatible:
+  - recommended: `module::submodule::fn(...)`
+  - backwards-compatible: `submodule.fn(...)`
+- Added parser and language regression tests for double-colon namespace calls.
+- Version bump: `3.6.0` -> `3.7.0`.
+
 ## [3.6.0] - 2026-05-18
 
 ### Changed

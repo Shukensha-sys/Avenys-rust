@@ -1973,6 +1973,10 @@ impl LlvmIrGen {
                     .user_functions
                     .get(&resolved_name)
                     .cloned()
+                    .or_else(|| {
+                        strip_root_namespace(&resolved_name)
+                            .and_then(|alias| self.user_functions.get(&alias).cloned())
+                    })
                     .ok_or_else(|| {
                         MireError::new(ErrorKind::Backend {
                             message: format!("Avenys unknown function '{}'", name),
@@ -7751,4 +7755,15 @@ fn normalize_nominal_name(value: &str) -> String {
         .split_once('[')
         .map(|(base, _)| base.to_string())
         .unwrap_or_else(|| value.to_string())
+}
+
+fn strip_root_namespace(value: &str) -> Option<String> {
+    let mut parts = value.split('.');
+    let _root = parts.next()?;
+    let second = parts.next()?;
+    Some(parts.fold(second.to_string(), |mut acc, segment| {
+        acc.push('.');
+        acc.push_str(segment);
+        acc
+    }))
 }

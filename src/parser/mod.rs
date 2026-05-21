@@ -3910,6 +3910,20 @@ mod tests {
     }
 
     #[test]
+    fn parses_module_chain_call_with_double_colon() {
+        let source = "pub fn main: () {\nuse kioto::fs::read(\"Cargo.toml\")\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Expression(Expression::Call { name, .. }) = &body[0] else {
+            panic!("expected call expression");
+        };
+        assert_eq!(name, "kioto.fs.read");
+    }
+
+    #[test]
     fn parses_brace_map_literal() {
         let source = "set m = {a: 1, b: 2} :map[str i64]\n";
         let program = parse(source).expect("parse should succeed");

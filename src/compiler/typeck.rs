@@ -1683,6 +1683,58 @@ impl TypeChecker {
                     return Ok(ret);
                 }
 
+                if let Some(alias_name) = Self::strip_root_namespace(name)
+                    && let Some(sig) = self.functions.get(&alias_name).cloned()
+                {
+                    if sig.params.len() != arg_types.len() {
+                        return Err(type_error(format!(
+                            "Function '{}' expects {} arguments, got {}",
+                            alias_name,
+                            sig.params.len(),
+                            arg_types.len()
+                        )));
+                    }
+
+                    let resolved_type_args = if sig.type_params.is_empty() {
+                        if !type_args.is_empty() {
+                            return Err(type_error(format!(
+                                "Function '{}' is not generic; remove explicit type arguments",
+                                alias_name
+                            )));
+                        }
+                        Vec::new()
+                    } else {
+                        self.resolve_generic_type_args(&sig, type_args, &arg_types)?
+                    };
+                    self.validate_generic_bounds(&alias_name, &sig, &resolved_type_args)?;
+                    let generic_bindings = self.generic_bindings_from_args(&sig, &resolved_type_args);
+
+                    for (idx, (expected, actual)) in sig
+                        .params
+                        .iter()
+                        .map(|param| self.substitute_generics(param, &generic_bindings))
+                        .zip(arg_types.iter())
+                        .enumerate()
+                    {
+                        if !self.is_assignable(&expected, actual) {
+                            return Err(type_error(format!(
+                                "Function '{}' argument {} expects {:?}, got {:?}",
+                                alias_name,
+                                idx + 1,
+                                expected,
+                                actual
+                            )));
+                        }
+                    }
+
+                    if !resolved_type_args.is_empty() {
+                        *type_args = resolved_type_args;
+                    }
+                    let ret = self.substitute_generics(&sig.return_type, &generic_bindings);
+                    *data_type = ret.clone();
+                    return Ok(ret);
+                }
+
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(ret);
@@ -3099,6 +3151,17 @@ impl TypeChecker {
         (name, Vec::new())
     }
 
+    fn strip_root_namespace(name: &str) -> Option<String> {
+        let mut parts = name.split('.');
+        let _root = parts.next()?;
+        let _second = parts.next()?;
+        Some(parts.fold(_second.to_string(), |mut acc, segment| {
+            acc.push('.');
+            acc.push_str(segment);
+            acc
+        }))
+    }
+
     fn parse_nominal_type_args(inner: &str) -> Vec<DataType> {
         fn parse_token(token: &str) -> DataType {
             let parsed = DataType::parse_type(token);
@@ -4112,6 +4175,18 @@ impl TypeChecker {
                 if let Some(ret) = self.builtin_returns.get(name).cloned() {
                     *data_type = ret.clone();
                     return Ok(Some(ret));
+                }
+                if let Some(alias_name) = Self::strip_root_namespace(name)
+                    && let Some(sig) = self.functions.get(&alias_name).cloned()
+                    && sig.params.len() == arg_types.len()
+                    && sig
+                        .params
+                        .iter()
+                        .zip(arg_types.iter())
+                        .all(|(expected, actual)| self.is_assignable(expected, actual))
+                {
+                    *data_type = sig.return_type.clone();
+                    return Ok(Some(sig.return_type));
                 }
                 Ok(None)
             }

@@ -2163,6 +2163,32 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
 }
 
 #[test]
+fn kioto_double_colon_namespace_calls_resolve_with_selected_imports() {
+    let root = make_temp_project_root("mire_kioto_double_colon");
+    fs::write(
+        root.join("owl.toml"),
+        "[project]\nname = \"kioto-double-colon\"\nversion = \"0.1.0\"\nentry = \"main.mire\"\n",
+    )
+    .expect("write project");
+    fs::create_dir_all(root.join("kioto")).expect("mkdir kioto");
+    fs::write(root.join("kioto").join("lib.mire"), "pub fn version: () :str { return \"0.1.0\" }\n")
+        .expect("write lib");
+    fs::write(
+        root.join("kioto").join("fs.mire"),
+        "pub fn read: (path: str) :str { return path }\n",
+    )
+    .expect("write fs module");
+
+    let main_path = root.join("main.mire");
+    let source =
+        "import kioto: (fs)\n\npub fn main: () {\n    set text = kioto::fs::read(\"ok\")\n    use dasu(text)\n}\n";
+    fs::write(&main_path, source).expect("write main");
+
+    let mut loaded = load_program_with_metadata(&main_path).expect("load with imports");
+    check_program_types(&mut loaded.program, source).expect("typecheck should pass");
+}
+
+#[test]
 fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
     let root = make_temp_project_root("mire_incremental_build_reuse");
     let source_path = root.join("reuse.mire");

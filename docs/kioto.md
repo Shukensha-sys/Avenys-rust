@@ -40,15 +40,19 @@ Conceptualmente, Kioto es a Mire lo que libc es a C: la plataforma.
 | Import completo | `import kioto` (carga `lib.mire` mínimo) | ✅ |
 | Llamada como statement | `use kioto::fs::read("file")` | ✅ |
 | Llamada como expresión | `set x = kioto::fs::read("file")` | ✅ |
+| Compatibilidad legacy | `use fs.read("file")` (con `import kioto: (fs)`) | ✅ |
 | Binding | `set content = kioto::fs::read("path")` | ✅ |
 | Métodos | `list.push(42)` | ✅ |
 
-Las llamadas a funciones de Kioto usan `::` como separador de namespace:
+Las llamadas recomendadas de Kioto usan `::` como separador de namespace:
 
 ```
 use kioto::fs::read("/etc/config.toml")
 use kioto::time::sleep_ms(500)
 set files = kioto::fs::list("/tmp")
+
+# Compatibilidad mantenida (legacy)
+use fs.read("/etc/config.toml")
 ```
 
 Los imports usan la sintaxis actual con `:` y paréntesis:
