@@ -1085,7 +1085,7 @@ fn manifest_cache_settings(source_path: &Path) -> Result<CacheSettings> {
         return Ok(CacheSettings::defaults());
     };
 
-    let manifest_path = project_root.join("project.toml");
+    let manifest_path = project_root.join("owl.toml");
     let raw = match fs::read_to_string(&manifest_path) {
         Ok(raw) => raw,
         Err(_) => return Ok(CacheSettings::defaults()),
@@ -1105,7 +1105,7 @@ fn manifest_cache_settings(source_path: &Path) -> Result<CacheSettings> {
 
     let manifest = toml::from_str::<ManifestFile>(&raw).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
-            message: format!("Invalid project.toml cache configuration: {}", err),
+            message: format!("Invalid owl.toml cache configuration: {}", err),
         })
     })?;
     let defaults = CacheSettings::defaults();

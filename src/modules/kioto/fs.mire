@@ -1,0 +1,7 @@
+pub fn read: () {
+    use dasu("reading from kioto.fs")
+}
+
+pub fn write: (data: str) {
+    use dasu("writing to kioto.fs")
+}

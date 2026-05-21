@@ -675,7 +675,6 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = Some(start);
     while let Some(path) = current {
         if path.join("owl.toml").exists()
-            || path.join("project.toml").exists()
             || path.join("Mire.toml").exists()
         {
             return Some(path.to_path_buf());
@@ -688,9 +687,6 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
 pub fn project_manifest_path(cwd: &Path) -> PathBuf {
     if cwd.join("owl.toml").exists() {
         return cwd.join("owl.toml");
-    }
-    if cwd.join("project.toml").exists() {
-        return cwd.join("project.toml");
     }
     cwd.join("Mire.toml")
 }

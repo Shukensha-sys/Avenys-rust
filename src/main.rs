@@ -370,11 +370,8 @@ fn parse_debug_options(cwd: &Path, args: &[String]) -> Result<DebugOptions, Mire
 }
 
 fn default_entry_from_manifest(cwd: &Path) -> Result<Option<String>, MireError> {
-    let project_toml = cwd.join("project.toml");
     let owl_toml = cwd.join("owl.toml");
-    let path = if project_toml.exists() {
-        Some(project_toml)
-    } else if owl_toml.exists() {
+    let path = if owl_toml.exists() {
         Some(owl_toml)
     } else {
         None
@@ -392,7 +389,7 @@ fn default_entry_from_manifest(cwd: &Path) -> Result<Option<String>, MireError> 
 
 fn resolve_source_path(cwd: &Path, file: Option<String>) -> Result<PathBuf, MireError> {
     let file = file.ok_or_else(|| {
-        runtime_msg("No input file provided and no `entry` was found in project.toml/owl.toml")
+        runtime_msg("No input file provided and no `entry` was found in owl.toml")
     })?;
     let path = PathBuf::from(&file);
     let resolved = if path.is_absolute() { path } else { cwd.join(path) };

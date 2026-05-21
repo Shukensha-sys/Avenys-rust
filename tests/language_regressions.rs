@@ -165,13 +165,13 @@ fn compile_attributes_imported_type_error_to_imported_file() {
     let lib_path = root.join("code").join("lib.mire");
     fs::create_dir_all(main_path.parent().expect("main parent")).expect("mkdir code");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"imported-type-error\"\nversion = \"0.1.0\"\nentry = \"code/main.mire\"\n",
     )
     .expect("write project");
     fs::write(
         &main_path,
-        "import ./code/lib\n\npub fn main: () {\n    use fail()\n}\n",
+        "import ./lib\n\npub fn main: () {\n    use fail()\n}\n",
     )
     .expect("write main");
     fs::write(
@@ -307,7 +307,7 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
     let root = make_temp_project_root("mire_enum_variant_named_payloads");
     let source_path = root.join("enum_variant_named_payloads.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-variant-named-payloads\"\nversion = \"0.1.0\"\nentry = \"enum_variant_named_payloads.mire\"\n",
     )
     .expect("write project");
@@ -401,7 +401,7 @@ fn if_expression_infers_branch_type_and_runs() {
     let root = make_temp_project_root("mire_if_expression_infers_branch_type");
     let source_path = root.join("if_expression_infers_branch_type.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"if-expression-infers-branch-type\"\nversion = \"0.1.0\"\nentry = \"if_expression_infers_branch_type.mire\"\n",
     )
     .expect("write project");
@@ -466,7 +466,7 @@ fn match_expression_with_default_infers_string_branch_type_and_compiles() {
     let root = make_temp_project_root("mire_match_expression_default_infers_string_type");
     let source_path = root.join("match_expression_default_infers_string_type.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"match-expression-default-infers-string-type\"\nversion = \"0.1.0\"\nentry = \"match_expression_default_infers_string_type.mire\"\n",
     )
     .expect("write project");
@@ -506,7 +506,7 @@ fn match_expression_can_be_returned_directly_from_function() {
     let root = make_temp_project_root("mire_return_match_direct");
     let source_path = root.join("return_match_direct.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"return-match-direct\"\nversion = \"0.1.0\"\nentry = \"return_match_direct.mire\"\n",
     )
     .expect("write project");
@@ -541,7 +541,7 @@ fn enum_match_without_default_returns_second_variant_string() {
     let root = make_temp_project_root("mire_enum_match_second_variant_string");
     let source_path = root.join("enum_match_second_variant_string.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-second-variant-string\"\nversion = \"0.1.0\"\nentry = \"enum_match_second_variant_string.mire\"\n",
     )
     .expect("write project");
@@ -581,7 +581,7 @@ fn incremental_recompile_keeps_enum_match_string_result_consistent() {
     let root = make_temp_project_root("mire_enum_match_string_flip");
     let source_path = root.join("main.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-string-flip\"\nversion = \"0.1.0\"\nentry = \"main.mire\"\n[cache]\nanalysis_cache = true\ncompression = false\n",
     )
     .expect("write project");
@@ -650,7 +650,7 @@ fn instance_method_call_resolves_and_compiles() {
     let root = make_temp_project_root("mire_instance_method_call");
     let source_path = root.join("instance_method_call.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"instance-method-call\"\nversion = \"0.1.0\"\nentry = \"instance_method_call.mire\"\n",
     )
     .expect("write project");
@@ -686,7 +686,7 @@ fn direct_template_member_access_prints_field_values() {
     let root = make_temp_project_root("mire_direct_template_member_access");
     let source_path = root.join("direct_template_member_access.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"direct-template-member-access\"\nversion = \"0.1.0\"\nentry = \"direct_template_member_access.mire\"\n",
     )
     .expect("write project");
@@ -733,7 +733,7 @@ fn direct_struct_field_assignment_updates_mutable_binding() {
     let root = make_temp_project_root("mire_direct_struct_field_assignment");
     let source_path = root.join("direct_struct_field_assignment.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"direct-struct-field-assignment\"\nversion = \"0.1.0\"\nentry = \"direct_struct_field_assignment.mire\"\n",
     )
     .expect("write project");
@@ -785,7 +785,7 @@ fn struct_with_array_field_declaration_and_construction_compiles() {
     let root = make_temp_project_root("mire_struct_array_field");
     let source_path = root.join("struct_array_field.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"struct-array-field\"\nversion = \"0.1.0\"\nentry = \"struct_array_field.mire\"\n",
     )
     .expect("write project");
@@ -820,7 +820,7 @@ fn static_impl_method_call_resolves_and_runs() {
     let root = make_temp_project_root("mire_static_impl_method_call");
     let source_path = root.join("static_impl_method_call.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"static-impl-method-call\"\nversion = \"0.1.0\"\nentry = \"static_impl_method_call.mire\"\n",
     )
     .expect("write project");
@@ -861,7 +861,7 @@ fn implicit_self_method_return_still_runs() {
     let root = make_temp_project_root("mire_explicit_self_method_return");
     let source_path = root.join("explicit_self_method_return.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"explicit-self-method-return\"\nversion = \"0.1.0\"\nentry = \"explicit_self_method_return.mire\"\n",
     )
     .expect("write project");
@@ -982,7 +982,7 @@ fn runtime_division_by_zero_exits_with_error() {
     let root = make_temp_project_root("mire_runtime_division_by_zero");
     let source_path = root.join("runtime_division_by_zero.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"runtime-division-by-zero\"\nversion = \"0.1.0\"\nentry = \"runtime_division_by_zero.mire\"\n",
     )
     .expect("write project");
@@ -1022,7 +1022,7 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
     let root = make_temp_project_root("mire_signed_division");
     let source_path = root.join("signed_division.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"signed-division\"\nversion = \"0.1.0\"\nentry = \"signed_division.mire\"\n",
     )
     .expect("write project");
@@ -1062,7 +1062,7 @@ fn float_arithmetic_with_typed_float_variable_executes() {
     let root = make_temp_project_root("mire_float_arithmetic_typed_var");
     let source_path = root.join("float_arithmetic_typed_var.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"float-arithmetic-typed-var\"\nversion = \"0.1.0\"\nentry = \"float_arithmetic_typed_var.mire\"\n",
     )
     .expect("write project");
@@ -1116,7 +1116,7 @@ fn secondary_for_loop_binding_compiles_and_uses_index() {
     let root = make_temp_project_root("mire_for_secondary_binding");
     let source_path = root.join("for_secondary_binding.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"for-secondary-binding\"\nversion = \"0.1.0\"\nentry = \"for_secondary_binding.mire\"\n",
     )
     .expect("write project");
@@ -1156,7 +1156,7 @@ fn advanced_literals_compile_and_run() {
     let root = make_temp_project_root("mire_advanced_literals");
     let source_path = root.join("advanced_literals.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"advanced-literals\"\nversion = \"0.1.0\"\nentry = \"advanced_literals.mire\"\n",
     )
     .expect("write project");
@@ -1197,7 +1197,7 @@ fn unsafe_block_compiles_and_runs() {
     let root = make_temp_project_root("mire_unsafe_block");
     let source_path = root.join("unsafe_block.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"unsafe-block\"\nversion = \"0.1.0\"\nentry = \"unsafe_block.mire\"\n",
     )
     .expect("write project");
@@ -1236,7 +1236,7 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
     let root = make_temp_project_root("mire_extern_asm_parse_compile");
     let source_path = root.join("extern_asm_parse_compile.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"extern-asm-parse-compile\"\nversion = \"0.1.0\"\nentry = \"extern_asm_parse_compile.mire\"\n",
     )
     .expect("write project");
@@ -1268,7 +1268,7 @@ fn runtime_out_of_bounds_exits_with_error() {
     let root = make_temp_project_root("mire_runtime_out_of_bounds");
     let source_path = root.join("runtime_out_of_bounds.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"runtime-out-of-bounds\"\nversion = \"0.1.0\"\nentry = \"runtime_out_of_bounds.mire\"\n",
     )
     .expect("write project");
@@ -1320,7 +1320,7 @@ fn strings_split_returns_list_and_works_with_join() {
     let root = make_temp_project_root("mire_strings_split");
     let source_path = root.join("strings_split.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"strings-split\"\nversion = \"0.1.0\"\nentry = \"strings_split.mire\"\n",
     )
     .expect("write project");
@@ -1360,7 +1360,7 @@ fn strings_split_supports_multi_char_delimiter() {
     let root = make_temp_project_root("mire_strings_split_multichar");
     let source_path = root.join("strings_split_multichar.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"strings-split-multichar\"\nversion = \"0.1.0\"\nentry = \"strings_split_multichar.mire\"\n",
     )
     .expect("write project");
@@ -1403,7 +1403,7 @@ fn strings_split_preserves_empty_segments() {
     let root = make_temp_project_root("mire_strings_split_empty_segments");
     let source_path = root.join("strings_split_empty_segments.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"strings-split-empty\"\nversion = \"0.1.0\"\nentry = \"strings_split_empty_segments.mire\"\n",
     )
     .expect("write project");
@@ -1443,7 +1443,7 @@ fn syntax_reference_prototype_compiles_and_runs() {
     let root = make_temp_project_root("mire_syntax_prototype");
     let source_path = root.join("prototype.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"syntax-prototype\"\nversion = \"0.1.0\"\nentry = \"prototype.mire\"\n",
     )
     .expect("write project");
@@ -1483,7 +1483,7 @@ fn array_index_assignment_mutates_elements_in_place() {
     let root = make_temp_project_root("mire_array_index_assignment");
     let source_path = root.join("array_index_assignment.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"array-index-assignment\"\nversion = \"0.1.0\"\nentry = \"array_index_assignment.mire\"\n",
     )
     .expect("write project");
@@ -1523,7 +1523,7 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
     let root = make_temp_project_root("mire_struct_array_index_assignment");
     let source_path = root.join("struct_array_index_assignment.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"struct-array-index-assignment\"\nversion = \"0.1.0\"\nentry = \"struct_array_index_assignment.mire\"\n",
     )
     .expect("write project");
@@ -1563,7 +1563,7 @@ fn shared_reference_lowering_compiles_and_runs() {
     let root = make_temp_project_root("mire_shared_reference_lowering");
     let source_path = root.join("shared_reference_lowering.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"shared-reference-lowering\"\nversion = \"0.1.0\"\nentry = \"shared_reference_lowering.mire\"\n",
     )
     .expect("write project");
@@ -1603,7 +1603,7 @@ fn impl_method_can_mutate_self_field_and_run() {
     let root = make_temp_project_root("mire_impl_self_field_mutation");
     let source_path = root.join("impl_self_field_mutation.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"impl-self-field-mutation\"\nversion = \"0.1.0\"\nentry = \"impl_self_field_mutation.mire\"\n",
     )
     .expect("write project");
@@ -1691,7 +1691,7 @@ fn parses_local_import_with_selection() {
 fn local_import_loads_selected_symbols_from_project_root() {
     let root = make_temp_project_root("mire_local_import");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"local-import\"\nversion = \"0.1.0\"\nentry = \"code/main.mire\"\n",
     )
     .expect("write project");
@@ -1704,7 +1704,7 @@ fn local_import_loads_selected_symbols_from_project_root() {
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
-        "import ./code/helpers: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
+        "import ./helpers: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
     )
     .expect("write main");
 
@@ -1762,7 +1762,7 @@ fn enum_match_payload_statement_body_compiles() {
     let root = make_temp_project_root("mire_enum_match_payload");
     let source_path = root.join("enum_match_payload.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-payload\"\nversion = \"0.1.0\"\nentry = \"enum_match_payload.mire\"\n",
     )
     .expect("write project");
@@ -1794,7 +1794,7 @@ fn enum_match_multiple_payloads_compile() {
     let root = make_temp_project_root("mire_enum_match_multi_payload");
     let source_path = root.join("enum_match_multi_payload.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-multi-payload\"\nversion = \"0.1.0\"\nentry = \"enum_match_multi_payload.mire\"\n",
     )
     .expect("write project");
@@ -1826,7 +1826,7 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
     let root = make_temp_project_root("mire_enum_match_multi_payload_commas");
     let source_path = root.join("enum_match_multi_payload_commas.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-multi-payload-commas\"\nversion = \"0.1.0\"\nentry = \"enum_match_multi_payload_commas.mire\"\n",
     )
     .expect("write project");
@@ -1858,7 +1858,7 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
     let root = make_temp_project_root("mire_enum_match_statement_payload_types");
     let source_path = root.join("enum_match_statement_payload_types.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"enum-match-statement-payload-types\"\nversion = \"0.1.0\"\nentry = \"enum_match_statement_payload_types.mire\"\n",
     )
     .expect("write project");
@@ -2018,7 +2018,7 @@ fn generic_impl_method_codegen_builds_for_concrete_type() {
     let root = make_temp_project_root("mire_generic_impl_codegen");
     let source_path = root.join("main.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"generic-impl\"\nversion = \"0.1.0\"\nentry = \"main.mire\"\n",
     )
     .expect("write project");
@@ -2069,7 +2069,7 @@ fn debug_build_persists_ir_on_disk() {
     let root = make_temp_project_root("mire_debug_persists_ir");
     let source_path = root.join("debug_ir.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"debug-ir\"\nversion = \"0.1.0\"\nentry = \"debug_ir.mire\"\n",
     )
     .expect("write project");
@@ -2108,7 +2108,7 @@ fn debug_build_persists_ir_on_disk() {
 fn incremental_loader_tracks_hashes_for_local_dependencies() {
     let root = make_temp_project_root("mire_incremental_loader");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"incremental-loader\"\nversion = \"0.1.0\"\nentry = \"code/main.mire\"\n",
     )
     .expect("write project");
@@ -2123,7 +2123,7 @@ fn incremental_loader_tracks_hashes_for_local_dependencies() {
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
-        "import ./code/helper: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
+        "import ./helper: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
     )
     .expect("write main");
 
@@ -2167,7 +2167,7 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
     let root = make_temp_project_root("mire_incremental_build_reuse");
     let source_path = root.join("reuse.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"incremental-build\"\nversion = \"0.1.0\"\nentry = \"reuse.mire\"\n",
     )
     .expect("write project");
@@ -2228,7 +2228,7 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
 fn incremental_build_invalidates_on_local_import_change() {
     let root = make_temp_project_root("mire_incremental_build_invalidate");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"incremental-invalidate\"\nversion = \"0.1.0\"\nentry = \"code/main.mire\"\n",
     )
     .expect("write project");
@@ -2243,7 +2243,7 @@ fn incremental_build_invalidates_on_local_import_change() {
     let main_path = root.join("code").join("main.mire");
     fs::write(
         &main_path,
-        "import ./code/helper: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
+        "import ./helper: (helper)\n\npub fn main: () {\n    use helper()\n}\n",
     )
     .expect("write main");
 
@@ -2302,7 +2302,7 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
     let root = make_temp_project_root("mire_incremental_analysis_error_cache");
     let source_path = root.join("broken.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"incremental-analysis-error\"\nversion = \"0.1.0\"\nentry = \"broken.mire\"\n[cache]\nmax_units = 256\nanalysis_cache = true\ncompression = false\n",
     )
     .expect("write project");
@@ -2369,7 +2369,7 @@ fn list_hofs_infer_closure_params_and_execute() {
     let root = make_temp_project_root("mire_list_hofs");
     let source_path = root.join("list_hofs.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"list-hofs\"\nversion = \"0.1.0\"\nentry = \"list_hofs.mire\"\n",
     )
     .expect("write project");
@@ -2410,7 +2410,7 @@ fn nested_map_string_render_executes_without_runtime_errors() {
     let root = make_temp_project_root("mire_nested_map_string");
     let source_path = root.join("nested_map_string.mire");
     fs::write(
-        root.join("project.toml"),
+        root.join("owl.toml"),
         "[project]\nname = \"nested-map-string\"\nversion = \"0.1.0\"\nentry = \"nested_map_string.mire\"\n",
     )
     .expect("write project");

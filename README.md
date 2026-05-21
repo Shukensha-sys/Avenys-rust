@@ -34,8 +34,8 @@ Default profile is `debug` (`-O0`).
 
 - Language syntax (canonical): [SYNTAX.md](./SYNTAX.md)
 - Changelog: [CHANGELOG.md](./CHANGELOG.md)
+- Kioto standard library: [docs/kioto.md](./docs/kioto.md)
 - CLI and technical docs: `docs/`
-- Avenys consolidated changelog: [docs/changelog-avenys.md](./docs/changelog-avenys.md)
 
 ## Editor Extension
 

@@ -34,6 +34,6 @@ CLI simplificada para priorizar integración backend (Avenys/Owl).
 
 ## Notas
 
-- Si no pasas archivo, se intenta resolver `entry` desde `project.toml` u `owl.toml`.
+- Si no pasas archivo, se intenta resolver `entry` desde `owl.toml`.
 - `run` soporta separación de argumentos con `--`.
 - En editor (extensión `mire-language`), si existe `owl.toml` en el workspace se habilitan comandos Owl (`Run/Build`) automáticamente.

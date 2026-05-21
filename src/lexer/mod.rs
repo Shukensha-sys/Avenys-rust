@@ -182,22 +182,36 @@ impl Lexer {
     }
 
     fn skip_comment(&mut self) -> Result<bool> {
-        if self.peek(0) == Some('\\') && self.peek(1) == Some('!') {
+        if self.peek(0) == Some('/') && self.peek(1) == Some('/') {
             self.advance();
             self.advance();
-            while self.pos < self.len {
-                if self.peek(0) == Some('!') && self.peek(1) == Some('\\') {
-                    self.advance();
-                    self.advance();
-                    return Ok(true);
+            if self.peek(0) == Some('!') {
+                self.advance();
+                loop {
+                    match (self.peek(0), self.peek(1), self.peek(2)) {
+                        (Some('!'), Some('/'), Some('/')) => {
+                            self.advance();
+                            self.advance();
+                            self.advance();
+                            return Ok(true);
+                        }
+                        (None, _, _) => {
+                            return Err(MireError::new(ErrorKind::Lexer {
+                                line: self.line,
+                                column: self.column,
+                                message: "Unterminated block comment".to_string(),
+                            }));
+                        }
+                        _ => {
+                            self.advance();
+                        }
+                    }
                 }
+            }
+            while self.pos < self.len && self.peek(0) != Some('\n') {
                 self.advance();
             }
-            return Err(MireError::new(ErrorKind::Lexer {
-                line: self.line,
-                column: self.column,
-                message: "Unterminated comment".to_string(),
-            }));
+            return Ok(true);
         }
         Ok(false)
     }

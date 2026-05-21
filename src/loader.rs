@@ -63,7 +63,7 @@ fn load_shallow_program(path: &Path) -> Result<LoadedProgram> {
     if contains_local_import(&program.statements) {
         return Err(MireError::new(ErrorKind::Runtime {
             message: format!(
-                "Local import statements require a Mire project root with project.toml: '{}'",
+                "Local import statements require a Mire project root with owl.toml: '{}'",
                 path.display()
             ),
         }));
@@ -189,6 +189,29 @@ impl ImportResolver {
                         &imported_path,
                     )?);
                 }
+                Statement::Use {
+                    path,
+                    alias: _,
+                    items,
+                    is_local: false,
+                } if path != "std"
+                    && !path.starts_with("__")
+                    && !path.starts_with("stdall:")
+                    && !path.starts_with("stdselect:")
+                    && !path.starts_with("stdalias:") => {
+                    if let Some(submodules) = items {
+                        let module_dir = self.resolve_module_dir(&path)?;
+                        let imported =
+                            self.load_all_modules(&path, &module_dir, &submodules)?;
+                        direct_dependencies.extend(imported.iter().map(|e| e.origin.clone()));
+                        expanded.extend(imported);
+                    } else {
+                        let module_path = self.resolve_module_path(&path)?;
+                        let imported = self.load_module(&path, &module_path)?;
+                        direct_dependencies.push(module_path);
+                        expanded.extend(imported);
+                    }
+                }
                 other => expanded.push(ExpandedStatement {
                     statement: other,
                     origin: canonical.clone(),
@@ -295,14 +318,10 @@ impl ImportResolver {
         }
 
         let relative = &raw_path[2..];
-        let mut candidate = if importer_path.starts_with(&self.project_root) {
-            self.project_root.join(relative)
-        } else {
-            let importer_dir = importer_path
-                .parent()
-                .unwrap_or(self.project_root.as_path());
-            importer_dir.join(relative)
-        };
+        let importer_dir = importer_path
+            .parent()
+            .unwrap_or(self.project_root.as_path());
+        let mut candidate = importer_dir.join(relative);
         if candidate.extension().is_none() {
             candidate.set_extension("mire");
         }
@@ -358,6 +377,111 @@ impl ImportResolver {
             })
         })
     }
+
+    fn resolve_module_path(&self, name: &str) -> Result<PathBuf> {
+        let project_candidate = self.project_root.join(name).join("lib.mire");
+        if let Ok(path) = project_candidate.canonicalize() {
+            return Ok(path);
+        }
+        let bundled_candidate =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules").join(name).join("lib.mire");
+        bundled_candidate.canonicalize().map_err(|err| {
+            MireError::new(ErrorKind::Runtime {
+                message: format!(
+                    "Could not resolve module '{}' (tried '{}' and '{}'): {}",
+                    name,
+                    project_candidate.display(),
+                    bundled_candidate.display(),
+                    err
+                ),
+            })
+        })
+    }
+
+    fn resolve_module_dir(&self, name: &str) -> Result<PathBuf> {
+        let project_candidate = self.project_root.join(name);
+        if let Ok(path) = project_candidate.canonicalize() {
+            return Ok(path);
+        }
+        let bundled_candidate =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules").join(name);
+        bundled_candidate.canonicalize().map_err(|err| {
+            MireError::new(ErrorKind::Runtime {
+                message: format!(
+                    "Could not resolve module directory '{}' (tried '{}' and '{}'): {}",
+                    name,
+                    project_candidate.display(),
+                    bundled_candidate.display(),
+                    err
+                ),
+            })
+        })
+    }
+
+    fn load_module(&mut self, module_name: &str, path: &Path) -> Result<Vec<ExpandedStatement>> {
+        let loaded = self.load_file(path)?;
+        Ok(loaded
+            .into_iter()
+            .map(|mut stmt| {
+                stmt.statement = prefix_statement_name(&stmt.statement, module_name);
+                stmt
+            })
+            .collect())
+    }
+
+    fn load_all_modules(
+        &mut self,
+        module_name: &str,
+        module_dir: &Path,
+        items: &[String],
+    ) -> Result<Vec<ExpandedStatement>> {
+        let mut result = Vec::new();
+        for item in items {
+            let file_name = format!("{}.mire", item);
+            let file_path = module_dir.join(&file_name);
+            let canonical = file_path.canonicalize().map_err(|err| {
+                MireError::new(ErrorKind::Runtime {
+                    message: format!(
+                        "Could not resolve module file '{}': {}",
+                        file_path.display(),
+                        err
+                    ),
+                })
+            })?;
+            let loaded = self.load_file(&canonical)?;
+            let prefix = if item == "lib" {
+                module_name.to_string()
+            } else {
+                format!("{}.{}", module_name, item)
+            };
+            result.extend(loaded.into_iter().map(|mut stmt| {
+                stmt.statement = prefix_statement_name(&stmt.statement, &prefix);
+                stmt
+            }));
+        }
+        Ok(result)
+    }
+}
+
+fn prefix_statement_name(statement: &Statement, prefix: &str) -> Statement {
+    let mut stmt = statement.clone();
+    let name = match &mut stmt {
+        Statement::Let { name, .. }
+        | Statement::Function { name, .. }
+        | Statement::Type { name, .. }
+        | Statement::Class { name, .. }
+        | Statement::Trait { name, .. }
+        | Statement::Skill { name, .. }
+        | Statement::Module { name, .. }
+        | Statement::Enum { name, .. }
+        | Statement::ExternLib { name, .. }
+        | Statement::ExternFunction { name, .. } => Some(name),
+        _ => None,
+    };
+    if let Some(name) = name {
+        *name = format!("{}.{}", prefix, name);
+    }
+    stmt
 }
 
 fn select_imported_statements(

@@ -1,0 +1,7 @@
+pub fn greet: () {
+    use dasu("hello from kioto")
+}
+
+pub fn version: () :str {
+    return "3.6.0"
+}

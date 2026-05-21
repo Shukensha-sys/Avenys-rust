@@ -1773,16 +1773,22 @@ impl Parser {
                 continue;
             }
 
+            if self.check_double_colon() && Self::is_member_name_token(self.peek_n(2).ttype) {
+                self.advance();
+                self.advance();
+                let member = self.expect_member_name()?;
+                expr = Expression::MemberAccess {
+                    target: Box::new(expr),
+                    member,
+                    data_type: DataType::Unknown,
+                };
+                continue;
+            }
+
             if self.check(TokenType::Lparen) {
                 let call_target = match &expr {
                     Expression::Identifier(Identifier { name, .. }) => Some(name.clone()),
-                    Expression::MemberAccess { target, member, .. } => {
-                        let module = match &**target {
-                            Expression::Identifier(Identifier { name, .. }) => Some(name.clone()),
-                            _ => None,
-                        };
-                        module.map(|m| format!("{}.{}", m, member))
-                    }
+                    Expression::MemberAccess { .. } => Self::member_access_name(&expr),
                     Expression::EnumVariantPath {
                         enum_name,
                         variant_name,
@@ -3308,6 +3314,16 @@ impl Parser {
                 | TokenType::MoveKw
                 | TokenType::OwnKw
         )
+    }
+
+    fn member_access_name(expr: &Expression) -> Option<String> {
+        match expr {
+            Expression::Identifier(Identifier { name, .. }) => Some(name.clone()),
+            Expression::MemberAccess { target, member, .. } => {
+                Self::member_access_name(target).map(|prefix| format!("{}.{}", prefix, member))
+            }
+            _ => None,
+        }
     }
 
     fn is_at_end(&self) -> bool {
