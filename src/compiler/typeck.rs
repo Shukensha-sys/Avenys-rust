@@ -1,15 +1,8 @@
 mod typeck_returns;
 mod typeck_builtins;
 mod typeck_signatures;
-mod typeck_match;
-mod typeck_lifecycle;
-mod typeck_statements_bindings;
-mod typeck_statements_control;
-mod typeck_statements_functions;
-mod typeck_statements_misc;
-mod typeck_statements_nominal;
-mod typeck_expressions_collections;
-mod typeck_expressions_calls;
+mod typeck_statements;
+mod typeck_expressions;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
