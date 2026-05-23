@@ -251,11 +251,11 @@ fn parse_common_with_file(
                 let level = args
                     .get(i)
                     .ok_or_else(|| runtime_msg("Missing optimization level after -O/--opt-level"))?;
-                opt_level = OptLevel::from_str(level)
+                opt_level = OptLevel::parse(level)
                     .ok_or_else(|| runtime_msg("Invalid optimization level, use 0/1/2/3/s/z"))?;
             }
             flag if flag.starts_with("-O") && flag.len() > 2 => {
-                opt_level = OptLevel::from_str(&flag[2..])
+                opt_level = OptLevel::parse(&flag[2..])
                     .ok_or_else(|| runtime_msg("Invalid optimization level, use 0/1/2/3/s/z"))?;
             }
             "-o" | "--output" => {

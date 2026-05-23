@@ -1,9 +1,11 @@
 use super::*;
 
+type TypeParamBounds = Vec<(String, Vec<String>)>;
+
 impl Parser {
     pub(super) fn parse_optional_type_params_with_bounds(
         &mut self,
-    ) -> Result<(Vec<String>, Vec<(String, Vec<String>)>)> {
+    ) -> Result<(Vec<String>, TypeParamBounds)> {
         if !self.check(TokenType::Lbracket) {
             return Ok((Vec::new(), Vec::new()));
         }

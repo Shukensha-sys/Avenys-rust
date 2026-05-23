@@ -2788,6 +2788,7 @@ fn is_word_surface(surface: &str) -> bool {
 
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::parse;
     use crate::parser::ast::{DataType, Expression, Literal, Statement};

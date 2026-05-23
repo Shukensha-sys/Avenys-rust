@@ -895,11 +895,11 @@ impl IncrementalCache {
             if start >= end {
                 continue;
             }
-            if let Some((_, last_end)) = unique_live_ranges.last_mut() {
-                if start <= *last_end {
-                    *last_end = (*last_end).max(end);
-                    continue;
-                }
+            if let Some((_, last_end)) = unique_live_ranges.last_mut()
+                && start <= *last_end
+            {
+                *last_end = (*last_end).max(end);
+                continue;
             }
             unique_live_ranges.push((start, end));
         }

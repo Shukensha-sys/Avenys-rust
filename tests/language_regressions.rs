@@ -93,7 +93,6 @@ fn compile_reports_lexer_error_kind_and_filename() {
     assert!(matches!(err.kind, ErrorKind::Lexer { .. }));
     assert!(
         err.filename()
-            .as_deref()
             .is_some_and(|name| name.ends_with("lexer_error.mire"))
     );
     let rendered = err.to_string();
@@ -112,7 +111,6 @@ fn compile_reports_parser_error_kind_and_filename() {
     assert!(matches!(err.kind, ErrorKind::Parser { .. }));
     assert!(
         err.filename()
-            .as_deref()
             .is_some_and(|name| name.ends_with("parser_error.mire"))
     );
     let rendered = err.to_string();
@@ -131,7 +129,6 @@ fn compile_reports_type_error_kind_and_filename() {
     assert!(matches!(err.kind, ErrorKind::Type { .. }));
     assert!(
         err.filename()
-            .as_deref()
             .is_some_and(|name| name.ends_with("type_error.mire"))
     );
     let rendered = err.to_string();
@@ -150,7 +147,6 @@ fn compile_reports_ownership_error_kind_and_filename() {
     assert!(matches!(err.kind, ErrorKind::Ownership { .. }));
     assert!(
         err.filename()
-            .as_deref()
             .is_some_and(|name| name.ends_with("ownership_error.mire"))
     );
     let rendered = err.to_string();
@@ -199,7 +195,6 @@ fn compile_attributes_imported_type_error_to_imported_file() {
     assert!(matches!(err.kind, ErrorKind::Type { .. }));
     assert!(
         err.filename()
-            .as_deref()
             .is_some_and(|name| name.ends_with("code/lib.mire")),
         "{err:?}"
     );

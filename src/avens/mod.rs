@@ -157,7 +157,7 @@ pub enum OptLevel {
 }
 
 impl OptLevel {
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         match value {
             "0" | "O0" | "o0" => Some(Self::O0),
             "1" | "O1" | "o1" => Some(Self::O1),

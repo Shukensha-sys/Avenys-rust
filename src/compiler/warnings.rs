@@ -228,15 +228,13 @@ impl WarningAnalyzer {
                     self.scan_defs(b);
                 }
             }
-            Statement::Use { path, is_local, .. } => {
-                if !*is_local {
-                    self.imported_modules.push(Identifier {
-                        name: path.clone(),
-                        data_type: DataType::Unknown,
-                        line: 1,
-                        column: 1,
-                    });
-                }
+            Statement::Use { path, is_local, .. } if !*is_local => {
+                self.imported_modules.push(Identifier {
+                    name: path.clone(),
+                    data_type: DataType::Unknown,
+                    line: 1,
+                    column: 1,
+                });
             }
             Statement::If { then_branch, else_branch, .. } => {
                 for s in then_branch {
@@ -286,11 +284,8 @@ impl WarningAnalyzer {
                     None,
                 );
             }
-            Statement::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.scan_expr(expr);
-                }
-            }
+            Statement::Return(Some(expr)) => self.scan_expr(expr),
+            Statement::Return(None) => {}
             Statement::If { condition, then_branch, else_branch } => {
                 self.scan_expr(condition);
                 if then_branch.is_empty() && else_branch.as_ref().is_none_or(|v| v.is_empty()) {
@@ -398,11 +393,10 @@ impl WarningAnalyzer {
                     );
                 }
             }
-            Statement::Break | Statement::Continue => {
-                if self.loop_depth == 0 {
-                    self.push_warn(DiagnosticCode::W0019, "Control Flow", "break/continue outside loop".to_string(), 1, 1, None);
-                }
+            Statement::Break | Statement::Continue if self.loop_depth == 0 => {
+                self.push_warn(DiagnosticCode::W0019, "Control Flow", "break/continue outside loop".to_string(), 1, 1, None);
             }
+            Statement::Break | Statement::Continue => {}
             Statement::Use { path, .. } => {
                 self.used_imports.insert(path.clone());
             }
@@ -528,10 +522,10 @@ impl WarningAnalyzer {
                         self.push_warn(DiagnosticCode::W0022, "Negative Literal", "negative literal used directly".to_string(), 1, 1, None);
                     }
                 }
-                if let Literal::Str(s) = lit {
-                    if s.len() > 120 {
-                        self.push_warn(DiagnosticCode::W0024, "Long String Literal", "very long string literal".to_string(), 1, 1, None);
-                    }
+                if let Literal::Str(s) = lit
+                    && s.len() > 120
+                {
+                    self.push_warn(DiagnosticCode::W0024, "Long String Literal", "very long string literal".to_string(), 1, 1, None);
                 }
             }
             Expression::Tuple { elements, .. } => {
@@ -617,34 +611,21 @@ fn contains_explicit_return(statements: &[Statement]) -> bool {
                 then_branch,
                 else_branch,
                 ..
-            } => {
-                if contains_explicit_return(then_branch)
-                    || else_branch
-                        .as_ref()
-                        .is_some_and(|branch| contains_explicit_return(branch))
-                {
-                    return true;
-                }
-            }
+            } if contains_explicit_return(then_branch)
+                || else_branch
+                    .as_ref()
+                    .is_some_and(|branch| contains_explicit_return(branch)) => return true,
             Statement::While { body, .. }
             | Statement::For { body, .. }
             | Statement::Find { body, .. }
             | Statement::Function { body, .. }
             | Statement::Unsafe { body }
-            | Statement::Module { body, .. } => {
-                if contains_explicit_return(body) {
-                    return true;
-                }
-            }
-            Statement::Match { cases, default, .. } => {
+            | Statement::Module { body, .. } if contains_explicit_return(body) => return true,
+            Statement::Match { cases, default, .. }
                 if cases
                     .iter()
                     .any(|(_, body)| contains_explicit_return(body))
-                    || contains_explicit_return(default)
-                {
-                    return true;
-                }
-            }
+                    || contains_explicit_return(default) => return true,
             _ => {}
         }
     }

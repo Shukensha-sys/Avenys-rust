@@ -944,11 +944,11 @@ impl TypeChecker {
                     }
                 }
 
-                if name == "move::" {
-                    if let Some(first) = arg_types.first() {
-                        *data_type = first.clone();
-                        return Ok(first.clone());
-                    }
+                if name == "move::"
+                    && let Some(first) = arg_types.first()
+                {
+                    *data_type = first.clone();
+                    return Ok(first.clone());
                 }
 
                 if name == "drop::" {
@@ -1729,13 +1729,13 @@ impl TypeChecker {
 
         let mut covered = std::collections::HashSet::new();
         for (pattern, _) in cases {
-            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)? {
-                if !covered.insert(variant_name.to_string()) {
-                    return Err(type_error(format!(
-                        "Duplicate match arm for enum variant '{}.{}'",
-                        enum_name, variant_name
-                    )));
-                }
+            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)?
+                && !covered.insert(variant_name.to_string())
+            {
+                return Err(type_error(format!(
+                    "Duplicate match arm for enum variant '{}.{}'",
+                    enum_name, variant_name
+                )));
             }
         }
 
@@ -1768,13 +1768,13 @@ impl TypeChecker {
 
         let mut covered = std::collections::HashSet::new();
         for (pattern, _) in cases {
-            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)? {
-                if !covered.insert(variant_name.to_string()) {
-                    return Err(type_error(format!(
-                        "Duplicate match arm for enum variant '{}.{}'",
-                        enum_name, variant_name
-                    )));
-                }
+            if let Some(variant_name) = self.variant_name_from_match_pattern(pattern, enum_name)?
+                && !covered.insert(variant_name.to_string())
+            {
+                return Err(type_error(format!(
+                    "Duplicate match arm for enum variant '{}.{}'",
+                    enum_name, variant_name
+                )));
             }
         }
 
