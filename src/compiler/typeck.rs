@@ -7,6 +7,7 @@ mod typeck_statements_bindings;
 mod typeck_statements_control;
 mod typeck_statements_functions;
 mod typeck_statements_misc;
+mod typeck_statements_nominal;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -361,49 +362,9 @@ impl TypeChecker {
                 type_name,
                 methods,
                 ..
-            } => {
-                self.validate_impl_method_declarations(type_name, methods)?;
-                if let Some(trait_name) = trait_name {
-                    self.validate_trait_impl(trait_name, type_name, methods)?;
-                }
-                let old_self = self.impl_self_type.take();
-                let old_self_name = self.impl_self_name.take();
-                let method_mask = self
-                    .current_nested_statement_mask()
-                    .map(|mask| mask.to_vec());
-
-                for (method_index, method) in methods.iter_mut().enumerate() {
-                    if method_mask
-                        .as_ref()
-                        .and_then(|mask| mask.get(method_index))
-                        .is_some_and(|should_check| !should_check)
-                    {
-                        continue;
-                    }
-                    let has_self = matches!(
-                        method,
-                        Statement::Function { params, .. }
-                            if params.iter().any(|(param_name, _)| param_name == "self")
-                    );
-                    self.impl_self_type =
-                        has_self.then(|| DataType::StructNamed(type_name.clone()));
-                    self.impl_self_name = has_self.then(|| type_name.clone());
-                    self.check_statement(method)?;
-                }
-
-                self.impl_self_type = old_self;
-                self.impl_self_name = old_self_name;
-            }
-            Statement::Type { fields, .. } => self.check_container_statements(fields)?,
-            Statement::Skill { name, methods } => {
-                if methods.is_empty() {
-                    return Err(type_error(format!(
-                        "Skill '{}' must declare at least one method",
-                        name
-                    )));
-                }
-                self.validate_trait_method_declarations(name, methods, "Skill")?;
-            }
+            } => self.check_impl_statement(trait_name, type_name, methods)?,
+            Statement::Type { fields, .. } => self.check_type_statement(fields)?,
+            Statement::Skill { name, methods } => self.check_skill_statement(name, methods)?,
             Statement::Break
             | Statement::Continue
             | Statement::ExternLib { .. }
