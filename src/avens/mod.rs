@@ -21,6 +21,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+mod utils;
+use utils::{
+    escape_llvm_string, normalize_nominal_name, sanitize_symbol, string_byte_len,
+    strip_root_namespace,
+};
+
 fn prepare_program_with_partial_analysis_reuse(
     current_program: &mut Program,
     cached: CachedAnalysisSnapshot,
@@ -7706,53 +7712,3 @@ impl LlvmIrGen {
     }
 }
 
-fn string_byte_len(value: &str) -> usize {
-    value.len()
-}
-
-fn escape_llvm_string(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        match byte {
-            b'\\' => out.push_str("\\5C"),
-            b'"' => out.push_str("\\22"),
-            b'\n' => out.push_str("\\0A"),
-            b'\r' => out.push_str("\\0D"),
-            b'\t' => out.push_str("\\09"),
-            32..=126 => out.push(byte as char),
-            _ => out.push_str(&format!("\\{:02X}", byte)),
-        }
-    }
-    out
-}
-
-fn sanitize_symbol(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-fn normalize_nominal_name(value: &str) -> String {
-    value
-        .split_once('[')
-        .map(|(base, _)| base.to_string())
-        .unwrap_or_else(|| value.to_string())
-}
-
-fn strip_root_namespace(value: &str) -> Option<String> {
-    let mut parts = value.split('.');
-    let _root = parts.next()?;
-    let second = parts.next()?;
-    Some(parts.fold(second.to_string(), |mut acc, segment| {
-        acc.push('.');
-        acc.push_str(segment);
-        acc
-    }))
-}
