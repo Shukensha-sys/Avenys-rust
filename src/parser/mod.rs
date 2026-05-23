@@ -1,8 +1,6 @@
 pub mod ast;
 mod imports;
-mod lifecycle;
-mod match_syntax;
-mod pipeline;
+mod syntax;
 mod types;
 
 use crate::error::{ErrorKind, MireError, Result};
@@ -12,7 +10,7 @@ use crate::parser::ast::{
     Visibility,
 };
 use std::collections::{HashMap, HashSet};
-use self::pipeline::{contains_self_placeholder, replace_self_placeholder};
+use self::syntax::{contains_self_placeholder, replace_self_placeholder};
 
 pub use ast::{EnumDef, EnumVariantDef, MireValue, Program};
 
