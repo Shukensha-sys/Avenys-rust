@@ -4,6 +4,7 @@ mod typeck_signatures;
 mod typeck_match;
 mod typeck_lifecycle;
 mod typeck_statements_bindings;
+mod typeck_statements_control;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -364,94 +365,19 @@ impl TypeChecker {
                 condition,
                 then_branch,
                 else_branch,
-            } => {
-                let cond_type = self.check_expression(condition)?;
-                if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "If condition must be bool, got {:?}",
-                        cond_type
-                    )));
-                }
-
-                self.push_scope();
-                self.check_statements(then_branch)?;
-                self.pop_scope();
-
-                if let Some(branch) = else_branch {
-                    self.push_scope();
-                    self.check_statements(branch)?;
-                    self.pop_scope();
-                }
-            }
-            Statement::While { condition, body } => {
-                let cond_type = self.check_expression(condition)?;
-                if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "While condition must be bool, got {:?}",
-                        cond_type
-                    )));
-                }
-
-                self.push_scope();
-                self.check_statements(body)?;
-                self.pop_scope();
-            }
+            } => self.check_if_statement(condition, then_branch, else_branch)?,
+            Statement::While { condition, body } => self.check_while_statement(condition, body)?,
             Statement::For {
                 variable,
                 index,
                 iterable,
                 body,
-            } => {
-                let iter_type = self.check_expression(iterable)?;
-                self.push_scope();
-
-                let item_type = match iterable {
-                    Expression::Call { name, .. } if name == "range" => DataType::I64,
-                    _ => match iter_type {
-                        DataType::Array { element_type, .. } | DataType::Slice { element_type } => {
-                            *element_type
-                        }
-                        DataType::Tuple => DataType::Anything,
-                        DataType::List => DataType::Anything,
-                        DataType::Vector { element_type, .. } => *element_type,
-                        DataType::Str => DataType::Str,
-                        _ => DataType::Anything,
-                    },
-                };
-                self.insert_var(variable.clone(), item_type, true);
-                if let Some(index_name) = index {
-                    self.insert_var(index_name.clone(), DataType::I64, true);
-                }
-
-                self.check_statements(body)?;
-                self.pop_scope();
-            }
+            } => self.check_for_statement(variable, index, iterable, body)?,
             Statement::Find {
                 variable,
                 iterable,
                 body,
-            } => {
-                let iter_type = self.check_expression(iterable)?;
-                self.push_scope();
-
-                let item_type = match iterable {
-                    Expression::Call { name, .. } if name == "range" => DataType::I64,
-                    _ => match iter_type {
-                        DataType::Array { element_type, .. } | DataType::Slice { element_type } => {
-                            *element_type
-                        }
-                        DataType::Tuple => DataType::Anything,
-                        DataType::List => DataType::Anything,
-                        DataType::Vector { element_type, .. } => *element_type,
-                        DataType::Str => DataType::Str,
-                        _ => DataType::Anything,
-                    },
-                };
-                self.insert_var(variable.clone(), item_type, true);
-
-                self.check_statements(body)?;
-                self.pop_scope();
-            }
+            } => self.check_find_statement(variable, iterable, body)?,
             Statement::Expression(expr) => {
                 self.check_expression(expr)?;
             }
@@ -459,35 +385,7 @@ impl TypeChecker {
                 value,
                 cases,
                 default,
-            } => {
-                let value_type = self.check_expression(value)?;
-                self.validate_match_coverage(&value_type, cases, !default.is_empty())?;
-                for (case_expr, case_body) in cases.iter_mut() {
-                    if !Self::is_match_identifier_pattern(case_expr) {
-                        let case_type = self.check_match_pattern(case_expr)?;
-                        if value_type != DataType::Unknown
-                            && case_type != DataType::Unknown
-                            && !self.is_assignable(&value_type, &case_type)
-                        {
-                            return Err(type_error(format!(
-                                "Match case type mismatch: value is {:?}, case is {:?}",
-                                value_type, case_type
-                            )));
-                        }
-                    }
-
-                    self.push_scope();
-
-                    self.insert_match_pattern_bindings(case_expr);
-
-                    self.check_statements(case_body)?;
-                    self.pop_scope();
-                }
-
-                self.push_scope();
-                self.check_statements(default)?;
-                self.pop_scope();
-            }
+            } => self.check_match_statement(value, cases, default)?,
             Statement::Unsafe { body } | Statement::Module { body, .. } => {
                 self.push_scope();
                 self.check_statements(body)?;
