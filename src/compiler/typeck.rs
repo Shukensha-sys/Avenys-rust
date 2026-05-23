@@ -9,6 +9,7 @@ mod typeck_statements_functions;
 mod typeck_statements_misc;
 mod typeck_statements_nominal;
 mod typeck_expressions_collections;
+mod typeck_expressions_calls;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -499,118 +500,10 @@ impl TypeChecker {
                     return Ok(resolved);
                 }
 
-                if let Some(sig) = self.functions.get(name).cloned() {
-                    if sig.params.len() != arg_types.len() {
-                        return Err(type_error(format!(
-                            "Function '{}' expects {} arguments, got {}",
-                            name,
-                            sig.params.len(),
-                            arg_types.len()
-                        )));
-                    }
-
-                    let resolved_type_args = if sig.type_params.is_empty() {
-                        if !type_args.is_empty() {
-                            return Err(type_error(format!(
-                                "Function '{}' is not generic; remove explicit type arguments",
-                                name
-                            )));
-                        }
-                        Vec::new()
-                    } else {
-                        self.resolve_generic_type_args(&sig, type_args, &arg_types)?
-                    };
-                    self.validate_generic_bounds(name, &sig, &resolved_type_args)?;
-                    let generic_bindings = self.generic_bindings_from_args(&sig, &resolved_type_args);
-
-                    for (idx, (expected, actual)) in sig
-                        .params
-                        .iter()
-                        .map(|param| self.substitute_generics(param, &generic_bindings))
-                        .zip(arg_types.iter())
-                        .enumerate()
-                    {
-                        if !self.is_assignable(&expected, actual) {
-                            return Err(type_error(format!(
-                                "Function '{}' argument {} expects {:?}, got {:?}",
-                                name,
-                                idx + 1,
-                                expected,
-                                actual
-                            )));
-                        }
-                    }
-
-                    if !resolved_type_args.is_empty() {
-                        *type_args = resolved_type_args;
-                    }
-                    let ret = self.substitute_generics(&sig.return_type, &generic_bindings);
-                    *data_type = ret.clone();
-                    return Ok(ret);
-                }
-
-                if let Some(alias_name) = Self::strip_root_namespace(name)
-                    && let Some(sig) = self.functions.get(&alias_name).cloned()
+                if let Some(resolved) =
+                    self.infer_function_or_builtin_call(name, &arg_types, type_args, data_type)?
                 {
-                    if sig.params.len() != arg_types.len() {
-                        return Err(type_error(format!(
-                            "Function '{}' expects {} arguments, got {}",
-                            alias_name,
-                            sig.params.len(),
-                            arg_types.len()
-                        )));
-                    }
-
-                    let resolved_type_args = if sig.type_params.is_empty() {
-                        if !type_args.is_empty() {
-                            return Err(type_error(format!(
-                                "Function '{}' is not generic; remove explicit type arguments",
-                                alias_name
-                            )));
-                        }
-                        Vec::new()
-                    } else {
-                        self.resolve_generic_type_args(&sig, type_args, &arg_types)?
-                    };
-                    self.validate_generic_bounds(&alias_name, &sig, &resolved_type_args)?;
-                    let generic_bindings = self.generic_bindings_from_args(&sig, &resolved_type_args);
-
-                    for (idx, (expected, actual)) in sig
-                        .params
-                        .iter()
-                        .map(|param| self.substitute_generics(param, &generic_bindings))
-                        .zip(arg_types.iter())
-                        .enumerate()
-                    {
-                        if !self.is_assignable(&expected, actual) {
-                            return Err(type_error(format!(
-                                "Function '{}' argument {} expects {:?}, got {:?}",
-                                alias_name,
-                                idx + 1,
-                                expected,
-                                actual
-                            )));
-                        }
-                    }
-
-                    if !resolved_type_args.is_empty() {
-                        *type_args = resolved_type_args;
-                    }
-                    let ret = self.substitute_generics(&sig.return_type, &generic_bindings);
-                    *data_type = ret.clone();
-                    return Ok(ret);
-                }
-
-                if let Some(ret) = self.builtin_returns.get(name).cloned() {
-                    *data_type = ret.clone();
-                    return Ok(ret);
-                }
-
-                if let Some(rest) = name.strip_prefix("std.")
-                    && let Some(ret) = self.builtin_returns.get(rest).cloned()
-                {
-                    *data_type = ret.clone();
-                    return Ok(ret);
+                    return Ok(resolved);
                 }
 
                 // Check class constructors BEFORE enum variants.
