@@ -2,6 +2,15 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.8.4] - 2026-05-23
+
+### Changed
+- Compiler modularization phase 2:
+  - parser import parsing moved to `src/parser/imports.rs`
+  - parser type parsing and generic type-parameter helpers moved to `src/parser/types.rs`
+  - type checker builtin registry/import helpers moved to `src/compiler/typeck/typeck_builtins.rs`
+- `src/parser/mod.rs` and `src/compiler/typeck.rs` reduced as orchestration layers while preserving behavior.
+
 ## [3.8.3] - 2026-05-23
 
 ### Changed
