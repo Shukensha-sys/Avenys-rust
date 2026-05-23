@@ -22,10 +22,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 mod utils;
+mod manifest;
+mod toolchain;
 use utils::{
     escape_llvm_string, normalize_nominal_name, sanitize_symbol, string_byte_len,
     strip_root_namespace,
 };
+pub use manifest::{
+    find_project_root, load_project_manifest, project_lock_path, project_manifest_path,
+    write_lock_file,
+};
+use toolchain::{compile_binary_from_ir, optimize_ir};
 
 fn prepare_program_with_partial_analysis_reuse(
     current_program: &mut Program,
@@ -248,74 +255,6 @@ pub struct MireLockBuild {
     pub llvm_version: String,
     pub profile: String,
     pub opt_level: String,
-}
-
-pub fn load_project_manifest(cwd: &Path) -> Result<Option<MireManifest>> {
-    let manifest_path = project_manifest_path(cwd);
-    if !manifest_path.exists() {
-        let legacy = cwd.join("Mire.toml");
-        if !legacy.exists() {
-            return Ok(None);
-        }
-        return load_manifest_file(&legacy);
-    }
-
-    load_manifest_file(&manifest_path)
-}
-
-fn load_manifest_file(manifest_path: &Path) -> Result<Option<MireManifest>> {
-    if !manifest_path.exists() {
-        return Ok(None);
-    }
-
-    let raw = fs::read_to_string(manifest_path).map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Could not read '{}': {}", manifest_path.display(), err),
-        })
-    })?;
-
-    let manifest: MireManifest = toml::from_str(&raw).map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Invalid Mire.toml: {}", err),
-        })
-    })?;
-
-    Ok(Some(manifest))
-}
-
-pub fn write_lock_file(cwd: &Path, manifest: &MireManifest, mode: BuildMode) -> Result<()> {
-    let llvm_version = llvm_version()?;
-    let lock = MireLock {
-        project: MireLockProject {
-            name: manifest.project.name.clone(),
-            version: manifest.project.version.clone(),
-        },
-        build: MireLockBuild {
-            llvm_version,
-            profile: match mode {
-                BuildMode::Debug => "debug".to_string(),
-                BuildMode::Release => "release".to_string(),
-            },
-            opt_level: match mode {
-                BuildMode::Debug => "0".to_string(),
-                BuildMode::Release => "3".to_string(),
-            },
-        },
-    };
-
-    let raw = toml::to_string_pretty(&lock).map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Could not serialize Mire.lock: {}", err),
-        })
-    })?;
-
-    fs::write(project_lock_path(cwd), raw).map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Could not write project.lock: {}", err),
-        })
-    })?;
-
-    Ok(())
 }
 
 pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> Result<BuildResult> {
@@ -583,141 +522,6 @@ pub fn default_output_dir(source_path: &Path, mode: BuildMode) -> PathBuf {
             BuildMode::Debug => "debug",
             BuildMode::Release => "release",
         })
-}
-
-fn optimize_ir(ir: &str, opt_level: OptLevel) -> Result<String> {
-    let mut command = Command::new("opt");
-    command
-        .arg("-S")
-        .arg(opt_level.as_opt_flag())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped());
-    let mut child = command.spawn().map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Failed to run opt: {}", err),
-        })
-    })?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(ir.as_bytes()).map_err(|err| {
-            MireError::new(ErrorKind::Runtime {
-                message: format!("Failed to stream IR into opt: {}", err),
-            })
-        })?;
-    }
-    let output = child.wait_with_output().map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Failed to wait for opt: {}", err),
-        })
-    })?;
-    if !output.status.success() {
-        return Err(MireError::new(ErrorKind::Runtime {
-            message: format!(
-                "opt failed with status {}.\nstderr:\n{}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr).trim()
-            ),
-        }));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-fn compile_binary_from_ir(
-    ir: &str,
-    runtime_support: &Path,
-    binary_path: &Path,
-    opt_level: OptLevel,
-) -> Result<()> {
-    let mut clang = Command::new("clang");
-    clang
-        .arg("-x")
-        .arg("ir")
-        .arg("-")
-        .arg("-x")
-        .arg("c")
-        .arg(runtime_support)
-        .arg("-o")
-        .arg(binary_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    clang.arg(opt_level.as_opt_flag());
-
-    let mut child = clang.spawn().map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Failed to run clang: {}", err),
-        })
-    })?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(ir.as_bytes()).map_err(|err| {
-            MireError::new(ErrorKind::Runtime {
-                message: format!("Failed to stream IR into clang: {}", err),
-            })
-        })?;
-    }
-    let output = child.wait_with_output().map_err(|err| {
-        MireError::new(ErrorKind::Runtime {
-            message: format!("Failed to wait for clang: {}", err),
-        })
-    })?;
-    if output.status.success() {
-        return Ok(());
-    }
-
-    Err(MireError::new(ErrorKind::Runtime {
-        message: format!(
-            "clang failed with status {}.\nstdout:\n{}\nstderr:\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stdout).trim(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ),
-    }))
-}
-
-pub fn find_project_root(start: &Path) -> Option<PathBuf> {
-    let mut current = Some(start);
-    while let Some(path) = current {
-        if path.join("owl.toml").exists()
-            || path.join("Mire.toml").exists()
-        {
-            return Some(path.to_path_buf());
-        }
-        current = path.parent();
-    }
-    None
-}
-
-pub fn project_manifest_path(cwd: &Path) -> PathBuf {
-    if cwd.join("owl.toml").exists() {
-        return cwd.join("owl.toml");
-    }
-    cwd.join("Mire.toml")
-}
-
-pub fn project_lock_path(cwd: &Path) -> PathBuf {
-    if cwd.join("owl.lock").exists() {
-        return cwd.join("owl.lock");
-    }
-    if cwd.join("project.lock").exists() {
-        return cwd.join("project.lock");
-    }
-    cwd.join("Mire.lock")
-}
-
-fn llvm_version() -> Result<String> {
-    let output = Command::new("llvm-config")
-        .arg("--version")
-        .output()
-        .map_err(|err| {
-            MireError::new(ErrorKind::Runtime {
-                message: format!("Failed to run llvm-config: {}", err),
-            })
-        })?;
-    if !output.status.success() {
-        return Err(MireError::new(ErrorKind::Runtime {
-            message: "llvm-config --version failed".to_string(),
-        }));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -7711,4 +7515,3 @@ impl LlvmIrGen {
         Ok(lines.join("\n"))
     }
 }
-
