@@ -358,9 +358,6 @@ impl SemanticModelBuilder {
                 }
                 self.with_scope(|builder| builder.visit_statements(default));
             }
-            Statement::Class { methods, .. } | Statement::Code { methods, .. } => {
-                self.visit_statements(methods);
-            }
             Statement::Impl {
                 type_name, methods, ..
             } => {
@@ -383,15 +380,8 @@ impl SemanticModelBuilder {
                     self.visit_expression(expr);
                 }
             }
-            Statement::Module { body, .. }
-            | Statement::DmireTable { body, .. }
-            | Statement::DmireColumn { body, .. } => {
+            Statement::Module { body, .. } => {
                 self.with_scope(|builder| builder.visit_statements(body));
-            }
-            Statement::DmireDlist { data, .. } => {
-                for expr in data {
-                    self.visit_expression(expr);
-                }
             }
             Statement::Query { bindings, ops, .. } => {
                 self.with_scope(|builder| {
@@ -441,10 +431,8 @@ impl SemanticModelBuilder {
             }
             Statement::Break
             | Statement::Continue
-            | Statement::Trait { .. }
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
-            | Statement::AddLib { .. }
             | Statement::Use { .. }
             | Statement::Enum { .. } => {}
         }
@@ -752,10 +740,6 @@ impl SemanticModelBuilder {
             MireValue::Dict(_) => DataType::Dict,
             MireValue::Tuple(_) => DataType::Tuple,
             MireValue::Function(_) | MireValue::Builtinfn(_) => DataType::Function,
-            MireValue::Object { .. } | MireValue::Instance { .. } => DataType::Anything,
-            MireValue::Trait { name, .. } => DataType::DynTrait {
-                trait_name: name.clone(),
-            },
             MireValue::Ref { is_mutable, .. } => {
                 if *is_mutable {
                     DataType::mutable_ref(DataType::Unknown)

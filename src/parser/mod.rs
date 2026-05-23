@@ -3549,16 +3549,9 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
         Statement::Query { .. }
         | Statement::Break
         | Statement::Continue
-        | Statement::Code { .. }
-        | Statement::Class { .. }
-        | Statement::Trait { .. }
         | Statement::ExternLib { .. }
         | Statement::ExternFunction { .. }
-        | Statement::AddLib { .. }
         | Statement::Use { .. }
-        | Statement::DmireTable { .. }
-        | Statement::DmireColumn { .. }
-        | Statement::DmireDlist { .. }
         | Statement::Enum { .. } => false,
     }
 }

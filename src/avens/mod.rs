@@ -119,8 +119,6 @@ fn prepare_nested_reuse(
 fn container_children(statement: &Statement) -> Option<&[Statement]> {
     match statement {
         Statement::Type { fields, .. } => Some(fields.as_slice()),
-        Statement::Class { methods, .. }
-        | Statement::Code { methods, .. }
         | Statement::Impl { methods, .. } => Some(methods.as_slice()),
         _ => None,
     }
@@ -129,8 +127,6 @@ fn container_children(statement: &Statement) -> Option<&[Statement]> {
 fn container_children_mut(statement: &mut Statement) -> Option<&mut Vec<Statement>> {
     match statement {
         Statement::Type { fields, .. } => Some(fields),
-        Statement::Class { methods, .. }
-        | Statement::Code { methods, .. }
         | Statement::Impl { methods, .. } => Some(methods),
         _ => None,
     }
@@ -1355,15 +1351,8 @@ impl LlvmIrGen {
             // Frontend-only declarations/analysis statements: currently no direct IR emission.
             Statement::Type { .. }
             | Statement::Skill { .. }
-            | Statement::Code { .. }
-            | Statement::Class { .. }
-            | Statement::Trait { .. }
             | Statement::Impl { .. }
             | Statement::Enum { .. }
-            | Statement::AddLib { .. }
-            | Statement::DmireTable { .. }
-            | Statement::DmireColumn { .. }
-            | Statement::DmireDlist { .. }
             | Statement::Query { .. }
             => Err(MireError::new(ErrorKind::Backend {
                 message: "Avenys statement is parsed/typechecked but not lowered in backend yet"

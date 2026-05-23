@@ -2,6 +2,16 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.8.2] - 2026-05-23
+
+### Changed
+- Removed legacy AST/runtime variants and dead compiler branches:
+  - `Statement::{Class, Trait, Code, AddLib, DmireTable, DmireColumn, DmireDlist}`
+  - `MireValue::{Object, Trait, Instance}`
+- Cleaned parser/type checker/borrow checker/semantic model/backend/incremental paths to stop matching and hashing removed legacy nodes.
+- Simplified and updated internal tests that depended on legacy class/code units.
+- Updated planning docs (`todo.md`) with current completion status and remaining high-impact performance tasks.
+
 ## [3.8.1] - 2026-05-23
 
 ### Changed

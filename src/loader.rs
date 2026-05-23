@@ -491,8 +491,6 @@ fn prefix_statement_name(statement: &Statement, prefix: &str) -> Statement {
         Statement::Let { name, .. }
         | Statement::Function { name, .. }
         | Statement::Type { name, .. }
-        | Statement::Class { name, .. }
-        | Statement::Trait { name, .. }
         | Statement::Skill { name, .. }
         | Statement::Module { name, .. }
         | Statement::Enum { name, .. } => Some(name),

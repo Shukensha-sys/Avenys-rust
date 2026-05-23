@@ -1,12 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::PathBuf;
 
 use crate::compiler::AnalysisSelection;
 use crate::error::{MireError, Result};
 use crate::incremental::analysis_unit_key;
-use crate::lexer::tokenize;
-use crate::parser::Parser;
 use crate::parser::ast::{
     AssignmentTarget, DataType, Expression, Identifier, Literal, MireValue, Program, QueryOp,
     Statement, TraitMethodSig,
@@ -110,7 +107,6 @@ struct TypeChecker {
     impl_traits: HashMap<String, HashSet<String>>,
     builtin_returns: HashMap<String, DataType>,
     return_type_stack: Vec<DataType>,
-    visited_libs: HashSet<String>,
     impl_self_type: Option<DataType>,
     impl_self_name: Option<String>,
     statement_origins: Vec<String>,
@@ -137,7 +133,6 @@ impl TypeChecker {
             impl_traits: HashMap::new(),
             builtin_returns: Self::default_builtin_returns(),
             return_type_stack: Vec::new(),
-            visited_libs: HashSet::new(),
             impl_self_type: None,
             impl_self_name: None,
             statement_origins: Vec::new(),
@@ -700,41 +695,6 @@ impl TypeChecker {
                         },
                     );
                 }
-                Statement::Trait { name, methods } => {
-                    self.traits.insert(
-                        name.clone(),
-                        TraitSig {
-                            methods: methods.clone(),
-                        },
-                    );
-                }
-                Statement::Class { name, methods, .. } => {
-                    let fields = methods
-                        .iter()
-                        .filter_map(|statement| match statement {
-                            Statement::Let {
-                                name,
-                                data_type,
-                                value,
-                                ..
-                            } => Some(ClassFieldSig {
-                                name: name.clone(),
-                                data_type: data_type.clone(),
-                                has_default: value.is_some(),
-                            }),
-                            _ => None,
-                        })
-                        .collect();
-                    self.classes.insert(
-                        name.clone(),
-                        ClassSig {
-                            type_params: Vec::new(),
-                            type_param_bounds: Vec::new(),
-                            fields,
-                        },
-                    );
-                    self.collect_function_signatures(methods)?
-                }
                 Statement::Type {
                     name,
                     type_params,
@@ -768,10 +728,6 @@ impl TypeChecker {
                     );
                     self.collect_function_signatures(fields)?
                 }
-                Statement::Code { .. } => {
-                    // Code no longer supported
-                }
-                Statement::AddLib { path } => self.collect_library_signatures(path)?,
                 Statement::Enum {
                     name,
                     type_params,
@@ -797,24 +753,6 @@ impl TypeChecker {
             }
         }
         Ok(())
-    }
-
-    fn collect_library_signatures(&mut self, path: &str) -> Result<()> {
-        if !self.visited_libs.insert(path.to_string()) {
-            return Ok(());
-        }
-
-        let source = fs::read_to_string(path)
-            .map_err(|err| type_error(format!("Failed to read library '{}': {}", path, err)))?;
-        let tokens = tokenize(&source).map_err(|err| {
-            err.with_source(source.clone())
-                .with_filename(path.to_string())
-        })?;
-        let mut parser = Parser::new(tokens);
-        let imported = parser
-            .parse()
-            .map_err(|err| err.with_source(source).with_filename(path.to_string()))?;
-        self.collect_function_signatures(&imported.statements)
     }
 
     fn check_statements(&mut self, statements: &mut [Statement]) -> Result<()> {
@@ -1165,10 +1103,7 @@ impl TypeChecker {
                 self.check_statements(default)?;
                 self.pop_scope();
             }
-            Statement::Unsafe { body }
-            | Statement::Module { body, .. }
-            | Statement::DmireTable { body, .. }
-            | Statement::DmireColumn { body, .. } => {
+            Statement::Unsafe { body } | Statement::Module { body, .. } => {
                 self.push_scope();
                 self.check_statements(body)?;
                 self.pop_scope();
@@ -1229,12 +1164,6 @@ impl TypeChecker {
                     self.check_query_op(op)?;
                 }
             }
-            Statement::DmireDlist { data, .. } => {
-                for expr in data.iter_mut() {
-                    self.check_expression(expr)?;
-                }
-            }
-            Statement::Class { methods, .. } => self.check_container_statements(methods)?,
             Statement::Impl {
                 trait_name,
                 type_name,
@@ -1274,7 +1203,6 @@ impl TypeChecker {
                 self.impl_self_name = old_self_name;
             }
             Statement::Type { fields, .. } => self.check_container_statements(fields)?,
-            Statement::Code { methods, .. } => self.check_container_statements(methods)?,
             Statement::Skill { name, methods } => {
                 if methods.is_empty() {
                     return Err(type_error(format!(
@@ -1284,15 +1212,11 @@ impl TypeChecker {
                 }
                 self.validate_trait_method_declarations(name, methods, "Skill")?;
             }
-            Statement::Trait { name, methods } => {
-                self.validate_trait_method_declarations(name, methods, "Trait")?;
-            }
             Statement::Break
             | Statement::Continue
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
             | Statement::Enum { .. } => {}
-            Statement::AddLib { .. } => {}
             Statement::Use { path, .. } => {
                 if path == "__std_all__" {
                     for module in ["math", "term", "strings", "lists", "dicts", "time"] {
@@ -2615,10 +2539,6 @@ impl TypeChecker {
             }
             MireValue::Tuple(_) => DataType::Tuple,
             MireValue::Function(_) | MireValue::Builtinfn(_) => DataType::Function,
-            MireValue::Object { .. } | MireValue::Instance { .. } => DataType::Anything,
-            MireValue::Trait { .. } => DataType::DynTrait {
-                trait_name: "trait".to_string(),
-            },
             MireValue::Ref { is_mutable, .. } => {
                 if *is_mutable {
                     DataType::RefMut {
@@ -4506,9 +4426,7 @@ fn statement_contains_explicit_return(statement: &Statement) -> bool {
         | Statement::For { body, .. }
         | Statement::Find { body, .. }
         | Statement::Unsafe { body }
-        | Statement::Module { body, .. }
-        | Statement::DmireTable { body, .. }
-        | Statement::DmireColumn { body, .. } => statements_contain_explicit_return(body),
+        | Statement::Module { body, .. } => statements_contain_explicit_return(body),
         Statement::Match { cases, default, .. } => {
             cases
                 .iter()
@@ -4517,8 +4435,6 @@ fn statement_contains_explicit_return(statement: &Statement) -> bool {
         }
         Statement::Function { body, .. }
         | Statement::Type { fields: body, .. }
-        | Statement::Class { methods: body, .. }
-        | Statement::Code { methods: body, .. }
         | Statement::Impl { methods: body, .. } => statements_contain_explicit_return(body),
         _ => false,
     }
@@ -4914,7 +4830,7 @@ mod tests {
     }
 
     #[test]
-    fn partial_typecheck_can_skip_nested_members_in_type_class_and_code() {
+    fn partial_typecheck_can_skip_nested_members_in_type_and_impl_members() {
         let mut program = Program {
             statements: vec![
                 Statement::Type {
@@ -4948,14 +4864,16 @@ mod tests {
                         },
                     ],
                 },
-                Statement::Class {
-                    name: "PointClass".to_string(),
-                    parent: None,
+                Statement::Impl {
+                    trait_name: None,
+                    type_name: "PointType".to_string(),
+                    type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     methods: vec![
                         Statement::Function {
                             name: "good".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
+                            type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
                                 1,
@@ -4966,43 +4884,8 @@ mod tests {
                         },
                         Statement::Function {
                             name: "bad".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
-                            params: vec![],
-                            body: vec![Statement::Return(Some(Expression::Identifier(
-                                Identifier {
-                                    name: "missing".to_string(),
-                                    data_type: DataType::Unknown,
-                                    line: 0,
-                                    column: 0,
-                                },
-                            )))],
-                            return_type: DataType::I64,
-                            visibility: Visibility::Public,
-                            is_method: true,
-                        },
-                    ],
-                },
-                Statement::Code {
-                    trait_name: "Drawable".to_string(),
-                    type_name: "PointCode".to_string(),
-                    methods: vec![
-                        Statement::Function {
-                            name: "draw".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
-                            params: vec![],
-                            body: vec![Statement::Return(Some(Expression::Literal(Literal::Int(
-                                1,
-                            ))))],
-                            return_type: DataType::I64,
-                            visibility: Visibility::Public,
-                            is_method: true,
-                        },
-                        Statement::Function {
-                            name: "broken".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
+                            type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             params: vec![],
                             body: vec![Statement::Return(Some(Expression::Identifier(
                                 Identifier {
@@ -5027,15 +4910,13 @@ mod tests {
             &[
                 PathBuf::from("test.mire"),
                 PathBuf::from("test.mire"),
-                PathBuf::from("test.mire"),
             ],
             &HashMap::new(),
             &AnalysisSelection {
-                statement_mask: vec![true, true, true],
+                statement_mask: vec![true, true],
                 nested_statement_masks: HashMap::from([
                     ("PointType".to_string(), vec![true, false]),
-                    ("PointClass".to_string(), vec![true, false]),
-                    ("code::Drawable::PointCode".to_string(), vec![true, false]),
+                    ("impl::PointType".to_string(), vec![true, false]),
                 ]),
             },
         )

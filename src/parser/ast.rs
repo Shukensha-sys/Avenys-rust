@@ -542,20 +542,6 @@ pub enum Statement {
         name: String,
         methods: Vec<TraitMethodSig>,
     },
-    Code {
-        trait_name: String,
-        type_name: String,
-        methods: Vec<Statement>,
-    },
-    Class {
-        name: String,
-        parent: Option<String>,
-        methods: Vec<Statement>,
-    },
-    Trait {
-        name: String,
-        methods: Vec<TraitMethodSig>,
-    },
     Impl {
         trait_name: Option<String>,
         type_name: String,
@@ -580,9 +566,6 @@ pub enum Statement {
     },
     Asm {
         instructions: Vec<(String, Expression)>,
-    },
-    AddLib {
-        path: String,
     },
     Use {
         path: String,
@@ -616,20 +599,6 @@ pub enum Statement {
         #[serde(default)]
         type_param_bounds: Vec<(String, Vec<String>)>,
         variants: Vec<EnumVariantDef>,
-    },
-    DmireTable {
-        name: String,
-        columns: Vec<String>,
-        body: Vec<Statement>,
-    },
-    DmireColumn {
-        name: String,
-        col_type: Option<String>,
-        body: Vec<Statement>,
-    },
-    DmireDlist {
-        index: usize,
-        data: Vec<Expression>,
     },
     Query {
         table: String,
@@ -722,21 +691,6 @@ pub enum MireValue {
     Tuple(Vec<MireValue>),
     Function(FunctionDef),
     Builtinfn(String),
-    Object {
-        class_name: String,
-        parent: Option<String>,
-        fields: Vec<((String, MireValue), DataType)>,
-        methods: Vec<FunctionDef>,
-    },
-    Trait {
-        name: String,
-        methods: Vec<TraitMethodSig>,
-    },
-    Instance {
-        class_name: String,
-        fields: Vec<((String, MireValue), DataType)>,
-        methods: Vec<FunctionDef>,
-    },
     Ref {
         value: Box<MireValue>,
         is_mutable: bool,
@@ -827,8 +781,6 @@ impl MireValue {
             }
             (MireValue::Function(_), MireValue::Function(_)) => false,
             (MireValue::Builtinfn(a), MireValue::Builtinfn(b)) => a == b,
-            (MireValue::Object { .. }, MireValue::Object { .. }) => false,
-            (MireValue::Instance { .. }, MireValue::Instance { .. }) => false,
             (MireValue::Ref { .. }, MireValue::Ref { .. }) => false,
             (MireValue::Box { .. }, MireValue::Box { .. }) => false,
             (

@@ -333,9 +333,6 @@ impl<'a> BorrowChecker<'a> {
                 }
                 self.impl_owner_stack.pop();
             }
-            Statement::Class { methods, .. } | Statement::Code { methods, .. } => {
-                self.check_statements(methods)?;
-            }
             Statement::Type { fields, .. } => {
                 self.check_statements(fields)?;
             }
@@ -353,9 +350,7 @@ impl<'a> BorrowChecker<'a> {
                     self.check_expression(expr)?;
                 }
             }
-            Statement::Module { body, .. }
-            | Statement::DmireTable { body, .. }
-            | Statement::DmireColumn { body, .. } => {
+            Statement::Module { body, .. } => {
                 self.push_scope();
                 self.check_statements(body)?;
                 self.pop_scope();
@@ -395,17 +390,10 @@ impl<'a> BorrowChecker<'a> {
                 }
                 self.pop_scope();
             }
-            Statement::DmireDlist { data, .. } => {
-                for expr in data {
-                    self.check_expression(expr)?;
-                }
-            }
             Statement::Break
             | Statement::Continue
-            | Statement::Trait { .. }
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
-            | Statement::AddLib { .. }
             | Statement::Use { .. }
             | Statement::Enum { .. } => {}
         }
@@ -990,9 +978,7 @@ fn statement_contains_explicit_return(statement: &Statement) -> bool {
         | Statement::For { body, .. }
         | Statement::Find { body, .. }
         | Statement::Unsafe { body }
-        | Statement::Module { body, .. }
-        | Statement::DmireTable { body, .. }
-        | Statement::DmireColumn { body, .. } => statements_contain_explicit_return(body),
+        | Statement::Module { body, .. } => statements_contain_explicit_return(body),
         Statement::Match { cases, default, .. } => {
             cases
                 .iter()
@@ -1001,8 +987,6 @@ fn statement_contains_explicit_return(statement: &Statement) -> bool {
         }
         Statement::Function { body, .. }
         | Statement::Type { fields: body, .. }
-        | Statement::Class { methods: body, .. }
-        | Statement::Code { methods: body, .. }
         | Statement::Impl { methods: body, .. } => statements_contain_explicit_return(body),
         _ => false,
     }

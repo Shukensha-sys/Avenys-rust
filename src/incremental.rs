@@ -170,8 +170,6 @@ pub struct AnalysisUnitMetadata {
 pub enum AnalysisUnitKind {
     Function,
     Type,
-    Class,
-    Code,
     Enum,
     Impl,
     Field,
@@ -1067,8 +1065,6 @@ pub fn statement_export_name(statement: &Statement) -> Option<&str> {
         Statement::Let { name, .. }
         | Statement::Function { name, .. }
         | Statement::Type { name, .. }
-        | Statement::Class { name, .. }
-        | Statement::Trait { name, .. }
         | Statement::Skill { name, .. }
         | Statement::Module { name, .. }
         | Statement::Enum { name, .. }
@@ -1766,15 +1762,6 @@ fn analysis_unit_for_statement(statement: &Statement) -> AnalysisUnitMetadata {
     let (unit_key, unit_kind) = match statement {
         Statement::Function { name, .. } => (name.clone(), AnalysisUnitKind::Function),
         Statement::Type { name, .. } => (name.clone(), AnalysisUnitKind::Type),
-        Statement::Class { name, .. } => (name.clone(), AnalysisUnitKind::Class),
-        Statement::Code {
-            trait_name,
-            type_name,
-            ..
-        } => (
-            format!("code::{trait_name}::{type_name}"),
-            AnalysisUnitKind::Code,
-        ),
         Statement::Enum { name, .. } => (name.clone(), AnalysisUnitKind::Enum),
         Statement::Impl { type_name, .. } => (format!("impl::{type_name}"), AnalysisUnitKind::Impl),
         other => (
@@ -1803,25 +1790,13 @@ pub fn analysis_child_unit_key(parent_key: &str, child: &Statement, child_index:
         Statement::Function { name, .. } => {
             if let Some(type_name) = parent_key.strip_prefix("impl::") {
                 format!("{type_name}.{name}")
-            } else if let Some(rest) = parent_key.strip_prefix("code::") {
-                let type_name = rest
-                    .rsplit_once("::")
-                    .map(|(_, type_name)| type_name)
-                    .unwrap_or(rest);
-                format!("{type_name}.{name}")
             } else {
                 format!("{parent_key}.{name}")
             }
         }
         Statement::Let { name, .. } => format!("{parent_key}#{name}"),
         Statement::Type { name, .. }
-        | Statement::Class { name, .. }
         | Statement::Enum { name, .. } => format!("{parent_key}::{name}"),
-        Statement::Code {
-            trait_name,
-            type_name,
-            ..
-        } => format!("{parent_key}::code::{trait_name}::{type_name}"),
         Statement::Impl {
             trait_name,
             type_name,
@@ -1851,14 +1826,12 @@ fn analysis_child_unit_for_statement(
         Statement::Let { .. }
             if matches!(
                 parent_kind,
-                AnalysisUnitKind::Type | AnalysisUnitKind::Class
+                AnalysisUnitKind::Type
             ) =>
         {
             AnalysisUnitKind::Field
         }
         Statement::Type { .. } => AnalysisUnitKind::Type,
-        Statement::Class { .. } => AnalysisUnitKind::Class,
-        Statement::Code { .. } => AnalysisUnitKind::Code,
         Statement::Enum { .. } => AnalysisUnitKind::Enum,
         Statement::Impl { .. } => AnalysisUnitKind::Impl,
         _ => AnalysisUnitKind::Other,
@@ -1876,8 +1849,6 @@ fn analysis_child_unit_for_statement(
 fn direct_analysis_children(statement: &Statement) -> Option<&[Statement]> {
     match statement {
         Statement::Type { fields, .. } => Some(fields.as_slice()),
-        Statement::Class { methods, .. }
-        | Statement::Code { methods, .. }
         | Statement::Impl { methods, .. } => Some(methods.as_slice()),
         _ => None,
     }
@@ -1984,21 +1955,22 @@ fn collect_statement_dependencies(statement: &Statement, deps: &mut Vec<String>)
             }
         }
         Statement::Type { fields, .. }
-        | Statement::Class {
-            methods: fields, ..
-        }
-        | Statement::Code {
-            methods: fields, ..
-        }
         | Statement::Unsafe { body: fields }
         | Statement::Module { body: fields, .. }
-        | Statement::DmireTable { body: fields, .. }
-        | Statement::DmireColumn { body: fields, .. }
         | Statement::Impl {
             methods: fields, ..
         } => {
             for statement in fields {
                 collect_statement_dependencies(statement, deps);
+            }
+        }
+        Statement::Skill { methods, .. } => {
+            for method in methods {
+                deps.push(method.name.clone());
+                for (_, data_type) in &method.params {
+                    collect_type_dependencies(data_type, deps);
+                }
+                collect_type_dependencies(&method.return_type, deps);
             }
         }
         Statement::ExternFunction {
@@ -2074,21 +2046,7 @@ fn collect_statement_dependencies(statement: &Statement, deps: &mut Vec<String>)
             deps.push(name.clone());
             deps.push(path.clone());
         }
-        Statement::Skill { methods, .. } | Statement::Trait { methods, .. } => {
-            for method in methods {
-                deps.push(method.name.clone());
-                for (_, data_type) in &method.params {
-                    collect_type_dependencies(data_type, deps);
-                }
-                collect_type_dependencies(&method.return_type, deps);
-            }
-        }
-        Statement::DmireDlist { data, .. } => {
-            for expr in data {
-                collect_expression_dependencies(expr, deps);
-            }
-        }
-        Statement::Break | Statement::Continue | Statement::AddLib { .. } => {}
+        Statement::Break | Statement::Continue => {}
     }
 }
 
@@ -2350,31 +2308,6 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             name.hash(hasher);
             hash_trait_methods(methods, hasher);
         }
-        Statement::Code {
-            trait_name,
-            type_name,
-            methods,
-        } => {
-            hasher.write_u8(14);
-            trait_name.hash(hasher);
-            type_name.hash(hasher);
-            hash_statements(methods, hasher);
-        }
-        Statement::Class {
-            name,
-            parent,
-            methods,
-        } => {
-            hasher.write_u8(15);
-            name.hash(hasher);
-            parent.hash(hasher);
-            hash_statements(methods, hasher);
-        }
-        Statement::Trait { name, methods } => {
-            hasher.write_u8(16);
-            name.hash(hasher);
-            hash_trait_methods(methods, hasher);
-        }
         Statement::Impl {
             trait_name,
             type_name,
@@ -2382,7 +2315,7 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             type_params,
             type_param_bounds,
         } => {
-            hasher.write_u8(17);
+            hasher.write_u8(14);
             trait_name.hash(hasher);
             type_name.hash(hasher);
             type_params.hash(hasher);
@@ -2417,10 +2350,6 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
                 name.hash(hasher);
                 hash_expression(expr, hasher);
             }
-        }
-        Statement::AddLib { path } => {
-            hasher.write_u8(22);
-            path.hash(hasher);
         }
         Statement::Use {
             path,
@@ -2472,31 +2401,6 @@ fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             type_params.hash(hasher);
             type_param_bounds.hash(hasher);
             hash_enum_variants(variants, hasher);
-        }
-        Statement::DmireTable {
-            name,
-            columns,
-            body,
-        } => {
-            hasher.write_u8(28);
-            name.hash(hasher);
-            columns.hash(hasher);
-            hash_statements(body, hasher);
-        }
-        Statement::DmireColumn {
-            name,
-            col_type,
-            body,
-        } => {
-            hasher.write_u8(29);
-            name.hash(hasher);
-            col_type.hash(hasher);
-            hash_statements(body, hasher);
-        }
-        Statement::DmireDlist { index, data } => {
-            hasher.write_u8(30);
-            index.hash(hasher);
-            hash_expressions(data, hasher);
         }
         Statement::Query {
             table,
@@ -3048,43 +2952,6 @@ fn hash_mire_value(value: &MireValue, hasher: &mut FxHasher) {
             hasher.write_u8(18);
             name.hash(hasher);
         }
-        MireValue::Object {
-            class_name,
-            parent,
-            fields,
-            methods,
-        } => {
-            hasher.write_u8(19);
-            class_name.hash(hasher);
-            parent.hash(hasher);
-            fields.len().hash(hasher);
-            for ((name, value), dt) in fields {
-                name.hash(hasher);
-                hash_mire_value(value, hasher);
-                hash_data_type(dt, hasher);
-            }
-            hash_function_defs(methods, hasher);
-        }
-        MireValue::Trait { name, methods } => {
-            hasher.write_u8(20);
-            name.hash(hasher);
-            hash_trait_methods(methods, hasher);
-        }
-        MireValue::Instance {
-            class_name,
-            fields,
-            methods,
-        } => {
-            hasher.write_u8(21);
-            class_name.hash(hasher);
-            fields.len().hash(hasher);
-            for ((name, value), dt) in fields {
-                name.hash(hasher);
-                hash_mire_value(value, hasher);
-                hash_data_type(dt, hasher);
-            }
-            hash_function_defs(methods, hasher);
-        }
         MireValue::Ref { value, is_mutable } => {
             hasher.write_u8(22);
             hash_mire_value(value, hasher);
@@ -3135,13 +3002,6 @@ fn hash_function_def(function: &FunctionDef, hasher: &mut FxHasher) {
     for (name, value) in &function.capture {
         name.hash(hasher);
         hash_mire_value(value, hasher);
-    }
-}
-
-fn hash_function_defs(functions: &[FunctionDef], hasher: &mut FxHasher) {
-    functions.len().hash(hasher);
-    for function in functions {
-        hash_function_def(function, hasher);
     }
 }
 
@@ -3623,43 +3483,15 @@ mod tests {
                         visibility: Visibility::Public,
                     }],
                 },
-                Statement::Class {
-                    name: "PointClass".to_string(),
-                    parent: None,
-                    methods: vec![Statement::Function {
-                        name: "good".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
-                        params: vec![],
-                        body: vec![],
-                        return_type: DataType::None,
-                        visibility: Visibility::Public,
-                        is_method: true,
-                    }],
-                },
-                Statement::Code {
-                    trait_name: "Drawable".to_string(),
-                    type_name: "PointCode".to_string(),
-                    methods: vec![Statement::Function {
-                        name: "draw".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
-                        params: vec![],
-                        body: vec![],
-                        return_type: DataType::None,
-                        visibility: Visibility::Public,
-                        is_method: true,
-                    }],
-                },
                 Statement::Impl {
                     trait_name: None,
                     type_name: "PointImpl".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
+                    type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     methods: vec![Statement::Function {
                         name: "new".to_string(),
-            type_params: Vec::new(),
-            type_param_bounds: Vec::new(),
+                        type_params: Vec::new(),
+                        type_param_bounds: Vec::new(),
                         params: vec![],
                         body: vec![],
                         return_type: DataType::None,
@@ -3675,10 +3507,6 @@ mod tests {
 
         assert!(keys.contains(&"PointType".to_string()));
         assert!(keys.contains(&"PointType#x".to_string()));
-        assert!(keys.contains(&"PointClass".to_string()));
-        assert!(keys.contains(&"PointClass.good".to_string()));
-        assert!(keys.contains(&"code::Drawable::PointCode".to_string()));
-        assert!(keys.contains(&"PointCode.draw".to_string()));
         assert!(keys.contains(&"impl::PointImpl".to_string()));
         assert!(keys.contains(&"PointImpl.new".to_string()));
     }

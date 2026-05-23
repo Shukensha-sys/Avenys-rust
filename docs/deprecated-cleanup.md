@@ -2,25 +2,25 @@
 
 Estado resumido de limpieza de sintaxis legacy en Avenys/Mire.
 
-## Hecho (3.8.1)
+## Hecho (3.8.2)
 
 - `none` eliminado como keyword de entrada.
 - `mu` queda como único literal/tipo unitario oficial.
 - `trait` y `code` ya no se parsean como sintaxis de usuario.
 - `?` queda reservado y ahora produce error léxico explícito.
+- Eliminadas variantes legacy internas del AST y pases asociados:
+  - `Statement::Code`
+  - `Statement::Class`
+  - `Statement::Trait`
+  - `Statement::AddLib`
+  - `Statement::Dmire*`
 
-## Pendiente (interno)
+## Pendiente (siguiente fase)
 
-Estas rutas legacy siguen en el AST/passes internos por compatibilidad técnica temporal y deben retirarse en una fase dedicada:
+- Modularización de `parser` y `typeck` para cerrar deuda estructural restante.
+- Optimización incremental por reachability real (import graph selectivo).
 
-- `Statement::Code`
-- `Statement::Class`
-- `Statement::Trait`
-- `Statement::AddLib`
-- `Statement::Dmire*`
+## Validación
 
-## Criterio de cierre
-
-- Remover variantes legacy del AST.
-- Remover arms muertos en typeck/borrowck/semantic/incremental/backend.
-- Mantener 100% de tests de regresión en verde.
+- Build completo: OK.
+- Suite de tests (`unit + language_regressions`): OK.
