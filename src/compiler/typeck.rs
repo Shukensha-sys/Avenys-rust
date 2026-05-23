@@ -6,6 +6,7 @@ mod typeck_lifecycle;
 mod typeck_statements_bindings;
 mod typeck_statements_control;
 mod typeck_statements_functions;
+mod typeck_statements_misc;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -14,7 +15,7 @@ use crate::compiler::AnalysisSelection;
 use crate::error::{MireError, Result};
 use crate::incremental::analysis_unit_key;
 use crate::parser::ast::{
-    AssignmentTarget, DataType, Expression, Identifier, Literal, MireValue, Program, QueryOp,
+    AssignmentTarget, DataType, Expression, Identifier, Literal, MireValue, Program,
     Statement, TraitMethodSig,
 };
 use self::typeck_returns::{implicit_return_expression_mut, statements_contain_explicit_return};
@@ -338,66 +339,23 @@ impl TypeChecker {
                 default,
             } => self.check_match_statement(value, cases, default)?,
             Statement::Unsafe { body } | Statement::Module { body, .. } => {
-                self.push_scope();
-                self.check_statements(body)?;
-                self.pop_scope();
+                self.check_scoped_body(body)?
             }
-            Statement::Asm { instructions } => {
-                for (_, expr) in instructions.iter_mut() {
-                    self.check_expression(expr)?;
-                }
-            }
-            Statement::Drop { value } => {
-                self.check_expression(value)?;
-            }
+            Statement::Asm { instructions } => self.check_asm_statement(instructions)?,
+            Statement::Drop { value } => self.check_drop_statement(value)?,
             Statement::New {
                 value,
                 declared_type,
-            } => {
-                self.validate_new_target_type(declared_type)?;
-                if let Some(initial) = value {
-                    let initial_ty = self.check_expression(initial)?;
-                    if !self.is_assignable(declared_type, &initial_ty) {
-                        return Err(type_error(format!(
-                            "new:: value type mismatch: declared {:?}, got {:?}",
-                            declared_type, initial_ty
-                        )));
-                    }
-                }
-            }
-            Statement::Own { value, inner_type } => {
-                self.validate_own_target_type(inner_type)?;
-                if let Some(initial) = value {
-                    let initial_ty = self.check_expression(initial)?;
-                    if !self.is_assignable(inner_type, &initial_ty) {
-                        return Err(type_error(format!(
-                            "own:: value type mismatch: declared {:?}, got {:?}",
-                            inner_type, initial_ty
-                        )));
-                    }
-                }
-            }
-            Statement::Move { target, value } => {
-                let moved_type = self.check_expression(value)?;
-                self.insert_var(target.clone(), moved_type.clone(), true);
-                self.refresh_binding_metadata(target, &moved_type, Some(value));
-            }
+            } => self.check_new_statement(value, declared_type)?,
+            Statement::Own { value, inner_type } => self.check_own_statement(value, inner_type)?,
+            Statement::Move { target, value } => self.check_move_statement(target, value)?,
             Statement::Query {
                 ops,
                 bindings,
                 group_by: _,
                 joins: _,
                 table: _,
-            } => {
-                for bind in bindings.iter() {
-                    self.insert_var(bind.target.clone(), DataType::Anything, true);
-                    self.insert_var(bind.alias.clone(), DataType::Anything, true);
-                }
-
-                for op in ops.iter_mut() {
-                    self.check_query_op(op)?;
-                }
-            }
+            } => self.check_query_statement(ops, bindings)?,
             Statement::Impl {
                 trait_name,
                 type_name,
@@ -451,78 +409,7 @@ impl TypeChecker {
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
             | Statement::Enum { .. } => {}
-            Statement::Use { path, .. } => {
-                if path == "__std_all__" {
-                    for module in ["math", "term", "strings", "lists", "dicts", "time"] {
-                        typeck_builtins::import_std_members(self, module);
-                    }
-                } else if let Some(rest) = path.strip_prefix("stdall:") {
-                    typeck_builtins::import_std_members(self, rest);
-                } else if let Some(rest) = path.strip_prefix("stdselect:") {
-                    if let Some((_, items)) = rest.split_once(':') {
-                        for item in items.split(',').filter(|item| !item.is_empty()) {
-                            self.insert_var(item.to_string(), DataType::Anything, true);
-                        }
-                    }
-                } else if let Some(rest) = path.strip_prefix("stdalias:") {
-                    if let Some((alias, _)) = rest.split_once(':') {
-                        self.insert_var(alias.to_string(), DataType::Anything, true);
-                    }
-                } else if let Some(rest) = path.strip_prefix("stdaliasselect:") {
-                    let mut parts = rest.splitn(3, ':');
-                    if let Some(alias) = parts.next() {
-                        self.insert_var(alias.to_string(), DataType::Anything, true);
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn check_query_op(&mut self, op: &mut QueryOp) -> Result<()> {
-        match op {
-            QueryOp::Insert { assigns } => {
-                for (_, expr) in assigns.iter_mut() {
-                    self.check_expression(expr)?;
-                }
-            }
-            QueryOp::Update { condition, assigns } => {
-                let cond_type = self.check_expression(condition)?;
-                if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query update condition must be bool, got {:?}",
-                        cond_type
-                    )));
-                }
-                for (_, expr) in assigns.iter_mut() {
-                    self.check_expression(expr)?;
-                }
-            }
-            QueryOp::Delete { condition } => {
-                let cond_type = self.check_expression(condition)?;
-                if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query delete condition must be bool, got {:?}",
-                        cond_type
-                    )));
-                }
-            }
-            QueryOp::Get(get) => {
-                let cond_type = self.check_expression(&mut get.condition)?;
-                if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query get condition must be bool, got {:?}",
-                        cond_type
-                    )));
-                }
-
-                self.push_scope();
-                self.insert_var(get.target.clone(), DataType::Anything, true);
-                self.check_statements(&mut get.body)?;
-                self.pop_scope();
-            }
-            QueryOp::Export { .. } | QueryOp::Import { .. } => {}
+            Statement::Use { path, .. } => self.check_use_statement(path),
         }
 
         Ok(())
