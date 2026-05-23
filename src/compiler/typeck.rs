@@ -2,6 +2,7 @@ mod typeck_returns;
 mod typeck_builtins;
 mod typeck_signatures;
 mod typeck_match;
+mod typeck_lifecycle;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -914,47 +915,9 @@ impl TypeChecker {
                     return Ok(resolved);
                 }
 
-                if name == "new::" {
-                    if args.is_empty() {
-                        if *data_type == DataType::Unknown {
-                            return Err(type_error(
-                                "new::() requires a type annotation (:T)".to_string(),
-                            ));
-                        }
-                        return Ok(data_type.clone());
-                    }
-                    if args.len() == 1 {
-                        *data_type = arg_types[0].clone();
-                        return Ok(arg_types[0].clone());
-                    }
-                }
-
-                if name == "own::" {
-                    if args.is_empty() {
-                        if *data_type == DataType::Unknown {
-                            return Err(type_error(
-                                "own::() requires a type annotation (:T)".to_string(),
-                            ));
-                        }
-                        *data_type = DataType::Box;
-                        return Ok(DataType::Box);
-                    }
-                    if args.len() == 1 {
-                        *data_type = DataType::Box;
-                        return Ok(DataType::Box);
-                    }
-                }
-
-                if name == "move::"
-                    && let Some(first) = arg_types.first()
+                if let Some(resolved) = self.infer_lifecycle_call(name, args, &arg_types, data_type)?
                 {
-                    *data_type = first.clone();
-                    return Ok(first.clone());
-                }
-
-                if name == "drop::" {
-                    *data_type = DataType::None;
-                    return Ok(DataType::None);
+                    return Ok(resolved);
                 }
 
                 if let Some(resolved) = self.resolve_instance_method_call(name, &arg_types)? {
@@ -1633,53 +1596,6 @@ impl TypeChecker {
                 Ok(data_type.clone())
             }
         }
-    }
-
-    fn validate_new_target_type(&self, declared_type: &DataType) -> Result<()> {
-        if matches!(
-            declared_type,
-            DataType::Array { .. } | DataType::Vector { .. } | DataType::Map { .. }
-        ) {
-            return Ok(());
-        }
-
-        Err(type_error(format!(
-            "new:: only supports arr/vec/map targets, got {:?}",
-            declared_type
-        )))
-    }
-
-    fn validate_own_target_type(&self, inner_type: &DataType) -> Result<()> {
-        if matches!(
-            inner_type,
-            DataType::I8
-                | DataType::I16
-                | DataType::I32
-                | DataType::I64
-                | DataType::U8
-                | DataType::U16
-                | DataType::U32
-                | DataType::U64
-                | DataType::F32
-                | DataType::F64
-                | DataType::Bool
-                | DataType::Char
-                | DataType::Str
-                | DataType::Struct
-                | DataType::StructNamed(_)
-                | DataType::Enum
-                | DataType::EnumNamed(_)
-                | DataType::Array { .. }
-                | DataType::Vector { .. }
-                | DataType::Map { .. }
-        ) {
-            return Ok(());
-        }
-
-        Err(type_error(format!(
-            "own:: target type {:?} is not heap-allocatable",
-            inner_type
-        )))
     }
 
     fn resolve_binary_type(
