@@ -5,6 +5,7 @@ mod typeck_match;
 mod typeck_lifecycle;
 mod typeck_statements_bindings;
 mod typeck_statements_control;
+mod typeck_statements_functions;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -302,65 +303,15 @@ impl TypeChecker {
                 body,
                 return_type,
                 ..
-            } => {
-                self.functions.insert(
-                    name.clone(),
-                    FunctionSig {
-                        type_params: type_params.clone(),
-                        type_param_bounds: type_param_bounds.clone(),
-                        params: params.iter().map(|(_, t)| t.clone()).collect(),
-                        return_type: return_type.clone(),
-                    },
-                );
-
-                self.push_scope();
-                for (param_name, param_type) in params.iter() {
-                    self.insert_var(param_name.clone(), param_type.clone(), true);
-                    self.refresh_binding_metadata(param_name, param_type, None);
-                }
-
-                self.return_type_stack.push(return_type.clone());
-                self.check_statements(body)?;
-                if !statements_contain_explicit_return(body)
-                    && let Some(expr) = implicit_return_expression_mut(body)
-                {
-                    let tail_type = self.check_expression(expr)?;
-                    if let Some(current) = self.return_type_stack.last_mut() {
-                        let unified = Self::unify_types(current, &tail_type)?;
-                        *current = unified;
-                    }
-                }
-                let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
-
-                if *return_type == DataType::Unknown {
-                    *return_type = inferred_return.clone();
-                } else if inferred_return != DataType::Unknown
-                    && !self.is_assignable(return_type, &inferred_return)
-                {
-                    return Err(type_error(format!(
-                        "Function '{}' return type mismatch: declared {:?}, inferred {:?}",
-                        name, return_type, inferred_return
-                    )));
-                }
-
-                self.pop_scope();
-
-                if let Some(sig) = self.functions.get_mut(name) {
-                    sig.return_type = return_type.clone();
-                }
-            }
-            Statement::Return(expr) => {
-                let return_type = if let Some(expression) = expr {
-                    self.check_expression(expression)?
-                } else {
-                    DataType::None
-                };
-
-                if let Some(current) = self.return_type_stack.last_mut() {
-                    let unified = Self::unify_types(current, &return_type)?;
-                    *current = unified;
-                }
-            }
+            } => self.check_function_statement(
+                name,
+                type_params,
+                type_param_bounds,
+                params,
+                body,
+                return_type,
+            )?,
+            Statement::Return(expr) => self.check_return_statement(expr)?,
             Statement::If {
                 condition,
                 then_branch,
