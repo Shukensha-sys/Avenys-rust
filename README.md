@@ -2,7 +2,7 @@
 
 Mire is a compiled, statically typed programming language with ownership-oriented memory safety checks and an LLVM-based backend.
 
-Current compiler crate version: `2.8.0`.
+Current compiler crate version: `3.8.0`.
 
 ## Status
 
@@ -34,6 +34,7 @@ Default profile is `debug` (`-O0`).
 
 - Language syntax (canonical): [SYNTAX.md](./SYNTAX.md)
 - Changelog: [CHANGELOG.md](./CHANGELOG.md)
+  - Includes reconstructed early-history notes for v1.x-v2.5.4 based on commit archaeology.
 - Kioto standard library: [docs/kioto.md](./docs/kioto.md)
 - CLI and technical docs: `docs/`
 

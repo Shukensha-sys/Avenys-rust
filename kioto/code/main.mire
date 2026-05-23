@@ -1,0 +1,5 @@
+import kioto
+
+pub fn main: () {
+    use dasu("Kioto v" + kioto::version())
+}

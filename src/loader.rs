@@ -383,14 +383,25 @@ impl ImportResolver {
         if let Ok(path) = project_candidate.canonicalize() {
             return Ok(path);
         }
+        let workspace_project_candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join(name)
+            .join("modules")
+            .join("lib.mire");
+        if let Ok(path) = workspace_project_candidate.canonicalize() {
+            return Ok(path);
+        }
         let bundled_candidate =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules").join(name).join("lib.mire");
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("src/modules")
+                .join(name)
+                .join("lib.mire");
         bundled_candidate.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
                 message: format!(
-                    "Could not resolve module '{}' (tried '{}' and '{}'): {}",
+                    "Could not resolve module '{}' (tried '{}', '{}' and '{}'): {}",
                     name,
                     project_candidate.display(),
+                    workspace_project_candidate.display(),
                     bundled_candidate.display(),
                     err
                 ),
@@ -403,14 +414,25 @@ impl ImportResolver {
         if let Ok(path) = project_candidate.canonicalize() {
             return Ok(path);
         }
+        let project_modules_candidate = self.project_root.join(name).join("modules");
+        if let Ok(path) = project_modules_candidate.canonicalize() {
+            return Ok(path);
+        }
+        let workspace_project_candidate =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(name).join("modules");
+        if let Ok(path) = workspace_project_candidate.canonicalize() {
+            return Ok(path);
+        }
         let bundled_candidate =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/modules").join(name);
         bundled_candidate.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
                 message: format!(
-                    "Could not resolve module directory '{}' (tried '{}' and '{}'): {}",
+                    "Could not resolve module directory '{}' (tried '{}', '{}', '{}' and '{}'): {}",
                     name,
                     project_candidate.display(),
+                    project_modules_candidate.display(),
+                    workspace_project_candidate.display(),
                     bundled_candidate.display(),
                     err
                 ),

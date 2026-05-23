@@ -1,6 +1,6 @@
 [project]
 name = "mire"
-version = "3.6.0"
+version = "3.8.0"
 entry = "main.mire"
 
 [cache]

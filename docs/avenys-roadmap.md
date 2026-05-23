@@ -1,6 +1,10 @@
 ## Estado de Avenys (Actualizado Mayo 2026)
 
-### Version: v2.5.6
+### Version: v3.8.0
+
+> Nota histórica:
+> Este archivo conserva una vista técnica acumulada de etapas previas (`v2.x`).
+> Para el registro cronológico oficial y actualizado, usar `CHANGELOG.md`.
 
 ### Nuevo: std modular
 - Archivo agregador de Standard Library disponible: `src/modules/std/mod.mire`

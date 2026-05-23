@@ -1,6 +1,6 @@
 # Roadmap Técnico (Avenys + Owl)
 
-## Completado en Avenys (v2.8.0)
+## Completado en Avenys (v3.8.0)
 
 - CLI reducida a `run`, `build`, `check`, `debug`.
 - Perfiles de compilación simplificados con default `debug`.
@@ -9,6 +9,7 @@
 - Fingerprint incremental de build extendido para incluir nivel de optimización.
 - Diagnósticos de errores/warnings reanclados con contexto AST activo (sin falsos positivos en `import std`/`1:1`).
 - Warnings sin ubicación fuente real ahora se suprimen para evitar ruido y anclaje engañoso.
+- Namespaces estilo Rust (`::`) estabilizados para módulos/librerías, con migración de Kioto/Owl al estilo canónico.
 
 ## Completado en Owl (v0.9.0)
 

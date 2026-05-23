@@ -532,10 +532,8 @@ impl Lexer {
                     "fn" => Token::new(TokenType::Fn, self.line, self.column),
                     "type" => Token::new(TokenType::Type, self.line, self.column),
                     "skill" => Token::new(TokenType::Skill, self.line, self.column),
-                    "code" => Token::new(TokenType::Code, self.line, self.column),
                     "struct" => Token::new(TokenType::Struct, self.line, self.column),
                     "impl" => Token::new(TokenType::Impl, self.line, self.column),
-                    "trait" => Token::new(TokenType::Trait, self.line, self.column),
                     "enum" => Token::new(TokenType::Enum, self.line, self.column),
                     "extern" => Token::new(TokenType::Extern, self.line, self.column),
                     "lib" => Token::new(TokenType::Lib, self.line, self.column),
@@ -563,7 +561,6 @@ impl Lexer {
                     "true" | "false" => {
                         Token::new(TokenType::BoolLit, start_line, start_col).with_value(ident)
                     }
-                    "none" => Token::new(TokenType::NoneLit, start_line, start_col),
                     _ => Token::new(TokenType::Ident, start_line, start_col).with_value(ident),
                 };
                 self.tokens.push(token);
@@ -765,9 +762,11 @@ impl Lexer {
                     Token::new(TokenType::At, start_line, start_col).with_value("@".to_string())
                 }
                 '?' => {
-                    self.advance();
-                    Token::new(TokenType::Question, start_line, start_col)
-                        .with_value("?".to_string())
+                    return Err(MireError::new(ErrorKind::Lexer {
+                        line: start_line,
+                        column: start_col,
+                        message: "Token '?' is reserved and currently unsupported".to_string(),
+                    }));
                 }
                 _ => {
                     return Err(MireError::new(ErrorKind::Lexer {

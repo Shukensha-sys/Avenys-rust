@@ -30,6 +30,9 @@ Conceptualmente, Kioto es a Mire lo que libc es a C: la plataforma.
 5. **Kioto es multiplataforma.**  
    El objetivo es ejecutar código Mire en todo lo que LLVM IR permite compilar. La capa de abstracción de plataforma se construye progresivamente.
 
+6. **Kioto es la ruta principal; `std` entra en transición deprecada.**  
+   Nuevas APIs de alto nivel deben vivir en Kioto. `std` se mantiene solo como capa de compatibilidad temporal para no romper usuarios existentes.
+
 ---
 
 ## Sintaxis de uso
@@ -40,19 +43,15 @@ Conceptualmente, Kioto es a Mire lo que libc es a C: la plataforma.
 | Import completo | `import kioto` (carga `lib.mire` mínimo) | ✅ |
 | Llamada como statement | `use kioto::fs::read("file")` | ✅ |
 | Llamada como expresión | `set x = kioto::fs::read("file")` | ✅ |
-| Compatibilidad legacy | `use fs.read("file")` (con `import kioto: (fs)`) | ✅ |
 | Binding | `set content = kioto::fs::read("path")` | ✅ |
 | Métodos | `list.push(42)` | ✅ |
 
-Las llamadas recomendadas de Kioto usan `::` como separador de namespace:
+Las llamadas de Kioto usan `::` como separador de namespace (sintaxis estable):
 
 ```
 use kioto::fs::read("/etc/config.toml")
 use kioto::time::sleep_ms(500)
 set files = kioto::fs::list("/tmp")
-
-# Compatibilidad mantenida (legacy)
-use fs.read("/etc/config.toml")
 ```
 
 Los imports usan la sintaxis actual con `:` y paréntesis:
@@ -67,7 +66,7 @@ import kioto
 ## Estructura de módulos
 
 ```
-src/modules/kioto/
+kioto/modules/
 ├── lib.mire          # Metadata, versión, constantes, platform detect
 ├── fs.mire           # Operaciones de archivos y directorios
 ├── env.mire          # Variables de entorno y argumentos
@@ -87,7 +86,7 @@ src/modules/kioto/
 Mínimo. Sin re-export de sub-módulos. Solo metadata, versión, constantes y helpers pequeños.
 
 ```
-pub const VERSION = "0.1.0"
+pub const VERSION = "0.2.0"
 
 pub fn version: () :str {
     return VERSION
@@ -356,7 +355,7 @@ Esto reduce tiempo de compilación y permite que Kioto tenga cientos de funcione
 ## Estructura del proyecto Kioto
 
 ```
-src/modules/kioto/
+kioto/modules/
 ├── lib.mire
 ├── fs.mire
 ├── env.mire

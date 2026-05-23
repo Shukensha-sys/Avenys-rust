@@ -1,7 +1,7 @@
 pub fn process: () :i64 {
-    return mem.process()
+    return mem::process()
 }
 
 pub fn format: (bytes: i64) :str {
-    return mem.format(bytes)
+    return mem::format(bytes)
 }

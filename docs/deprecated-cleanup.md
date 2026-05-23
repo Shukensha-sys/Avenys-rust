@@ -1,72 +1,26 @@
-# Deprecated & Obsolete Syntax Cleanup Plan
+# Deprecated Syntax Cleanup
 
-Plan para eliminar sintaxis deprecated y obsolete del compilador Avenys.
+Estado resumido de limpieza de sintaxis legacy en Avenys/Mire.
 
----
+## Hecho (3.8.1)
 
-## Inventario Actual
+- `none` eliminado como keyword de entrada.
+- `mu` queda como único literal/tipo unitario oficial.
+- `trait` y `code` ya no se parsean como sintaxis de usuario.
+- `?` queda reservado y ahora produce error léxico explícito.
 
-### 🔴 ELIMINAR (Deprecated - Reportado)
+## Pendiente (interno)
 
-| Sintaxis | Estado | Ubicación | Acción |
-|---------|--------|-----------|---------|
-| `add std` | ✅ ELIMINADO | parser/mod.rs | Eliminado completamente |
-| Angle brackets `<>` | ✅ ELIMINADO | parser/mod.rs:3076 | Ya eliminado |
+Estas rutas legacy siguen en el AST/passes internos por compatibilidad técnica temporal y deben retirarse en una fase dedicada:
 
-### 🟡 RESERVADO PARA FUTURO
+- `Statement::Code`
+- `Statement::Class`
+- `Statement::Trait`
+- `Statement::AddLib`
+- `Statement::Dmire*`
 
-| Sintaxis | Estado | Notas |
-|---------|--------|-------|
-| `unsafe` | ⚠️ No implementado | Reservado para FFI |
-| `asm` | ⚠️ No implementado | Reservado |
-| `extern lib` | ⚠️ No implementado | Planeado |
-| `extern fn` | ⚠️ No implementado | Planeado |
+## Criterio de cierre
 
-### ✅ RESUELTO (Abril 2026)
-
-| Feature | Estado | Notas |
-|---------|--------|-------|
-| Block parsing unificado | ✅ RESUELTO | Parser ahora usa helpers unificados para slicing hasta apertura/cierre de bloque y subparser reutilizable |
-| MireError (result_large_err) | ✅ RESUELTO | `MireError` compactado moviendo contexto opcional a estructura boxed; `result_large_err` desaparece |
-| Parser/Main if warnings | ✅ RESUELTO | Se eliminaron los casos más ruidosos y el clippy focalizado bajó drásticamente |
-
----
-
-## Plan de Limpieza
-
-### ✅ COMPLETADO (Abril 2026)
-
-#### 1.1 `add` Keyword - ELIMINADO
-- **Cambios**:
-  - Eliminada función `is_legacy_add_statement()` del parser
-  - Eliminado `Statement::AddLib` del AST
-  - Eliminados todos los match arms en typeck, borrowck, semantic, incremental
-  - Eliminados imports no usados en typeck.rs
-  - Actualizado test: ahora `add` es "Unknown identifier"
-
-#### 1.2 Angle Brackets `<>` - Ya eliminado
-- Confirmado en tests: rechazado
-
-### Estado Actual
-
-**Eliminado**: `add std`
-**Reservado**: `unsafe`, `asm`, `extern lib`, `extern fn`
-
----
-
-## Recomendación
-
-### Completado:
-1. ✅ Eliminado `add` - ahora treated as unknown identifier
-2. ✅ Angle brackets eliminado
-3. ✅ Documentado reservado para futuro: `unsafe`, `asm`, `extern`
-4. ✅ Parsing de bloque unificado en helpers compartidos del parser
-5. ✅ `MireError` compactado sin romper formato ni contexto
-6. ✅ Limpieza de warnings investigados en `parser`, `main` y `avens`
-
----
-
-## Referencias
-
-- Test actual: `tests/language_regressions.rs:56-78` (testea `add` como deprecated)
-- Parser: `src/parser/mod.rs:148` (`is_legacy_add_statement`)
+- Remover variantes legacy del AST.
+- Remover arms muertos en typeck/borrowck/semantic/incremental/backend.
+- Mantener 100% de tests de regresión en verde.

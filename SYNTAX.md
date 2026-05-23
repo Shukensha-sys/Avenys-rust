@@ -107,7 +107,7 @@ fn identity[T]: (x :T) :T {
 set a = identity[i64](42)   # explicit generic argument
 set b = identity("ok")      # inferred as T = str
 
-trait Show {
+skill Show {
     fn show: (self) :str
 }
 
@@ -656,7 +656,7 @@ set owned = box[i64]
 | `char` | Unicode scalar (`u32`) | `'a' :char`, `'\n' :char` |
 | `str` | String (heap-allocated) | `"hello" :str` |
 | `bool` | Boolean | `true`, `false` |
-| `none` | Unit / void type | — |
+| `mu` | Unit / void type | `set x = mu :mu` |
 
 ### Literal Forms
 
@@ -735,7 +735,7 @@ Compatibility note (v2.7.0): no syntax changes were introduced in this release.
 - Raw strings (`r"..."`, `r#"..."#`)
 
 **Still improving:**
-- Advanced trait conformance
+- Advanced skill conformance
 - FFI ABI stability
 - Field-level constructor validation
 

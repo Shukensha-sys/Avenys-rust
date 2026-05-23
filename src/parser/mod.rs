@@ -196,7 +196,6 @@ impl Parser {
                     TokenType::Type => self.parse_type_statement(visibility),
                     TokenType::Skill => self.parse_skill_statement(visibility),
                     TokenType::Struct => self.parse_struct_statement(visibility),
-                    TokenType::Trait => self.parse_trait_statement(visibility),
                     TokenType::Enum => self.parse_enum_statement(visibility),
                     _ => {
                         Err(self
@@ -207,10 +206,8 @@ impl Parser {
             TokenType::Fn => self.parse_fn_statement(Visibility::Private),
             TokenType::Type => self.parse_type_statement(Visibility::Private),
             TokenType::Skill => self.parse_skill_statement(Visibility::Private),
-            TokenType::Code => self.parse_code_statement(Visibility::Private),
             TokenType::Struct => self.parse_struct_statement(Visibility::Private),
             TokenType::Impl => self.parse_impl_statement(),
-            TokenType::Trait => self.parse_trait_statement(Visibility::Private),
             TokenType::Enum => self.parse_enum_statement(Visibility::Private),
             TokenType::Extern => self.parse_extern_statement(),
             TokenType::Unsafe => self.parse_unsafe_statement(),
@@ -291,16 +288,25 @@ impl Parser {
             self.advance();
             self.expect(TokenType::Slash)?;
             let mut path = String::from("./");
-            path.push_str(&self.expect_member_name()?);
+            path.push_str(&self.parse_local_import_segment()?);
             while self.check(TokenType::Slash) {
                 self.advance();
                 path.push('/');
-                path.push_str(&self.expect_member_name()?);
+                path.push_str(&self.parse_local_import_segment()?);
             }
             return Ok((path, true));
         }
 
         Ok((self.expect_ident()?, false))
+    }
+
+    fn parse_local_import_segment(&mut self) -> Result<String> {
+        if self.check(TokenType::Dot) && self.peek_n(1).ttype == TokenType::Dot {
+            self.advance();
+            self.advance();
+            return Ok("..".to_string());
+        }
+        self.expect_member_name()
     }
 
     fn parse_set_statement(&mut self) -> Result<Statement> {
@@ -626,76 +632,6 @@ impl Parser {
 
         self.expect_block_close()?;
         Ok(Statement::Skill { name, methods })
-    }
-
-    fn parse_code_statement(&mut self, visibility: Visibility) -> Result<Statement> {
-        let _ = visibility;
-        self.expect(TokenType::Code)?;
-        let trait_name = self.expect_ident()?;
-
-        // Parse "to TypeName"
-        self.expect(TokenType::To)?;
-        let type_name = self.expect_ident()?;
-
-        self.expect_block_open()?;
-        let mut methods = Vec::new();
-
-        while !self.check_block_close() && !self.is_at_end() {
-            self.skip_newlines();
-            if self.check_block_close() {
-                break;
-            }
-            // Parse method: fn name: (params) return_type > body <
-            if self.check(TokenType::Fn) {
-                let method_stmt = self.parse_fn_statement(Visibility::Private)?;
-                methods.push(method_stmt);
-            }
-            self.skip_newlines();
-        }
-
-        self.expect_block_close()?;
-        Ok(Statement::Code {
-            trait_name,
-            type_name,
-            methods,
-        })
-    }
-
-    fn parse_trait_statement(&mut self, visibility: Visibility) -> Result<Statement> {
-        let _ = visibility;
-        self.expect(TokenType::Trait)?;
-        let name = self.expect_ident()?;
-        self.expect_block_open()?;
-        let mut methods = Vec::new();
-
-        while !self.check_block_close() && !self.is_at_end() {
-            self.skip_newlines();
-            if self.check_block_close() {
-                break;
-            }
-            self.expect(TokenType::Fn)?;
-            let method_name = self.expect_ident()?;
-            self.expect(TokenType::Colon)?;
-            self.expect(TokenType::Lparen)?;
-            let params = self.parse_param_list()?;
-            self.expect(TokenType::Rparen)?;
-            let return_type = if self.check(TokenType::Colon) {
-                self.advance();
-                self.parse_type()?
-            } else {
-                DataType::None
-            };
-            methods.push(TraitMethodSig {
-                name: method_name,
-                params,
-                return_type,
-            });
-            self.skip_newlines();
-        }
-
-        self.expect_block_close()?;
-        self.declare(&name);
-        Ok(Statement::Trait { name, methods })
     }
 
     fn parse_impl_statement(&mut self) -> Result<Statement> {
@@ -2821,7 +2757,7 @@ impl Parser {
                 "char" => Ok(DataType::Char),
                 "str" => Ok(DataType::Str),
                 "bool" => Ok(DataType::Bool),
-                "none" | "mu" => Ok(DataType::None),
+                "mu" => Ok(DataType::None),
                 "arr" => {
                     self.expect(TokenType::Lbracket)?;
                     let element_type = Box::new(self.parse_type()?);
@@ -3309,6 +3245,7 @@ impl Parser {
         matches!(
             ttype,
             TokenType::Ident
+                | TokenType::Set
                 | TokenType::NewKw
                 | TokenType::DropKw
                 | TokenType::MoveKw
@@ -3560,9 +3497,7 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
         }
         Statement::Function { body, .. }
         | Statement::Unsafe { body }
-        | Statement::Module { body, .. }
-        | Statement::DmireTable { body, .. }
-        | Statement::DmireColumn { body, .. } => {
+        | Statement::Module { body, .. } => {
             body.iter().any(statement_contains_self_placeholder)
         }
         Statement::Return(expr) => expr.as_ref().is_some_and(contains_self_placeholder),
@@ -3598,9 +3533,7 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
                 })
                 || default.iter().any(statement_contains_self_placeholder)
         }
-        Statement::Class { methods, .. }
-        | Statement::Impl { methods, .. }
-        | Statement::Code { methods, .. } => {
+        Statement::Impl { methods, .. } => {
             methods.iter().any(statement_contains_self_placeholder)
         }
         Statement::Type { fields, .. } => fields.iter().any(statement_contains_self_placeholder),
@@ -3613,15 +3546,19 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
             value.as_ref().is_some_and(contains_self_placeholder)
         }
         Statement::Move { value, .. } => contains_self_placeholder(value),
-        Statement::DmireDlist { data, .. } => data.iter().any(contains_self_placeholder),
         Statement::Query { .. }
         | Statement::Break
         | Statement::Continue
+        | Statement::Code { .. }
+        | Statement::Class { .. }
         | Statement::Trait { .. }
         | Statement::ExternLib { .. }
         | Statement::ExternFunction { .. }
         | Statement::AddLib { .. }
         | Statement::Use { .. }
+        | Statement::DmireTable { .. }
+        | Statement::DmireColumn { .. }
+        | Statement::DmireDlist { .. }
         | Statement::Enum { .. } => false,
     }
 }
@@ -3891,6 +3828,13 @@ mod tests {
     }
 
     #[test]
+    fn parses_local_import_with_parent_segments() {
+        let source = "import ./../modules/fs_ops\n";
+        let program = parse(source);
+        assert!(program.is_ok(), "{program:?}");
+    }
+
+    #[test]
     fn parses_static_impl_call_with_double_colon() {
         let source = "pub fn main: () {\nset p = Point::new(1, 2)\n}\n";
         let program = parse(source).expect("parse should succeed");
@@ -3921,6 +3865,20 @@ mod tests {
             panic!("expected call expression");
         };
         assert_eq!(name, "kioto.fs.read");
+    }
+
+    #[test]
+    fn parses_keyword_member_name_in_namespace_call() {
+        let source = "pub fn main: () {\nuse dicts::set(d, k, v)\n}\n";
+        let program = parse(source).expect("parse should succeed");
+
+        let Statement::Function { body, .. } = &program.statements[0] else {
+            panic!("expected function");
+        };
+        let Statement::Expression(Expression::Call { name, .. }) = &body[0] else {
+            panic!("expected call expression");
+        };
+        assert_eq!(name, "dicts.set");
     }
 
     #[test]

@@ -2,6 +2,26 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.8.1] - 2026-05-23
+
+### Changed
+- Parser cleanup for syntax coherence:
+  - removed `none` keyword parsing; `mu` is now the only unit literal/type keyword.
+  - removed user-facing parsing paths for legacy `trait` and `code` statements.
+- Lexer now reports `?` as an explicit reserved/unsupported token instead of silently keeping a dormant token path.
+- Documentation alignment pass:
+  - `SYNTAX.md` updated to use `skill` examples and `mu` type reference.
+  - `docs/deprecated-cleanup.md` rewritten to reflect current real status (done vs internal pending).
+  - `todo.md` updated with active focus on `Performance & Optimizations` and `Quality of Life`.
+
+## [3.8.0] - 2026-05-22
+
+### Changed
+- Kioto and Owl code paths migrated to canonical namespace syntax using `::`.
+- Parser namespace member recognition extended to support keyword-like member names in paths
+  (e.g. `env::set`, `dicts::set`) without conflicting with statement parsing.
+- Version bump: `3.7.0` -> `3.8.0`.
+
 ## [3.7.0] - 2026-05-21
 
 ### Added

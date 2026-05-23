@@ -1,11 +1,11 @@
 pub fn slice: (list: vec[anything], start: i64, end: i64) :vec[anything] {
-    return lists.slice(list, start, end)
+    return lists::slice(list, start, end)
 }
 
 pub fn len: (list: vec[anything]) :i64 {
-    return lists.len(list)
+    return lists::len(list)
 }
 
 pub fn get: (list: vec[anything], index: i64) :anything {
-    return lists.get(list, index)
+    return lists::get(list, index)
 }
