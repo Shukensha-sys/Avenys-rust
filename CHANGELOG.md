@@ -2,6 +2,15 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.8.3] - 2026-05-23
+
+### Changed
+- Compiler modularization phase 1 (separation of responsibilities, no syntax/semantics changes):
+  - parser lifecycle parsing moved to `src/parser/lifecycle.rs`
+  - parser pipeline self-placeholder logic moved to `src/parser/pipeline.rs`
+  - type checker return-flow helpers moved to `src/compiler/typeck/typeck_returns.rs`
+- Updated planning documentation to reflect completed modularization phase and next extraction steps.
+
 ## [3.8.2] - 2026-05-23
 
 ### Changed

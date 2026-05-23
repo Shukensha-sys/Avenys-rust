@@ -1,3 +1,5 @@
+mod typeck_returns;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -8,6 +10,7 @@ use crate::parser::ast::{
     AssignmentTarget, DataType, Expression, Identifier, Literal, MireValue, Program, QueryOp,
     Statement, TraitMethodSig,
 };
+use self::typeck_returns::{implicit_return_expression_mut, statements_contain_explicit_return};
 
 #[derive(Debug, Clone)]
 struct FunctionSig {
@@ -4381,10 +4384,6 @@ fn type_error_at(line: usize, column: usize, message: String) -> MireError {
     MireError::type_error_at(err_line, err_col, message)
 }
 
-fn statements_contain_explicit_return(statements: &[Statement]) -> bool {
-    statements.iter().any(statement_contains_explicit_return)
-}
-
 fn data_type_name_for_diag(data_type: &DataType) -> String {
     match data_type {
         DataType::Generic(name) | DataType::StructNamed(name) | DataType::EnumNamed(name) => {
@@ -4406,44 +4405,6 @@ fn data_type_name_for_diag(data_type: &DataType) -> String {
             format!("vec[{}]", data_type_name_for_diag(element_type))
         }
         _ => "unknown".to_string(),
-    }
-}
-
-fn statement_contains_explicit_return(statement: &Statement) -> bool {
-    match statement {
-        Statement::Return(_) => true,
-        Statement::If {
-            then_branch,
-            else_branch,
-            ..
-        } => {
-            statements_contain_explicit_return(then_branch)
-                || else_branch
-                    .as_ref()
-                    .is_some_and(|branch| statements_contain_explicit_return(branch))
-        }
-        Statement::While { body, .. }
-        | Statement::For { body, .. }
-        | Statement::Find { body, .. }
-        | Statement::Unsafe { body }
-        | Statement::Module { body, .. } => statements_contain_explicit_return(body),
-        Statement::Match { cases, default, .. } => {
-            cases
-                .iter()
-                .any(|(_, body)| statements_contain_explicit_return(body))
-                || statements_contain_explicit_return(default)
-        }
-        Statement::Function { body, .. }
-        | Statement::Type { fields: body, .. }
-        | Statement::Impl { methods: body, .. } => statements_contain_explicit_return(body),
-        _ => false,
-    }
-}
-
-fn implicit_return_expression_mut(statements: &mut [Statement]) -> Option<&mut Expression> {
-    match statements.last_mut()? {
-        Statement::Expression(expr) => Some(expr),
-        _ => None,
     }
 }
 

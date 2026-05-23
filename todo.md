@@ -7,6 +7,10 @@
 Estado de avance inmediato:
 - ✅ Completado: eliminación de variantes legacy del AST (`Class`, `Trait`, `Code`, `AddLib`, `Dmire*`) y limpieza asociada en parser/typeck/borrowck/semantic/incremental/backend.
 - ✅ Completado: actualización de tests internos/regresión para no depender de esas variantes legacy.
+- ✅ Completado: primera fase de modularización de responsabilidades:
+  - parser lifecycle ops extraídas a `src/parser/lifecycle.rs`
+  - parser pipeline/self-placeholder helpers extraídos a `src/parser/pipeline.rs`
+  - type checker return-flow helpers extraídos a `src/compiler/typeck/typeck_returns.rs`
 - 🔜 Siguiente bloque grande: modularización de `parser` y `typeck`.
 
 ### Performance & Optimizations
@@ -23,8 +27,8 @@ Estado de avance inmediato:
 
 ## Pendientes Grandes (No cerrados en esta pasada)
 
-1. Modularización del parser (`src/parser/mod.rs`) en submódulos (`statements`, `expressions`, `types`, `patterns`, `imports`, `lifecycle`).
-2. Modularización de `typeck` (`src/compiler/typeck.rs`) en capas (`signatures`, `statements`, `expressions`, `types`, `builtins`, `errors`).
+1. Modularización del parser (`src/parser/mod.rs`) en submódulos restantes (`statements`, `expressions`, `types`, `patterns`, `imports`).
+2. Modularización de `typeck` (`src/compiler/typeck.rs`) en capas (`signatures`, `statements`, `expressions`, `types`, `builtins`, `errors`), partiendo de la fase 1 ya extraída (`typeck_returns`).
 3. Migración de builtins del compilador a Kioto (reducción de conocimiento hardcodeado en typechecker).
 4. Cleanup incremental fase 2: optimizar hashing/invalidation tras poda legacy y preparar caché por reachability real.
 
