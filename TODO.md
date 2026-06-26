@@ -16,6 +16,10 @@ Versioned copy of the workspace TODO. Keep this in sync with `../TODO.md`.
   - Current state: bare variants resolve correctly, payload variants still lose the payload binding path in some stages.
   - Needed: bind payloads through semantic, type checking, lowering, and codegen.
 
+- [ ] Enforce function visibility across files and modules
+  - Current state: private functions are still callable from other files in the temporary smoke test.
+  - Needed: make visibility rules explicit and reject cross-module access to private functions while keeping same-file private access working.
+
 - [ ] Decide and implement `try`, `ok`, `err`
   - Current state: parser/typeck already know about these forms, but the backend path is not complete.
   - Decision needed: either fully support them as first-class ergonomic sugar, or keep them as a deliberate non-goal if the language prefers explicit `match` and result handling.
@@ -74,4 +78,3 @@ Versioned copy of the workspace TODO. Keep this in sync with `../TODO.md`.
 - [ ] Keep docs synchronized with actual behavior
   - Update `docs/mir-pipeline.md`, `docs/LIBRARIES.md`, `docs/CHANGELOG.md`, and syntax docs when behavior changes.
   - Avoid decorative markers; use plain text statuses only.
-
