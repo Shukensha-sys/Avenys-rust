@@ -22,10 +22,14 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
         MirOp::Store(dst, src) => {
             let (src_s, src_ty) = resolve_typed(src, ctx);
             let (dst_s, _) = resolve_typed(dst, ctx);
-            if src_ty == "ptr"
-                && let MirValue::Temp(s_id) = src {
-                    ctx.owned_string_temps.remove(s_id);
-                }
+            if src_ty == "ptr" {
+                let old_ptr = tmp_extra(ctx, "ptr");
+                extra.push(format!("{} = load ptr, ptr {}", old_ptr, dst_s));
+                extra.push(format!("call void @rt_managed_free(ptr {})", old_ptr));
+            }
+            if src_ty == "ptr" && let MirValue::Temp(s_id) = src {
+                ctx.owned_string_temps.remove(s_id);
+            }
             format!("store {} {}, ptr {}", src_ty, src_s, dst_s)
         }
         MirOp::Add(l, r) => {
