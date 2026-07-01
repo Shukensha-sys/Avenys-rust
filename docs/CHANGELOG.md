@@ -2,6 +2,25 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.11.37] - 2026-07-01
+
+### Added
+- **SYNTAX.md overhaul**: Comprehensive documentation of previously undocumented
+  features: generics (functions, structs, enums, impl, trait bounds), closures,
+  pipeline operator (`=>`), match guards (`when`), or-patterns and numeric ranges,
+  error propagation (`?`), `Box[T]` heap allocation, constant modifier (`set x :i64 const`),
+  generic trait bounds, static methods, and higher-order list functions.
+
+### Fixed
+- **FFI codegen**: Added `DataType::Pointer(Box<DataType>)` AST variant so FFI pointer
+  types (`*mut i8`, `*const i8`) generate `ptr` in LLVM IR instead of `i64`. Void
+  return types (`extern fn foo: ()`) now emit `void` instead of `i64`. Both fixes
+  resolve SDL3 and other C-library FFI call compatibility.
+
+### Changed
+- **FFI compiler**: `parse_ffi_type()` returns `Pointer(inner)` instead of `I64`.
+  `DataType::None` maps to `"void"` in extern LLVM declare statements.
+
 ## [3.11.36] - 2026-07-01
 
 ### Changed

@@ -1,6 +1,6 @@
 [project]
 name = "mire"
-version = "3.11.36"
+version = "3.11.37"
 entry = "mod.mire"
 
 [build]
