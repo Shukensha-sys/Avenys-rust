@@ -1,6 +1,7 @@
 use super::sanitize_fn_name;
 use super::types::llvm_type_str;
 use crate::compiler::mir::{MirExternFunction, MirOp, MirProgram, MirValue};
+use crate::parser::ast::DataType;
 use std::collections::HashSet;
 
 pub(crate) fn collect_used_extern_wrappers(
@@ -88,7 +89,11 @@ pub(crate) fn collect_used_extern_wrappers(
 
 pub(crate) fn generate_extern_wrapper(ext: &MirExternFunction) -> String {
     let wrapper_name = format!("@fn_{}_wrapper", sanitize_fn_name(&ext.name));
-    let ret_ty = llvm_type_str(&ext.return_type);
+    let ret_ty = if ext.return_type == DataType::None {
+        "void".to_string()
+    } else {
+        llvm_type_str(&ext.return_type)
+    };
     let param_tys: Vec<String> = ext.params.iter().map(llvm_type_str).collect();
     let param_names: Vec<String> = (0..ext.params.len())
         .map(|i| format!("%arg_{}", i))
