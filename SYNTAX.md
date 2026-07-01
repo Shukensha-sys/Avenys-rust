@@ -1,6 +1,6 @@
 # Mire Language Reference
 
-Version: **3.11.33** · 151 tests passing
+Version: **3.11.37** · 287 tests passing
 
 ---
 
@@ -36,6 +36,9 @@ delimiters; consecutive `#` lines serve the same purpose.
 set name = "Mire"
 set count = 42
 
+# Constant — compiler-enforced immutability
+set x = 42 :i64 const
+
 # Mutable — add `:type mut`
 set counter = 0 :i64 mut
 set buffer = "" :str mut
@@ -51,6 +54,9 @@ set buffer = buffer + " more"
 
 **`set` is the universal keyword** for both declaration and reassignment.
 If the name doesn't exist, `set` declares it. If it exists, `set` reassigns.
+
+**Constant modifier:** `set x = 42 :i64 const` — the compiler rejects
+any reassignment to `x`.
 
 **Compound assignment:** `set x += 1`, `set x -= 1`
 
@@ -180,6 +186,60 @@ return value
 return                # void return (allowed but optional)
 ```
 
+### 5.4 Closures (anonymous functions)
+
+```mire
+# Signature closure — params => body
+set double = (x :i64) => x * 2
+use dasu(double(5))                # "10"
+
+# Multi-parameter closure
+set sum = (a b :i64) => a + b
+use dasu(sum(3 4))                 # "7"
+
+# With block body
+set greet = (name :str) => {
+    set msg = "Hello, " + name
+    use dasu(msg)
+}
+greet("Mire")
+
+# Closure with capture
+set factor = 3 :i64 mut
+set triple = (x :i64) => x * factor
+use dasu(triple(5))                # "15"
+```
+
+Closures are first-class values. They can be passed to higher-order functions:
+
+```mire
+set nums = [] :vec[i64] mut
+set nums = lists::push(nums 1)
+set nums = lists::push(nums 2)
+set nums = lists::push(nums 3)
+set mapped = lists::map(nums (x :i64) => x * 10)
+```
+
+The `=>` arrow distinguishes closures from regular blocks. Closures can
+capture variables from their enclosing scope without explicit syntax.
+
+### 5.5 Static / associated methods
+
+```mire
+impl Point {
+    # Associated (static) method — no self
+    fn new: (x :i64, y :i64) :Point {
+        return (Point x: x, y: y)
+    }
+}
+
+set origin = Point::new(0 0)
+```
+
+`::` syntax calls an associated method on the type name. The compiler
+normalizes `Point::new` to `Point.new` internally. This is also how
+module-qualified calls work: `strings::split(...)`.
+
 ---
 
 ## 6. Control flow
@@ -211,6 +271,54 @@ match status {
 }
 ```
 
+### 6.1 Match guards
+
+Match arms can have a `when` condition:
+
+```mire
+match value {
+    x when x > 10 { use dasu("big") }
+    x when x > 0  { use dasu("positive") }
+    _             { use dasu("non-positive") }
+}
+```
+
+### 6.2 Or-patterns and ranges
+
+```mire
+match value {
+    1 | 2 | 3 { use dasu("small") }
+    4..10     { use dasu("medium") }
+    _         { use dasu("large") }
+}
+```
+
+### 6.3 Pipeline operator (`=>`)
+
+The pipeline operator threads a value through a function call:
+
+```mire
+# Thread range output into dasu
+use range(5) => dasu(self)
+
+# Transform with closure
+set doubled = nums => (x => x * 2)
+
+# Safe pipeline — stops on error
+set result = input ?=> fallible_fn(self)
+```
+
+The `self` keyword acts as a placeholder for the piped value. If `self`
+is not used, the value is passed as the last argument. Pipelines compose:
+
+```mire
+set result = strings::split(data "\n")
+    => lists::filter(self (s :&str) => strings::len(*s) > 0)
+    => lists::len(self)
+```
+
+### 6.4 `} else {` rule
+
 **`} else {` must be on the SAME line.** Mire does not allow `else` on a new line:
 
 ```mire
@@ -232,7 +340,95 @@ else {
 
 ---
 
-## 7. Strings
+## 7. Generics
+
+### 7.1 Generic functions
+
+```mire
+fn identity[T]: (x :T) :T {
+    return x
+}
+
+# Explicit type argument
+set a = identity[i64](42)
+
+# Inferred type argument
+set b = identity("hello")
+
+fn pair[T U]: (a :T, b :U) :vec[T] {
+    return [a]
+}
+```
+
+Type parameters are declared in square brackets before the parameter list:
+`fn name[T]: (params) :return_type`.
+
+### 7.2 Generic structs and enums
+
+```mire
+type Box[T] {
+    value :T
+}
+
+enum Option[T] {
+    Some(value :T)
+    None
+}
+
+# Construction
+set b = (Box[i64] value: 42)
+set v = Option[i64].Some(10)
+```
+
+### 7.3 Generic impl blocks
+
+```mire
+impl[T] Box[T] {
+    fn get: (self) :T {
+        return self.value
+    }
+
+    fn set: (self, val :T) {
+        set self.value = val
+    }
+}
+
+set b = (Box[i64] value: 42)
+use dasu(b.get())     # "42"
+```
+
+### 7.4 Generic trait bounds
+
+```mire
+skill Printable {
+    fn print: (self) :str
+}
+
+fn show[T: Printable]: (v :T) {
+    use dasu(v.print())
+}
+
+# Multiple bounds
+fn process[T: Printable + Sized]: (v :T) { ... }
+```
+
+Trait bounds constrain type parameters to types that implement the
+required skills. The compiler validates bounds at call sites.
+
+### 7.5 Type argument syntax in calls
+
+```mire
+fn first[T]: (items :vec[T]) :T {
+    return lists::get(items 0)
+}
+
+set nums = [10 20 30]
+set v = first(nums)          # T inferred as i64
+```
+
+---
+
+## 8. Strings
 
 ```mire
 set s = "hello" :str mut
@@ -263,13 +459,14 @@ set full = s + " world"
 
 ---
 
-## 8. Collections
+## 9. Collections
 
 ```mire
 # Vectors (dynamic) — from strings::split
 set items = strings::split("a b c" " ")
 set n = rt_vec_len(items)
 set first = rt_vec_get_str(items 0)
+set second = rt_vec_get_str(items 1)
 
 # Iteration helpers
 set count = iter::count(items)
@@ -279,6 +476,9 @@ set has = iter::contains(items "b")
 set nums = [] :vec[i64] mut
 set nums = lists::push(nums 42)
 set val = lists::get(nums 0)
+
+# Box[T] — heap-allocated wrapper
+set b = box(42)
 ```
 
 **Access patterns:**
@@ -286,11 +486,51 @@ set val = lists::get(nums 0)
 - Vector length: `rt_vec_len(vec)`
 - List operations: `lists::push`, `lists::get`, `lists::len`, `lists::pop`
 
+### 9.1 Higher-order functions
+
+Mire supports closures with list higher-order functions:
+
+```mire
+set nums = [] :vec[i64] mut
+set nums = lists::push(nums 1)
+set nums = lists::push(nums 2)
+set nums = lists::push(nums 3)
+
+# Map
+set doubled = lists::map(nums (x :i64) => x * 2)
+
+# Filter
+set evens = lists::filter(nums (x :i64) => x % 2 == 0)
+
+# Fold
+set sum = lists::fold(0 (acc elem :i64) => acc + elem, nums)
+```
+
+### 9.2 Box — heap allocation
+
+`Box[T]` provides explicit heap allocation. Useful for recursive types
+(tree nodes, linked lists) and dynamic dispatch.
+
+```mire
+# Construction
+set b = box(42)
+
+# Type annotation
+set b = box(some_large_value) :Box[i64]
+
+# Box[T] in structs
+type TreeNode {
+    value :i64
+    left  :Box[TreeNode]
+    right :Box[TreeNode]
+}
+```
+
 ---
 
-## 9. Structs
+## 10. Structs
 
-### 9.1 Definition and construction
+### 10.1 Definition and construction
 
 ```mire
 pub struct Point {
@@ -300,9 +540,15 @@ pub struct Point {
 
 set p = (Point x: 10, y: 20)
 set q = (Point x: 3, y: 4)
+
+# Generic struct
+type Box[T] {
+    value :T
+}
+set b = (Box[i64] value: 42)
 ```
 
-### 9.2 Why parentheses?
+### 10.2 Why parentheses?
 
 Struct construction syntax is `(TypeName field: value, ...)` with mandatory
 parentheses. This is a deliberate design choice for parser consistency:
@@ -323,7 +569,7 @@ set p = (Point x: 1, y: 2)
 set p = Point x: 1, y: 2
 ```
 
-### 9.3 Methods
+### 10.3 Methods
 
 ```mire
 impl Point {
@@ -340,9 +586,21 @@ impl Point {
 set total = p.sum()
 ```
 
+### 10.4 Static methods
+
+```mire
+impl Point {
+    fn new: (x :i64, y :i64) :Point {
+        return (Point x: x, y: y)
+    }
+}
+
+set p = Point::new(10 20)
+```
+
 ---
 
-## 10. Enums
+## 11. Enums
 
 ```mire
 # Definition — simple variants
@@ -359,10 +617,17 @@ pub enum Result {
     Err(msg :str)
 }
 
+# Generic enum
+enum Option[T] {
+    Some(value :T)
+    None
+}
+
 # Construction
 set s = Status.Active
 set r = Result.Ok(42)
 set e = Result.Err("not found")
+set v = Option[i64].Some(10)
 
 # Pattern matching
 match s {
@@ -375,10 +640,11 @@ match s {
 
 ---
 
-## 11. Skills (Traits)
+## 12. Skills (Traits)
+
+### 12.1 Trait declaration
 
 ```mire
-# Trait declaration
 pub skill Printable {
     fn print: (self) :str
 }
@@ -386,8 +652,11 @@ pub skill Printable {
 pub skill Sized {
     fn size: (self) :i64
 }
+```
 
-# Trait implementation
+### 12.2 Trait implementation
+
+```mire
 impl Printable for Point {
     fn print: (self) :str {
         set x = strings::from_i64(self.x)
@@ -397,11 +666,37 @@ impl Printable for Point {
 }
 ```
 
+### 12.3 Generic trait bounds
+
+```mire
+fn show[T: Printable]: (v :T) {
+    use dasu(v.print())
+}
+
+fn process[T: Printable + Sized]: (v :T) {
+    # T must implement both Printable and Sized
+}
+```
+
+### 12.4 Bounds on generic impls
+
+```mire
+skill Default {
+    fn default: () :Self
+}
+
+impl[T: Default] Box[T] {
+    fn new_default: () :Box[T] {
+        return (Box[T] value: T::default())
+    }
+}
+```
+
 ---
 
-## 12. Module system
+## 13. Module system
 
-### 12.1 Declaring a module
+### 13.1 Declaring a module
 
 ```mire
 module mylib
@@ -411,7 +706,7 @@ pub fn version: () :str {
 }
 ```
 
-### 12.2 Loading modules
+### 13.2 Loading modules
 
 ```mire
 load kioto               # the standard library
@@ -419,7 +714,7 @@ load mylib               # a user library
 load kioto::json         # a specific submodule
 ```
 
-### 12.3 Namespace access
+### 13.3 Namespace access
 
 ```mire
 strings::split(data "\n")       # standard library
@@ -427,7 +722,7 @@ json::get(response "key")       # kioto submodule
 net::http::get("https://...")   # nested module (3 levels)
 ```
 
-### 12.4 owl.toml exports
+### 13.4 owl.toml exports
 
 ```toml
 [project]
@@ -458,9 +753,9 @@ Without `core/net/owl.toml`, the path `mylib::net::http` cannot resolve.
 
 ---
 
-## 13. External libraries (FFI)
+## 14. External libraries (FFI)
 
-### 13.1 Extern declarations
+### 14.1 Extern declarations
 
 ```mire
 extern lib "SDL2"                        # single-token: name = link flag
@@ -471,7 +766,17 @@ extern fn SDL_Quit: () lib "SDL2"
 extern fn puts: (msg :*mut i8) :i32 lib "c"
 ```
 
-### 13.2 Wrapping in safe functions
+### 14.2 Supported FFI types
+
+| Mire type | C type | Notes |
+|-----------|--------|-------|
+| `i64` | `int64_t` / `long` | 64-bit signed integer |
+| `str` | `char*` | Null-terminated string |
+| `bool` | `int` (0/1) | Boolean |
+| `*mut i8` | `void*` / `char*` | Raw mutable pointer |
+| `*const i8` | `const void*` | Raw const pointer |
+
+### 14.3 Wrapping in safe functions
 
 ```mire
 module sdl2
@@ -489,8 +794,6 @@ pub fn error_message: () :str {
 }
 ```
 
-**Supported FFI types:** `i64`, `str`, `bool`, `*mut i8`, `*const i8`
-
 **Linking:** `extern lib "name"` adds `-lname` to the linker. For `.so` files,
 add the full path: `extern lib "name" "/usr/lib/libname.so"` (adds `-L/path`).
 
@@ -498,7 +801,78 @@ See [`docs/FFI.md`](docs/FFI.md) for the complete FFI reference.
 
 ---
 
-## 14. Built-in functions
+## 15. Result type & error handling
+
+### 15.1 Result type
+
+The result type represents values that may be either `ok` or `err`:
+
+```mire
+# Type annotation
+set r = some_value :result[i64 str]
+
+# Ok/Err constructors
+set r = ok(42)
+set e = err("something went wrong")
+
+# With default error type (str)
+set r = some_value :result[i64]
+```
+
+### 15.2 Unwrapping
+
+```mire
+set v = result::unwrap(r)          # panics on Err
+set v = result::unwrap_or(r 0)    # returns default on Err
+set ok = result::is_ok(r)
+set err = result::is_err(r)
+```
+
+### 15.3 Try operator (`?`)
+
+The `?` operator propagates errors: if the value is `Ok(v)`, it unwraps
+to `v`; if `Err(e)`, it returns early with `Err(e)` from the enclosing
+function.
+
+```mire
+fn read_config: (path :&str) :result[str str] {
+    set raw = fs::read(path) ?      # returns early on error
+    return ok(parse_config(raw))
+}
+
+# The function return type must be a result type
+fn safe_divide: (a :i64, b :i64) :result[i64 str] {
+    if b == 0 {
+        return err("division by zero")
+    }
+    return ok(a / b)
+}
+
+fn main: () {
+    set r = safe_divide(10 2) ?
+    use dasu(r)                     # "5"
+}
+```
+
+### 15.4 Result in generics
+
+```mire
+type Result[T E] {
+    Ok(value :T)
+    Err(msg :E)
+}
+
+fn safe_get[T]: (items :vec[T], index :i64) :result[T str] {
+    if index < 0 {
+        return err("negative index")
+    }
+    return ok(lists::get(items index))
+}
+```
+
+---
+
+## 16. Built-in functions
 
 Mire's core I/O primitives use Japanese verb names as a deliberate design
 choice — short, unambiguous, and visually distinct from English keywords.
@@ -530,7 +904,7 @@ The rest of the standard library (kioto) uses English names: `log::info`,
 
 ---
 
-## 15. Common patterns — Basic
+## 17. Common patterns — Basic
 
 ```mire
 load kioto
@@ -574,7 +948,7 @@ pub fn main: () {
 
 ---
 
-## 16. Common patterns — Advanced
+## 18. Common patterns — Advanced
 
 ```mire
 load kioto
@@ -605,5 +979,14 @@ pub fn main: () {
         sdl2::destroy_window(win)
         sdl2::quit()
     }
+
+    # ── Pipeline ──
+    set result = strings::split(data "\n")
+        => lists::filter(self (s :&str) => strings::len(*s) > 0)
+        => lists::len(self)
+
+    # ── Closures ──
+    set doubled = lists::map(nums (x :i64) => x * 2)
+    set sum = lists::fold(0 (acc elem :i64) => acc + elem, nums)
 }
 ```

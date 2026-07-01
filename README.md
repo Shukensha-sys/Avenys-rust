@@ -132,7 +132,7 @@ pub fn main: () {
 ## Project structure
 
 ```
-mire/
+avenys/
 ├── src/
 │   ├── parser/          # Lexer + recursive descent parser
 │   ├── compiler/        # Type checker, borrow checker, semantic analysis
