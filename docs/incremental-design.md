@@ -255,6 +255,6 @@ project-root/
 1. ✅ **WAL + segment blob store**: Foundation for crash safety and small writes
 2. ✅ **Real LRU**: Replace sort-based eviction with `LinkedHashMap` (VecDeque-based)
 3. ✅ **Per-directory metadata**: Split index from blobs, per-entry `.meta` files
-4. ⬜ **Hot/cold separation**: Keep hot entries in memory, cold on mmap
-5. ⬜ **Statement-level selective codegen**: Fine-grained rebuild
-6. ⬜ **Parallel module compilation**: Multi-core scale-out
+4. **Hot/cold separation**: Keep hot entries in memory, cold on mmap
+5. **Statement-level selective codegen**: Fine-grained rebuild
+6. **Parallel module compilation**: Multi-core scale-out
