@@ -59,6 +59,6 @@ pub fn expression_location(expression: &Expression) -> (usize, usize) {
         Expression::EnumVariant { payloads, .. } => {
             payloads.first().map(expression_location).unwrap_or((1, 1))
         }
-        Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
+        Expression::Literal(_) | Expression::EnumVariantPath { .. } => (0, 0),
     }
 }

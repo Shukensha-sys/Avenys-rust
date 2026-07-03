@@ -19,15 +19,16 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
         .find(|label| label.style == LabelStyle::Primary);
     let line = primary
         .map(|label| label.line.max(1))
-        .unwrap_or_else(|| if diag.line == 0 { 1 } else { diag.line });
+        .unwrap_or(diag.line);
     let col = primary
         .map(|label| label.column.max(1))
-        .unwrap_or_else(|| if diag.column == 0 { 1 } else { diag.column });
-    let has_default_anchor = line == 1
-        && col == 1
-        && diag.labels.iter().any(|label| {
-            label.style == LabelStyle::Primary && label.line <= 1 && label.column <= 1
-        });
+        .unwrap_or(diag.column);
+    let has_default_anchor = (line == 0 && col == 0)
+        || (line == 1
+            && col == 1
+            && diag.labels.iter().any(|label| {
+                label.style == LabelStyle::Primary && label.line <= 1 && label.column <= 1
+            }));
 
     let mut out = String::new();
     let code_label = match diag.severity {

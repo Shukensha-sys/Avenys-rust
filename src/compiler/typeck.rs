@@ -257,7 +257,7 @@ impl TypeChecker {
     }
 
     fn attach_current_context(&self, err: MireError) -> MireError {
-        let err = if err.line == 1 && err.column == 1 {
+        let err = if (err.line == 0 && err.column == 0) || (err.line == 1 && err.column == 1) {
             err.with_position(self.current_line, self.current_column)
         } else {
             err
@@ -392,8 +392,7 @@ fn type_error(message: String) -> MireError {
 }
 
 fn type_error_at(line: usize, column: usize, message: String) -> MireError {
-    let (err_line, err_col) = if line == 0 { (1, 1) } else { (line, column) };
-    MireError::type_error_at(err_line, err_col, message)
+    MireError::type_error_at(line, column, message)
 }
 
 #[cfg(test)]
