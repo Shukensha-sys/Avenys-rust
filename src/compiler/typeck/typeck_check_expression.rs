@@ -9,8 +9,10 @@ use crate::compiler::typeck::{TypeChecker, type_error, type_error_at};
 impl TypeChecker {
     pub(super) fn check_expression(&mut self, expression: &mut Expression) -> Result<DataType> {
         let (line, column) = super::location::expression_location(expression);
-        self.current_line = line;
-        self.current_column = column;
+        if line > 0 {
+            self.current_line = line;
+            self.current_column = column;
+        }
         match expression {
             Expression::Literal(lit) => Ok(Self::literal_type(lit)),
             Expression::Identifier(ident) => {
