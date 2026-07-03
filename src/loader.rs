@@ -1626,7 +1626,14 @@ fn select_imported_statements(
                         continue;
                     };
                     for (dep_idx, statement) in statements.iter().enumerate() {
-                        if statement_export_name(&statement.statement) == Some(candidate_name)
+                        let export_name = statement_export_name(&statement.statement);
+                        let internal_name = match &statement.statement {
+                            Statement::ExternFunction { name, .. }
+                            | Statement::ExternLib { name, .. } => Some(name.as_str()),
+                            _ => None,
+                        };
+                        if (export_name == Some(candidate_name)
+                            || internal_name == Some(candidate_name))
                             && selected.insert(dep_idx)
                         {
                             selected_indices.push(dep_idx);

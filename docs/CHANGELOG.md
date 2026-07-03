@@ -2,6 +2,23 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.11.38] - 2026-07-03
+
+### Fixed
+- **Loader**: `select_imported_statements` in `src/loader.rs` now also matches
+  `ExternFunction` and `ExternLib` by their declaration name (not just via
+  `statement_export_name`), so private externs are no longer dropped when loading
+  modules via `ImportMode::Reachable` with selected items. (Fixes SDL3 function
+  resolution when importing `kioto::sdl3`.)
+
+### Changed
+- **Type checker**: Removed three `eprintln!` debug lines (`DEBUG_STMTS`,
+  `DEBUG_FUNCS`, `DEBUG_SEL`) from `src/compiler/typeck.rs:109-121` that were
+  left over from SDL3 FFI debugging.
+
+### Docs
+- **CHANGELOG.md**: Bumped to 3.11.38.
+
 ## [3.11.37] - 2026-07-01
 
 ### Added
