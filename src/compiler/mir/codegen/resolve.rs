@@ -81,8 +81,11 @@ pub(crate) fn resolve_named_call(
     } else if ctx.extern_fn_names.contains(name) {
         (format!("@{}", name), false)
     } else {
-        // Try stripping root namespace (e.g. "async.pal_proc_exists" -> "pal_proc_exists")
-        let stripped = name.split_once('.').and_then(|(_, rest)| {
+        // Try stripping root namespaces (e.g. "kioto.net.http.get" -> "http.get")
+        // Multiple prefix levels may need to be stripped since 'load kioto' flattens
+        // the top-level namespace with empty prefix.
+        let stripped = name.match_indices('.').rev().find_map(|(i, _)| {
+            let rest = &name[i + 1..];
             if ctx.defined_fn_names.contains(rest) {
                 Some(format!("@fn_{}", sanitize_fn_name(rest)))
             } else if ctx.extern_fn_names.contains(rest) {

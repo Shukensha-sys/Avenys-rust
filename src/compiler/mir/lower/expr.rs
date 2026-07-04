@@ -3,6 +3,7 @@ use super::collections::lower_index_read;
 use super::types::{
     data_type_to_kind, extract_data_type, is_map_or_dict_type, is_trivial_deref, llvm_elem_type_str,
 };
+use crate::compiler::location::expression_location;
 use crate::compiler::mir::*;
 use crate::parser::ast::{DataType, Expression, Literal, Statement};
 
@@ -16,6 +17,7 @@ impl MirLower {
                 if needs_wrap && is_map_or_dict_type(&arg_type) {
                     let str_result = self.new_temp();
                     let last = self.current_block;
+                    let a_loc = expression_location(a);
                     self.func.blocks[last].push(
                         Some(str_result),
                         MirOp::Call(
@@ -25,7 +27,7 @@ impl MirLower {
                                 data_type: DataType::Unknown,
                             },
                         ),
-                        (0, 0),
+                        a_loc,
                     );
                     MirValue::temp(str_result)
                 } else {
@@ -36,7 +38,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_expression(&mut self, expr: &Expression) -> MirValue {
-        let loc = (0, 0);
+        let loc = expression_location(expr);
         match expr {
             Expression::Literal(lit) => self.lower_literal(lit),
             Expression::Identifier(id) => {
@@ -945,7 +947,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_map(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or((1, 1));
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1139,7 +1141,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_filter(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or((1, 1));
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1366,7 +1368,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_fold(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or((1, 1));
         let acc_init = self.lower_expression(&args[0]);
         let closure_val = self.lower_expression(&args[1]);
         let list_val = self.lower_expression(&args[2]);
