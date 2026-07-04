@@ -186,10 +186,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_comment(&mut self) -> Result<bool> {
-        let c0 = self.peek(0);
-        let c1 = self.peek(1);
-
-        if c0 == Some('#') {
+        if self.peek(0) == Some('/') && self.peek(1) == Some('/') {
+            self.advance();
             self.advance();
             while self.pos < self.len && self.peek(0) != Some('\n') {
                 self.advance();
@@ -197,31 +195,17 @@ impl<'a> Lexer<'a> {
             return Ok(true);
         }
 
-        if c0 == Some('/') && c1 == Some('/') {
+        if self.peek(0) == Some('/') && self.peek(1) == Some('!') {
             self.advance();
             self.advance();
-            if self.peek(0) == Some('!') {
-                self.advance();
-                return self.skip_block_comment("//!", "!//");
-            }
-            while self.pos < self.len && self.peek(0) != Some('\n') {
-                self.advance();
-            }
-            return Ok(true);
-        }
-
-        if c0 == Some('/') && c1 == Some('!') {
-            self.advance();
-            self.advance();
-            return self.skip_block_comment("/!", "!/");
+            return self.skip_block_comment("!/");
         }
 
         Ok(false)
     }
 
-    fn skip_block_comment(&mut self, _open: &str, close: &str) -> Result<bool> {
+    fn skip_block_comment(&mut self, close: &str) -> Result<bool> {
         let close_bytes = close.as_bytes();
-        let close_len = close_bytes.len();
         loop {
             if self.pos >= self.len {
                 return Err(MireError::new(ErrorKind::Lexer {
@@ -230,17 +214,11 @@ impl<'a> Lexer<'a> {
                     message: "Unterminated block comment".to_string(),
                 }));
             }
-            let mut matched = true;
-            for (i, &b) in close_bytes.iter().enumerate() {
-                if self.peek(i) != Some(b as char) {
-                    matched = false;
-                    break;
-                }
-            }
-            if matched {
-                for _ in 0..close_len {
-                    self.advance();
-                }
+            if self.peek(0) == Some(close_bytes[0] as char)
+                && self.peek(1) == Some(close_bytes[1] as char)
+            {
+                self.advance();
+                self.advance();
                 return Ok(true);
             }
             self.advance();

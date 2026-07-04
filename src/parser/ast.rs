@@ -162,9 +162,40 @@ impl DataType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttributeArg {
+    pub name: Option<String>,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attribute {
+    pub name: String,
+    pub args: Vec<AttributeArg>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatementAnnotation {
+    pub statement_index: usize,
+    pub attributes: Vec<Attribute>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Program {
     pub statements: Vec<Statement>,
+    #[serde(default)]
+    pub annotations: Vec<StatementAnnotation>,
+}
+
+impl Program {
+    pub fn attributes_for(&self, statement_index: usize) -> &[Attribute] {
+        static EMPTY: &[Attribute] = &[];
+        self.annotations
+            .iter()
+            .find(|a| a.statement_index == statement_index)
+            .map(|a| a.attributes.as_slice())
+            .unwrap_or(EMPTY)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

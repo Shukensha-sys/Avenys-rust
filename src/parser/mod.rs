@@ -25,7 +25,7 @@ pub fn parse_with_recovery(source: &str) -> (Program, Vec<MireError>) {
     match tokenize(source) {
         Ok(tokens) => Parser::new(tokens).parse_with_recovery(),
         Err(e) => (
-            Program {
+            Program { annotations: vec![],
                 statements: Vec::new(),
             },
             vec![e],
@@ -198,13 +198,24 @@ impl Parser {
 
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<MireError>) {
         let mut statements = Vec::new();
+        let mut annotations = Vec::new();
         while !self.is_at_end() {
             self.skip_newlines();
             if self.is_at_end() {
                 break;
             }
+            let attrs = self.parse_attributes().unwrap_or_default();
+            self.skip_newlines();
             match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => {
+                    if !attrs.is_empty() {
+                        annotations.push(crate::parser::ast::StatementAnnotation {
+                            statement_index: statements.len(),
+                            attributes: attrs,
+                        });
+                    }
+                    statements.push(stmt);
+                }
                 Err(err) => {
                     self.errors.push(err);
                     self.skip_to_statement_boundary();
@@ -212,7 +223,7 @@ impl Parser {
             }
             self.skip_newlines();
         }
-        (Program { statements }, std::mem::take(&mut self.errors))
+        (Program { statements, annotations }, std::mem::take(&mut self.errors))
     }
 
     fn skip_to_statement_boundary(&mut self) {
