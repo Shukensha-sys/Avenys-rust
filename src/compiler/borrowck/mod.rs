@@ -887,7 +887,7 @@ impl<'a> BorrowChecker<'a> {
             DataType::RefMut { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if !is_mutable {
-                        return Err(MireError::type_error(format!(
+                        return Err(MireError::type_error_at(self.current_line.max(1), self.current_column.max(1), format!(
                             "Function '{}' argument {} requires a mutable reference",
                             callee,
                             index + 1

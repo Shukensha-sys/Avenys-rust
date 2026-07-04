@@ -219,6 +219,8 @@ impl LlvmIrGen {
             if name == "__match_guard" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line.max(1),
+                        column: self.current_column.max(1),
                         message: "Avenys __match_guard expects pattern and guard".to_string(),
                     }));
                 }
@@ -240,6 +242,8 @@ impl LlvmIrGen {
             if name == "__match_or" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line.max(1),
+                        column: self.current_column.max(1),
                         message: "Avenys __match_or expects two patterns".to_string(),
                     }));
                 }
@@ -257,6 +261,8 @@ impl LlvmIrGen {
             if name == "__match_range" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line.max(1),
+                        column: self.current_column.max(1),
                         message: "Avenys __match_range expects start and end".to_string(),
                     }));
                 }
@@ -416,6 +422,8 @@ impl LlvmIrGen {
             LlType::Ptr => (8, "ptr", self.cast_to_type(value, LlType::Ptr)?.repr),
             LlType::Struct(_) => {
                 return Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line.max(1),
+                    column: self.current_column.max(1),
                     message: "Cannot heap-box a struct value".to_string(),
                 }));
             }
@@ -570,6 +578,8 @@ impl LlvmIrGen {
                 owned: false,
             }),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line.max(1),
+                column: self.current_column.max(1),
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr => {

@@ -18,7 +18,7 @@ impl TypeChecker {
                                 | Expression::Dict { .. }
                                 | Expression::Identifier(_)
                         ) {
-                            return Err(type_error(format!(
+                            return Err(type_error(0, 0, format!(
                                 "Nested literal for {:?} must use explicit inner brackets",
                                 expected
                             )));
@@ -34,7 +34,7 @@ impl TypeChecker {
                 if Self::requires_explicit_nested_element(value_type) {
                     for (_, value) in entries {
                         if !matches!(value, Expression::List { .. } | Expression::Dict { .. }) {
-                            return Err(type_error(format!(
+                            return Err(type_error(0, 0, format!(
                                 "Nested literal for {:?} must use explicit inner brackets",
                                 expected
                             )));
@@ -59,7 +59,7 @@ impl TypeChecker {
         let trait_sig = self
             .traits
             .get(trait_name)
-            .ok_or_else(|| type_error(format!("Unknown skill/trait '{}'", trait_name)))?;
+            .ok_or_else(|| type_error(0, 0, format!("Unknown skill/trait '{}'", trait_name)))?;
 
         for required_method in &trait_sig.methods {
             let implemented = methods.iter().find_map(|statement| match statement {
@@ -73,7 +73,7 @@ impl TypeChecker {
             });
 
             let Some((implemented_params, implemented_return)) = implemented else {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Type '{}' does not implement required method '{}.{}'",
                     type_name, trait_name, required_method.name
                 )));
@@ -82,7 +82,7 @@ impl TypeChecker {
             let required_kind = Self::method_kind_for_params(&required_method.params);
             let implemented_kind = Self::method_kind_for_params(&implemented_params);
             if required_kind != implemented_kind {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Method '{}.{}' must be implemented as {}, got {}",
                     trait_name,
                     required_method.name,
@@ -99,7 +99,7 @@ impl TypeChecker {
             if implemented_params != required_params
                 || implemented_return != required_method.return_type
             {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Method '{}.{}' implementation signature does not match declaration: expected {:?} -> {:?}, got {:?} -> {:?}",
                     trait_name,
                     required_method.name,
@@ -172,7 +172,7 @@ impl TypeChecker {
         context: String,
     ) -> Result<()> {
         if params.iter().skip(1).any(|(name, _)| name == "self") {
-            return Err(type_error(format!(
+            return Err(type_error(0, 0, format!(
                 "{} must declare 'self' as the first parameter",
                 context
             )));

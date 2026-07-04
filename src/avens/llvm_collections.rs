@@ -26,6 +26,8 @@ impl LlvmIrGen {
                     owned: false,
                 }),
                 LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line.max(1),
+                    column: self.current_column.max(1),
                     message: "Struct type not supported here".to_string(),
                 })),
             },
@@ -895,6 +897,8 @@ impl LlvmIrGen {
                 })
             }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line.max(1),
+                column: self.current_column.max(1),
                 message: "Struct type not supported here".to_string(),
             })),
         }
@@ -1393,6 +1397,8 @@ impl LlvmIrGen {
         let haystack_type = self.expression_data_type(&args[0]);
         if haystack_type != DataType::Str {
             return Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line.max(1),
+                column: self.current_column.max(1),
                 message: "Avenys contains(...) is currently lowered for strings only".to_string(),
             }));
         }
@@ -1473,6 +1479,8 @@ impl LlvmIrGen {
                     }
                     LlType::Struct(_) => {
                         return Err(MireError::new(ErrorKind::Backend {
+                            line: self.current_line.max(1),
+                            column: self.current_column.max(1),
                             message: "Struct type not supported here".to_string(),
                         }));
                     }

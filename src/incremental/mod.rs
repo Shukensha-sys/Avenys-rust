@@ -207,6 +207,8 @@ pub(crate) enum StoredErrorKind {
         message: String,
     },
     Backend {
+        line: usize,
+        column: usize,
         message: String,
     },
     Runtime {
@@ -297,7 +299,13 @@ impl From<&ErrorKind> for StoredErrorKind {
                 column: *column,
                 message: message.clone(),
             },
-            ErrorKind::Backend { message } => Self::Backend {
+            ErrorKind::Backend {
+                line,
+                column,
+                message,
+            } => Self::Backend {
+                line: *line,
+                column: *column,
                 message: message.clone(),
             },
             ErrorKind::Runtime { message } => Self::Runtime {
@@ -351,7 +359,15 @@ impl From<StoredErrorKind> for ErrorKind {
                 column,
                 message,
             },
-            StoredErrorKind::Backend { message } => Self::Backend { message },
+            StoredErrorKind::Backend {
+                line,
+                column,
+                message,
+            } => Self::Backend {
+                line,
+                column,
+                message,
+            },
             StoredErrorKind::Runtime { message } => Self::Runtime { message },
             StoredErrorKind::Type {
                 line,
