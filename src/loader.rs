@@ -602,7 +602,9 @@ fn statement_prefix(module_name: &str, module_path: &Path, origin: &Path) -> Str
     }
 
     let base = module_path.parent().unwrap_or(module_path);
-    let relative = origin.strip_prefix(base).ok().unwrap_or(origin);
+    let Ok(relative) = origin.strip_prefix(base) else {
+        return String::new();
+    };
     let mut parts = Vec::new();
     for component in relative.components() {
         let part = component.as_os_str().to_string_lossy().to_string();
