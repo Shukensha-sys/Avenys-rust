@@ -344,10 +344,8 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                                         println!("  {}", trimmed);
                                     }
                                     file_failed += 1;
-                                } else if !trimmed.is_empty() {
-                                    if verbose || trimmed == "ok" {
-                                        println!("  {}", trimmed);
-                                    }
+                                } else if !trimmed.is_empty() && verbose {
+                                    println!("  {}", trimmed);
                                 }
                             }
                             let total = file_passed + file_failed;
