@@ -17,7 +17,7 @@ impl TypeChecker {
             .any(|arg| !matches!(arg, Expression::NamedArg { .. }));
 
         if has_named && has_positional {
-            return Err(type_error(format!(
+            return Err(type_error(self.current_line, self.current_column, format!(
                 "Constructor '{}' cannot mix named and positional arguments",
                 class_name
             )));
@@ -31,7 +31,7 @@ impl TypeChecker {
                 };
 
                 if !seen.insert(name.clone()) {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "Constructor '{}' received duplicate field '{}'",
                         class_name, name
                     )));
@@ -42,7 +42,7 @@ impl TypeChecker {
                     .iter()
                     .find(|field| field.name == *name)
                     .ok_or_else(|| {
-                        type_error(format!(
+                        type_error(self.current_line, self.current_column, format!(
                             "Constructor '{}' has no field '{}'",
                             class_name, name
                         ))
@@ -51,7 +51,7 @@ impl TypeChecker {
                 let actual = arg_types.get(index).cloned().unwrap_or(DataType::Unknown);
                 let expected = self.substitute_generics(&field.data_type, bindings);
                 if !self.is_assignable(&expected, &actual) {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "Constructor '{}.{}' expects {:?}, got {:?}",
                         class_name, name, expected, actual
                     )));
@@ -60,7 +60,7 @@ impl TypeChecker {
 
             for field in &class_sig.fields {
                 if !field.has_default && !seen.contains(&field.name) {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "Constructor '{}' is missing required field '{}'",
                         class_name, field.name
                     )));
@@ -68,7 +68,7 @@ impl TypeChecker {
             }
         } else {
             if arg_types.len() > class_sig.fields.len() {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Constructor '{}' expects at most {} values, got {}",
                     class_name,
                     class_sig.fields.len(),
@@ -82,7 +82,7 @@ impl TypeChecker {
                 };
                 let expected = self.substitute_generics(&field.data_type, bindings);
                 if !self.is_assignable(&expected, actual) {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "Constructor '{}.{}' expects {:?}, got {:?}",
                         class_name, field.name, expected, actual
                     )));
@@ -91,7 +91,7 @@ impl TypeChecker {
 
             for field in class_sig.fields.iter().skip(arg_types.len()) {
                 if !field.has_default {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "Constructor '{}' is missing required field '{}'",
                         class_name, field.name
                     )));
@@ -233,7 +233,7 @@ impl TypeChecker {
                 }
             }
             let Some(pair) = found else {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Struct '{}' has no method '{}'",
                     struct_name, method_name
                 )));
@@ -254,7 +254,7 @@ impl TypeChecker {
             .collect();
 
         if expected_args.len() != arg_types.len() {
-            return Err(type_error(format!(
+            return Err(type_error(self.current_line, self.current_column, format!(
                 "Method '{}.{}' expects {} arguments, got {}",
                 struct_name,
                 method_name,
@@ -265,7 +265,7 @@ impl TypeChecker {
 
         for (idx, (expected, actual)) in expected_args.iter().zip(arg_types.iter()).enumerate() {
             if !self.is_assignable(expected, actual) {
-                return Err(type_error(format!(
+                return Err(type_error(self.current_line, self.current_column, format!(
                     "Method '{}.{}' argument {} expects {:?}, got {:?}",
                     struct_name,
                     method_name,
@@ -287,7 +287,7 @@ impl TypeChecker {
         match name {
             "lists.fold" => {
                 if args.len() != 3 {
-                    return Err(type_error("lists.fold expects 3 arguments".to_string()));
+                    return Err(type_error(self.current_line, self.current_column, "lists.fold expects 3 arguments".to_string()));
                 }
                 // Mire currently defines the order as `(acc, closure, list)`.
                 let acc_type = self.check_expression(&mut args[0])?;
@@ -301,7 +301,7 @@ impl TypeChecker {
                 if closure_return != DataType::Unknown
                     && !self.is_assignable(&acc_type, &closure_return)
                 {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "lists.fold closure must return {:?}, got {:?}",
                         acc_type, closure_return
                     )));
@@ -311,7 +311,7 @@ impl TypeChecker {
             }
             "lists.map" => {
                 if args.len() != 2 {
-                    return Err(type_error("lists.map expects 2 arguments".to_string()));
+                    return Err(type_error(self.current_line, self.current_column, "lists.map expects 2 arguments".to_string()));
                 }
                 let list_type = self.check_expression(&mut args[1])?;
                 let elem_type = Self::infer_list_element_type(list_type)?;
@@ -321,7 +321,7 @@ impl TypeChecker {
                     "lists.map",
                 )?;
                 if mapped_type == DataType::Unknown {
-                    return Err(type_error(
+                    return Err(type_error(self.current_line, self.current_column, 
                         "lists.map closure must return a value".to_string(),
                     ));
                 }
@@ -334,7 +334,7 @@ impl TypeChecker {
             }
             "lists.filter" => {
                 if args.len() != 2 {
-                    return Err(type_error("lists.filter expects 2 arguments".to_string()));
+                    return Err(type_error(self.current_line, self.current_column, "lists.filter expects 2 arguments".to_string()));
                 }
                 let list_type = self.check_expression(&mut args[1])?;
                 let elem_type = Self::infer_list_element_type(list_type)?;
@@ -344,7 +344,7 @@ impl TypeChecker {
                     "lists.filter",
                 )?;
                 if !Self::is_bool_like(&predicate_type) {
-                    return Err(type_error(format!(
+                    return Err(type_error(self.current_line, self.current_column, format!(
                         "lists.filter closure must return bool, got {:?}",
                         predicate_type
                     )));

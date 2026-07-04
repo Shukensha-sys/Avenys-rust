@@ -24,6 +24,8 @@ pub enum ErrorKind {
         message: String,
     },
     Backend {
+        line: usize,
+        column: usize,
         message: String,
     },
     Runtime {
@@ -243,7 +245,19 @@ impl MireError {
     }
 
     pub fn backend(message: String) -> Self {
-        Self::new(ErrorKind::Backend { message })
+        Self::new(ErrorKind::Backend {
+            line: 0,
+            column: 0,
+            message,
+        })
+    }
+
+    pub fn backend_at(line: usize, column: usize, message: String) -> Self {
+        Self::new(ErrorKind::Backend {
+            line,
+            column,
+            message,
+        })
     }
 
     pub fn runtime(message: String) -> Self {
@@ -315,9 +329,13 @@ fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, Diagnostic
             message.clone(),
             DiagnosticCode::E0003,
         ),
-        ErrorKind::Backend { message } => (
-            1,
-            1,
+        ErrorKind::Backend {
+            line,
+            column,
+            message,
+        } => (
+            *line,
+            *column,
             "Backend Limitation",
             message.clone(),
             DiagnosticCode::E0014,

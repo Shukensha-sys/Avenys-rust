@@ -191,7 +191,7 @@ impl TypeChecker {
         statement_mask: &[bool],
     ) -> Result<()> {
         if statement_mask.len() != statements.len() {
-            return Err(type_error(format!(
+            return Err(type_error(self.current_line, self.current_column, format!(
                 "Typecheck mask length mismatch: expected {}, got {}",
                 statements.len(),
                 statement_mask.len()
@@ -230,7 +230,7 @@ impl TypeChecker {
         statement_mask: &[bool],
     ) -> Result<()> {
         if statement_mask.len() != statements.len() {
-            return Err(type_error(format!(
+            return Err(type_error(self.current_line, self.current_column, format!(
                 "Nested typecheck mask length mismatch: expected {}, got {}",
                 statements.len(),
                 statement_mask.len()
@@ -384,8 +384,8 @@ impl TypeChecker {
     }
 }
 
-fn type_error(message: String) -> MireError {
-    type_error_at(0, 0, message)
+fn type_error(line: usize, column: usize, message: String) -> MireError {
+    type_error_at(line, column, message)
 }
 
 fn type_error_at(line: usize, column: usize, message: String) -> MireError {

@@ -683,6 +683,8 @@ impl LlvmIrGen {
             | Statement::Impl { .. }
             | Statement::Enum { .. }
             | Statement::Query { .. } => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line.max(1),
+                column: self.current_column.max(1),
                 message: "Avenys statement is parsed/typechecked but not lowered in backend yet"
                     .to_string(),
             })),
@@ -976,6 +978,8 @@ impl LlvmIrGen {
                             })
                         }
                         LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                            line: self.current_line.max(1),
+                            column: self.current_column.max(1),
                             message: "Cannot convert struct to string".to_string(),
                         })),
                     },
@@ -1042,6 +1046,8 @@ impl LlvmIrGen {
                                 }
                             } else {
                                 return Err(MireError::new(ErrorKind::Backend {
+                                    line: self.current_line.max(1),
+                                    column: self.current_column.max(1),
                                     message: format!(
                                         "Avenys call(...) callback '{}' has no inferable signature; reject dynamic lowering",
                                         ident.name
@@ -1050,6 +1056,8 @@ impl LlvmIrGen {
                             }
                             if matches!(data_type, DataType::Unknown | DataType::Function) {
                                 return Err(MireError::new(ErrorKind::Backend {
+                                    line: self.current_line.max(1),
+                                    column: self.current_column.max(1),
                                     message: format!(
                                         "Avenys call(...) callback '{}' produced unresolved return type; dynamic lowering rejected",
                                         ident.name
@@ -1059,6 +1067,8 @@ impl LlvmIrGen {
                             let callback_ptr = self.compile_expr(&args[0])?;
                             if callback_ptr.ty != LlType::Ptr {
                                 return Err(MireError::new(ErrorKind::Backend {
+                                    line: self.current_line.max(1),
+                                    column: self.current_column.max(1),
                                     message: format!(
                                         "Avenys dynamic callback '{}' is not a function pointer",
                                         ident.name
@@ -1083,6 +1093,8 @@ impl LlvmIrGen {
                                     LlType::Ptr => ("ptr".to_string(), value.repr),
                                     LlType::Struct(_) => {
                                         return Err(MireError::new(ErrorKind::Backend {
+                                            line: self.current_line.max(1),
+                                            column: self.current_column.max(1),
                                             message: "Cannot pass struct to callback".to_string(),
                                         }));
                                     }
@@ -1182,6 +1194,8 @@ impl LlvmIrGen {
                     callback_expr => {
                         if matches!(data_type, DataType::Unknown | DataType::Function) {
                             return Err(MireError::new(ErrorKind::Backend {
+                                line: self.current_line.max(1),
+                                column: self.current_column.max(1),
                                 message:
                                     "Avenys call(...) callback expression has unresolved return type; dynamic lowering rejected"
                                         .to_string(),
@@ -1190,6 +1204,8 @@ impl LlvmIrGen {
                         let callback_ptr = self.compile_expr(callback_expr)?;
                         if callback_ptr.ty != LlType::Ptr {
                             return Err(MireError::new(ErrorKind::Backend {
+                                line: self.current_line.max(1),
+                                column: self.current_column.max(1),
                                 message:
                                     "Avenys call(...) dynamic callback must be a function pointer"
                                         .to_string(),
@@ -1213,6 +1229,8 @@ impl LlvmIrGen {
                                 LlType::Ptr => ("ptr".to_string(), value.repr),
                                 LlType::Struct(_) => {
                                     return Err(MireError::new(ErrorKind::Backend {
+                                        line: self.current_line.max(1),
+                                        column: self.current_column.max(1),
                                         message: "Cannot pass struct to callback".to_string(),
                                     }));
                                 }
@@ -1724,6 +1742,8 @@ impl LlvmIrGen {
                     })
                     .ok_or_else(|| {
                         MireError::new(ErrorKind::Backend {
+                            line: self.current_line.max(1),
+                            column: self.current_column.max(1),
                             message: format!("Avenys unknown function '{}'", name),
                         })
                     })?;
@@ -1805,6 +1825,8 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
+                                line: self.current_line.max(1),
+                                column: self.current_column.max(1),
                                 message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
@@ -1846,6 +1868,8 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
+                                line: self.current_line.max(1),
+                                column: self.current_column.max(1),
                                 message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
