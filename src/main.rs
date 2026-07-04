@@ -278,10 +278,20 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             entries.sort();
             test_files = entries;
         }
+        let main_candidates = [
+            cwd.join("code/main.mire"),
+            cwd.join("main.mire"),
+        ];
+        for candidate in &main_candidates {
+            if candidate.exists() {
+                test_files.push(candidate.clone());
+                break;
+            }
+        }
     }
 
     if test_files.is_empty() {
-        println!("no extra tests found");
+        println!("no tests found");
         return Ok(0);
     }
 
