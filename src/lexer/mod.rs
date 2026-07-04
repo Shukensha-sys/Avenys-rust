@@ -186,43 +186,65 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_comment(&mut self) -> Result<bool> {
-        if (self.peek(0) == Some('/') && self.peek(1) == Some('/')) || self.peek(0) == Some('#') {
-            let is_hash = self.peek(0) == Some('#');
-            if is_hash {
+        let c0 = self.peek(0);
+        let c1 = self.peek(1);
+
+        if c0 == Some('#') {
+            self.advance();
+            while self.pos < self.len && self.peek(0) != Some('\n') {
                 self.advance();
-            } else {
+            }
+            return Ok(true);
+        }
+
+        if c0 == Some('/') && c1 == Some('/') {
+            self.advance();
+            self.advance();
+            if self.peek(0) == Some('!') {
                 self.advance();
-                self.advance();
-                if self.peek(0) == Some('!') {
-                    self.advance();
-                    loop {
-                        match (self.peek(0), self.peek(1), self.peek(2)) {
-                            (Some('!'), Some('/'), Some('/')) => {
-                                self.advance();
-                                self.advance();
-                                self.advance();
-                                return Ok(true);
-                            }
-                            (None, _, _) => {
-                                return Err(MireError::new(ErrorKind::Lexer {
-                                    line: self.line,
-                                    column: self.column,
-                                    message: "Unterminated block comment".to_string(),
-                                }));
-                            }
-                            _ => {
-                                self.advance();
-                            }
-                        }
-                    }
-                }
+                return self.skip_block_comment("//!", "!//");
             }
             while self.pos < self.len && self.peek(0) != Some('\n') {
                 self.advance();
             }
             return Ok(true);
         }
+
+        if c0 == Some('/') && c1 == Some('!') {
+            self.advance();
+            self.advance();
+            return self.skip_block_comment("/!", "!/");
+        }
+
         Ok(false)
+    }
+
+    fn skip_block_comment(&mut self, _open: &str, close: &str) -> Result<bool> {
+        let close_bytes = close.as_bytes();
+        let close_len = close_bytes.len();
+        loop {
+            if self.pos >= self.len {
+                return Err(MireError::new(ErrorKind::Lexer {
+                    line: self.line,
+                    column: self.column,
+                    message: "Unterminated block comment".to_string(),
+                }));
+            }
+            let mut matched = true;
+            for (i, &b) in close_bytes.iter().enumerate() {
+                if self.peek(i) != Some(b as char) {
+                    matched = false;
+                    break;
+                }
+            }
+            if matched {
+                for _ in 0..close_len {
+                    self.advance();
+                }
+                return Ok(true);
+            }
+            self.advance();
+        }
     }
 
     fn read_identifier(&mut self) -> String {
