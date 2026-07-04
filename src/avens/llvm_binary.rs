@@ -688,19 +688,15 @@ impl LlvmIrGen {
                     .push(format!("  call void @rt_managed_free(ptr {old_ptr})"));
             }
 
-            let owned_value = if value.owned {
-                value
-            } else {
-                let copied = self.tmp();
-                self.body.push(format!(
-                    "  {copied} = call ptr @rt_string_copy(ptr {})",
-                    value.repr
-                ));
-                LlValue {
-                    ty: LlType::Ptr,
-                    repr: copied,
-                    owned: true,
-                }
+            let copied = self.tmp();
+            self.body.push(format!(
+                "  {copied} = call ptr @rt_string_copy(ptr {})",
+                value.repr
+            ));
+            let owned_value = LlValue {
+                ty: LlType::Ptr,
+                repr: copied,
+                owned: true,
             };
 
             self.owned_temps.remove(&owned_value.repr);
