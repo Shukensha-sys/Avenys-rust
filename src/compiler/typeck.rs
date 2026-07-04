@@ -297,16 +297,16 @@ impl TypeChecker {
         let (line, column) = location::statement_location(statement);
         self.current_line = line;
         self.current_column = column;
-        match statement {
+        let result = match statement {
             Statement::Let {
                 name,
                 data_type,
                 value,
                 is_mutable,
                 ..
-            } => self.check_let_statement(name, data_type, value, *is_mutable)?,
+            } => self.check_let_statement(name, data_type, value, *is_mutable),
             Statement::Assignment { target, value, .. } => {
-                self.check_assignment_statement(target, value)?
+                self.check_assignment_statement(target, value)
             }
             Statement::Function {
                 name,
@@ -323,67 +323,64 @@ impl TypeChecker {
                 params,
                 body,
                 return_type,
-            )?,
-            Statement::Return(expr) => self.check_return_statement(expr)?,
+            ),
+            Statement::Return(expr) => self.check_return_statement(expr),
             Statement::If {
                 condition,
                 then_branch,
                 else_branch,
-            } => self.check_if_statement(condition, then_branch, else_branch)?,
-            Statement::While { condition, body } => self.check_while_statement(condition, body)?,
+            } => self.check_if_statement(condition, then_branch, else_branch),
+            Statement::While { condition, body } => self.check_while_statement(condition, body),
             Statement::For {
                 variable,
                 index,
                 iterable,
                 body,
-            } => self.check_for_statement(variable, index, iterable, body)?,
+            } => self.check_for_statement(variable, index, iterable, body),
             Statement::Find {
                 variable,
                 iterable,
                 body,
-            } => self.check_find_statement(variable, iterable, body)?,
-            Statement::Expression(expr) => {
-                self.check_expression(expr)?;
-            }
+            } => self.check_find_statement(variable, iterable, body),
+            Statement::Expression(expr) => self.check_expression(expr).map(|_| ()),
             Statement::Match {
                 value,
                 cases,
                 default,
-            } => self.check_match_statement(value, cases, default)?,
-            Statement::Unsafe { body } => self.check_scoped_body(body)?,
-            Statement::Asm { instructions } => self.check_asm_statement(instructions)?,
-            Statement::Drop { value } => self.check_drop_statement(value)?,
+            } => self.check_match_statement(value, cases, default),
+            Statement::Unsafe { body } => self.check_scoped_body(body),
+            Statement::Asm { instructions } => self.check_asm_statement(instructions),
+            Statement::Drop { value } => self.check_drop_statement(value),
             Statement::New {
                 value,
                 declared_type,
-            } => self.check_new_statement(value, declared_type)?,
-            Statement::Own { value, inner_type } => self.check_own_statement(value, inner_type)?,
-            Statement::Move { target, value } => self.check_move_statement(target, value)?,
+            } => self.check_new_statement(value, declared_type),
+            Statement::Own { value, inner_type } => self.check_own_statement(value, inner_type),
+            Statement::Move { target, value } => self.check_move_statement(target, value),
             Statement::Query {
                 ops,
                 bindings,
                 group_by: _,
                 joins: _,
                 table: _,
-            } => self.check_query_statement(ops, bindings)?,
+            } => self.check_query_statement(ops, bindings),
             Statement::Impl {
                 trait_name,
                 type_name,
                 methods,
                 ..
-            } => self.check_impl_statement(trait_name, type_name, methods)?,
-            Statement::Type { fields, .. } => self.check_type_statement(fields)?,
-            Statement::Skill { name, methods, .. } => self.check_skill_statement(name, methods)?,
+            } => self.check_impl_statement(trait_name, type_name, methods),
+            Statement::Type { fields, .. } => self.check_type_statement(fields),
+            Statement::Skill { name, methods, .. } => self.check_skill_statement(name, methods),
             Statement::Break
             | Statement::Continue
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
             | Statement::Enum { .. }
-            | Statement::Module { .. } => {}
-            Statement::Load { .. } => {}
-        }
-
-        Ok(())
+            | Statement::Module { .. } => Ok(()),
+            Statement::Load { .. } => Ok(()),
+        };
+        result.map_err(|err| self.attach_current_context(err))
     }
 }
 
