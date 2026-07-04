@@ -41,6 +41,7 @@ pub(super) fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             return_type,
             visibility,
             is_method,
+            attributes: _,
         } => {
             hasher.write_u8(2);
             name.hash(hasher);

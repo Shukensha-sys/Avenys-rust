@@ -102,6 +102,7 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         cache: common.cache,
         warning_filter: common.warn.filter,
         deny_warnings: common.warn.deny,
+        test_mode: false,
         module_paths: Vec::new(),
     };
     let build = compile_file_with_avenys(&path, &options)?;
@@ -130,6 +131,7 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         cache: common.cache,
         warning_filter: common.warn.filter,
         deny_warnings: common.warn.deny,
+        test_mode: false,
         module_paths: Vec::new(),
     };
     let build = compile_file_with_avenys(&path, &options)?;
@@ -209,7 +211,8 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             cache: options.common.cache,
             warning_filter: options.common.warn.filter,
             deny_warnings: options.common.warn.deny,
-            module_paths: Vec::new(),
+            test_mode: false,
+        module_paths: Vec::new(),
         },
     )?;
 
@@ -314,7 +317,8 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             cache: Default::default(),
             warning_filter: WarningFilter::Default,
             deny_warnings: HashSet::new(),
-            module_paths: Vec::new(),
+            test_mode: true,
+        module_paths: Vec::new(),
         };
 
         match compile_file_with_avenys(file, &options) {

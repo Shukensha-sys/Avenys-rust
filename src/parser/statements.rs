@@ -293,8 +293,10 @@ impl Parser {
         self.pop_type_param_scope();
         self.declare(&name);
 
+        let attributes = std::mem::take(&mut self.pending_attributes);
         Ok(Statement::Function {
             name,
+            attributes,
             type_params,
             type_param_bounds,
             params,

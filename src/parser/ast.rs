@@ -534,6 +534,8 @@ pub enum Statement {
     Function {
         name: String,
         #[serde(default)]
+        attributes: Vec<Attribute>,
+        #[serde(default)]
         type_params: Vec<String>,
         #[serde(default)]
         type_param_bounds: Vec<(String, Vec<String>)>,
