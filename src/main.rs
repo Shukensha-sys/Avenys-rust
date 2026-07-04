@@ -285,24 +285,17 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         return Ok(0);
     }
 
-    let _total = test_files.len();
-    let mut passed = 0u32;
-    let mut failed = 0u32;
+    let mut global_passed = 0u32;
+    let mut global_failed = 0u32;
 
     for file in &test_files {
         let display = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
 
-        if verbose {
-            print!("test {} ... ", display);
-        }
-
         if !file.exists() {
             if verbose {
-                println!("FAILED");
-            } else {
                 println!("FAILED: {} - file not found", display);
             }
-            failed += 1;
+            global_failed += 1;
             continue;
         }
 
@@ -324,55 +317,69 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         match compile_file_with_avenys(file, &options) {
             Ok(build) => {
                 if run {
-                    match Command::new(&build.binary_path).status() {
-                        Ok(status) if status.success() => {
-                            if verbose {
-                                println!("ok");
+                    match Command::new(&build.binary_path).output() {
+                        Ok(output) => {
+                            let stdout = String::from_utf8_lossy(&output.stdout);
+                            let mut file_passed = 0u32;
+                            let mut file_failed = 0u32;
+                            for line in stdout.lines() {
+                                let trimmed = line.trim();
+                                if trimmed.starts_with("[PASS]") {
+                                    if verbose {
+                                        println!("  {}", trimmed);
+                                    }
+                                    file_passed += 1;
+                                } else if trimmed.starts_with("[FAIL]") {
+                                    if verbose {
+                                        println!("  {}", trimmed);
+                                    }
+                                    file_failed += 1;
+                                } else if !trimmed.is_empty() {
+                                    if verbose || trimmed == "ok" {
+                                        println!("  {}", trimmed);
+                                    }
+                                }
                             }
-                            passed += 1;
-                        }
-                        Ok(status) => {
-                            if verbose {
-                                println!("FAILED");
-                            } else {
-                                println!("FAILED: {} (exit code: {:?})", display, status.code());
-                            }
-                            failed += 1;
+                            let total = file_passed + file_failed;
+                            let status = if file_failed == 0 { "ok" } else { "FAILED" };
+                            println!(
+                                "test {} ... {}",
+                                display,
+                                if file_failed == 0 { "ok" } else { "FAILED" }
+                            );
+                            global_passed += file_passed;
+                            global_failed += file_failed;
                         }
                         Err(e) => {
-                            if verbose {
-                                println!("FAILED");
-                            } else {
-                                println!("FAILED: {} - run error: {}", display, e);
-                            }
-                            failed += 1;
+                            println!("test {} ... FAILED (run error: {})", display, e);
+                            global_failed += 1;
                         }
                     }
                 } else {
-                    if verbose {
-                        println!("ok");
-                    }
-                    passed += 1;
+                    println!("test {} ... ok (compiled)", display);
+                    global_passed += 1;
                 }
             }
             Err(e) => {
-                if verbose {
-                    println!("FAILED");
-                } else {
-                    println!("FAILED: {} - {}", display, e);
-                }
-                failed += 1;
+                println!("test {} ... FAILED ({})", display, e);
+                global_failed += 1;
             }
         }
     }
 
-    let status = if failed == 0 { "ok" } else { "FAILED" };
+    let total = global_passed + global_failed;
+    let skipped = 0u32;
+    let ok_count = global_passed;
+    println!();
+    println!("test result:");
     println!(
-        "\ntest result: {}. {} passed; {} failed; finished",
-        status, passed, failed
+        "Ok: {} - Passed: {} - Failed: {} - Filtered Out: {}",
+        ok_count, global_passed, global_failed, skipped
     );
+    println!("Total: {}", total);
+    let exit_code = if global_failed == 0 { 0 } else { 1 };
 
-    Ok(if failed == 0 { 0 } else { 1 })
+    Ok(exit_code)
 }
 
 fn walkdir(dir: &Path, _pattern: &str) -> Result<Vec<PathBuf>, MireError> {
