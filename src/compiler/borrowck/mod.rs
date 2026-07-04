@@ -1053,7 +1053,7 @@ mod tests {
 
     #[test]
     fn rejects_assignment_while_shared_borrow_exists() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1080,7 +1080,7 @@ mod tests {
 
     #[test]
     fn rejects_mutable_borrow_while_shared_borrow_exists() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1111,7 +1111,7 @@ mod tests {
 
     #[test]
     fn rejects_use_after_move() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Move {
@@ -1131,7 +1131,7 @@ mod tests {
 
     #[test]
     fn releases_borrow_on_scope_exit() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::If {
@@ -1162,7 +1162,7 @@ mod tests {
 
     #[test]
     fn unsafe_allows_write_while_borrowed() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1191,7 +1191,7 @@ mod tests {
 
     #[test]
     fn rejects_returning_reference_to_local_binding() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![Statement::Function {
                 name: "bad".to_string(),
                 type_params: Vec::new(),
@@ -1219,7 +1219,7 @@ mod tests {
 
     #[test]
     fn rejects_returning_reference_to_local_from_impl_method() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,
@@ -1266,7 +1266,7 @@ mod tests {
 
     #[test]
     fn rejects_call_that_requires_mut_ref_but_receives_shared_ref() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "mutate".to_string(),
@@ -1303,7 +1303,7 @@ mod tests {
 
     #[test]
     fn explicit_move_call_consumes_binding() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "item".to_string(),
@@ -1333,7 +1333,7 @@ mod tests {
 
     #[test]
     fn passing_copy_type_by_value_does_not_consume_binding() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "show".to_string(),
@@ -1362,7 +1362,7 @@ mod tests {
 
     #[test]
     fn partial_borrowck_skips_unselected_top_level_statements() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1402,7 +1402,7 @@ mod tests {
 
     #[test]
     fn partial_borrowck_can_skip_unchanged_impl_methods() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Impl {
@@ -1470,7 +1470,7 @@ mod tests {
 
     #[test]
     fn later_global_binding_does_not_hide_local_ref_escape() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "leak".to_string(),
@@ -1501,7 +1501,7 @@ mod tests {
 
     #[test]
     fn impl_method_returning_local_ref_is_rejected() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),

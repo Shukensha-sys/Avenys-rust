@@ -1,12 +1,54 @@
 use crate::error::Result;
 use crate::lexer::{Token, TokenType};
 use crate::parser::ast::{
-    DataType, EnumVariantDef, Expression, Literal, Statement, TraitMethodSig, Visibility,
+    Attribute, AttributeArg, DataType, EnumVariantDef, Expression, Literal, Statement,
+    TraitMethodSig, Visibility,
 };
 
 use super::Parser;
 
 impl Parser {
+    pub(super) fn parse_attributes(&mut self) -> Result<Vec<Attribute>> {
+        let mut attrs = Vec::new();
+        while self.check(TokenType::At) && self.peek_n(1).ttype == TokenType::Lbracket {
+            self.advance();
+            self.advance();
+            let name = self.expect_ident()?;
+            let mut args = Vec::new();
+            if self.check(TokenType::Lparen) {
+                self.advance();
+                while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                    if self.check(TokenType::StrLit) {
+                        let tok = self.advance();
+                        args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                    }
+                    if self.check(TokenType::Comma) { self.advance(); }
+                }
+                self.expect(TokenType::Rparen)?;
+            }
+            attrs.push(Attribute { name, args });
+            while self.check(TokenType::Comma) {
+                self.advance();
+                let attr_name = self.expect_ident()?;
+                let mut attr_args = Vec::new();
+                if self.check(TokenType::Lparen) {
+                    self.advance();
+                    while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                        if self.check(TokenType::StrLit) {
+                            let tok = self.advance();
+                            attr_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                        }
+                        if self.check(TokenType::Comma) { self.advance(); }
+                    }
+                    self.expect(TokenType::Rparen)?;
+                }
+                attrs.push(Attribute { name: attr_name, args: attr_args });
+            }
+            self.expect(TokenType::Rbracket)?;
+        }
+        Ok(attrs)
+    }
+
     pub(super) fn parse_statement(&mut self) -> Result<Statement> {
         if self.is_legacy_add_statement() {
             let token = self.peek();

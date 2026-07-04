@@ -68,7 +68,7 @@ pub fn load_program_with_metadata_with_settings(
         drop(resolver);
         cache.save()?;
         return Ok(LoadedProgram {
-            program: Program {
+            program: Program { annotations: vec![],
                 statements: program_statements,
             },
             files,
@@ -89,7 +89,7 @@ pub fn load_program_with_metadata_with_settings(
     drop(resolver);
     cache.save()?;
     Ok(LoadedProgram {
-        program: Program {
+        program: Program { annotations: vec![],
             statements: program_statements,
         },
         files,
@@ -127,7 +127,7 @@ pub fn load_program_with_cache(
         let statement_origins = statements.iter().map(|stmt| stmt.origin.clone()).collect();
         let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
         return Ok(LoadedProgram {
-            program: Program {
+            program: Program { annotations: vec![],
                 statements: program_statements,
             },
             files: resolver.files,
@@ -142,7 +142,7 @@ pub fn load_program_with_cache(
     let statement_origins = statements.iter().map(|stmt| stmt.origin.clone()).collect();
     let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
     Ok(LoadedProgram {
-        program: Program {
+        program: Program { annotations: vec![],
             statements: program_statements,
         },
         files: resolver.files,

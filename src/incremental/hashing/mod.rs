@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn analysis_units_include_nested_children_for_supported_containers() {
-        let program = Program {
+        let program = Program { annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,
@@ -675,7 +675,7 @@ mod tests {
 
     #[test]
     fn invalidation_report_matches_member_access_to_type_field_units() {
-        let previous = Program {
+        let previous = Program { annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,

@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn infers_unknown_let_from_literal() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![Statement::Let {
                 name: "x".to_string(),
                 data_type: DataType::Unknown,
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn resolves_identifier_type() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn infers_function_call_return_type() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "sum".to_string(),
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn fails_on_undefined_identifier() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![Statement::Expression(Expression::Identifier(Identifier {
                 name: "missing".to_string(),
                 data_type: DataType::Unknown,
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn fails_on_assignment_type_mismatch() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn accepts_builtin_calls() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn allows_unknown_in_logical_binary_ops() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn partial_typecheck_rechecks_only_selected_top_level_statements() {
-        let mut previous = Program {
+        let mut previous = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -684,7 +684,7 @@ mod tests {
         };
         check_program_types(&mut previous, "").expect("baseline type check must pass");
 
-        let mut current = Program {
+        let mut current = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -734,7 +734,7 @@ mod tests {
 
     #[test]
     fn partial_typecheck_can_skip_unchanged_impl_methods() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),
@@ -792,7 +792,7 @@ mod tests {
 
     #[test]
     fn partial_typecheck_can_skip_nested_members_in_type_and_impl_members() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,
@@ -953,7 +953,7 @@ mod tests {
 
     #[test]
     fn map_assignment_rejects_vector_values() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "values".to_string(),
@@ -1041,7 +1041,7 @@ mod tests {
 
     #[test]
     fn mutable_reference_expectation_rejects_shared_reference_argument() {
-        let mut program = Program {
+        let mut program = Program { annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "bump".to_string(),
