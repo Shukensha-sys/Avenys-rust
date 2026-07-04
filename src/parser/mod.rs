@@ -8,6 +8,7 @@ mod types;
 
 use crate::error::{MireError, Result};
 use crate::lexer::{Token, TokenType, tokenize};
+use crate::parser::ast::Attribute;
 use std::collections::{HashMap, HashSet};
 
 pub use ast::{EnumDef, EnumVariantDef, MireValue, Program, Statement};
@@ -44,6 +45,7 @@ pub struct Parser {
     type_param_scopes: Vec<HashSet<String>>,
     function_body_depth: usize,
     errors: Vec<MireError>,
+    pending_attributes: Vec<Attribute>,
 }
 
 #[derive(Clone, Copy)]
@@ -67,6 +69,7 @@ impl Parser {
             type_param_scopes: vec![HashSet::new()],
             function_body_depth: 0,
             errors: Vec::new(),
+            pending_attributes: Vec::new(),
         }
     }
 
@@ -198,7 +201,6 @@ impl Parser {
 
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<MireError>) {
         let mut statements = Vec::new();
-        let mut annotations = Vec::new();
         while !self.is_at_end() {
             self.skip_newlines();
             if self.is_at_end() {
@@ -206,16 +208,9 @@ impl Parser {
             }
             let attrs = self.parse_attributes().unwrap_or_default();
             self.skip_newlines();
+            self.pending_attributes = attrs;
             match self.parse_statement() {
-                Ok(stmt) => {
-                    if !attrs.is_empty() {
-                        annotations.push(crate::parser::ast::StatementAnnotation {
-                            statement_index: statements.len(),
-                            attributes: attrs,
-                        });
-                    }
-                    statements.push(stmt);
-                }
+                Ok(stmt) => statements.push(stmt),
                 Err(err) => {
                     self.errors.push(err);
                     self.skip_to_statement_boundary();
@@ -223,7 +218,7 @@ impl Parser {
             }
             self.skip_newlines();
         }
-        (Program { statements, annotations }, std::mem::take(&mut self.errors))
+        (Program { statements, annotations: vec![] }, std::mem::take(&mut self.errors))
     }
 
     fn skip_to_statement_boundary(&mut self) {

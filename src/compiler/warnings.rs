@@ -24,6 +24,8 @@ pub struct WarningAnalyzer {
     statement_origins: Vec<PathBuf>,
     entry_path: Option<PathBuf>,
     suppress_library_warnings: bool,
+    test_function_indices: HashSet<usize>,
+    test_function_names: HashSet<String>,
 }
 
 impl WarningAnalyzer {
@@ -46,6 +48,8 @@ impl WarningAnalyzer {
             statement_origins: Vec::new(),
             entry_path: None,
             suppress_library_warnings: false,
+            test_function_indices: HashSet::new(),
+            test_function_names: HashSet::new(),
         }
     }
 
@@ -62,6 +66,13 @@ impl WarningAnalyzer {
         source: &str,
         filename: Option<&str>,
     ) -> Vec<Diagnostic> {
+        for stmt in &program.statements {
+            if let Statement::Function { name, attributes, .. } = stmt {
+                if attributes.iter().any(|a| a.name == "test") {
+                    self.test_function_names.insert(name.clone());
+                }
+            }
+        }
         for (index, stmt) in program.statements.iter().enumerate() {
             if self.suppress_library_warnings {
                 let origin = self.statement_origins.get(index);
@@ -113,7 +124,9 @@ impl WarningAnalyzer {
 
         let defined_functions: Vec<String> = self.defined_functions.iter().cloned().collect();
         for name in &defined_functions {
-            if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name) {
+            if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name)
+                && !self.test_function_names.contains(name)
+            {
                 let pos = self
                     .function_positions
                     .get(name)

@@ -64,6 +64,7 @@ pub struct BuildOptions {
     pub warning_filter: WarningFilter,
     pub deny_warnings: HashSet<DiagnosticCode>,
     pub module_paths: Vec<PathBuf>,
+    pub test_mode: bool,
 }
 
 #[derive(Debug, Clone)]

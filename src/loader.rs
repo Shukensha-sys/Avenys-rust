@@ -713,6 +713,7 @@ impl<'a> ModuleRenamer<'a> {
                 return_type,
                 visibility,
                 is_method,
+                attributes,
             } => {
                 let name = self.rename_decl_name(name, scope_stack, top_level);
                 let mut body_scope = scope_stack.clone();
@@ -741,6 +742,7 @@ impl<'a> ModuleRenamer<'a> {
                 let return_type = self.rename_data_type(return_type, scope_stack);
                 let body = self.rename_statement_block(body, &mut body_scope);
                 Statement::Function {
+                    attributes,
                     name,
                     type_params,
                     type_param_bounds,

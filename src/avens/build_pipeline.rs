@@ -398,6 +398,92 @@ fn progress_phase(phase: &str, _file: &str, elapsed_ms: u64, total_ms: u64) {
     }
 }
 
+fn inject_test_harness(program: &mut crate::parser::ast::Program) {
+    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement, Visibility};
+    let mut test_fns: Vec<String> = Vec::new();
+    for stmt in &program.statements {
+        if let Statement::Function { name, attributes, .. } = stmt {
+            if attributes.iter().any(|a| a.name == "test") {
+                test_fns.push(name.clone());
+            }
+        }
+    }
+    if test_fns.is_empty() {
+        return;
+    }
+    let mut body: Vec<Statement> = Vec::new();
+    for name in &test_fns {
+        body.push(Statement::Let {
+            name: format!("_result_{}", name),
+            data_type: DataType::Bool,
+            value: Some(Expression::Call {
+                name: name.clone(),
+                args: Vec::new(),
+                type_args: Vec::new(),
+                data_type: DataType::Bool,
+            }),
+            is_constant: false,
+            is_mutable: false,
+            is_static: false,
+            visibility: Visibility::Private,
+            name_line: 0,
+            name_column: 0,
+        });
+        let result_name = format!("_result_{}", name);
+        let pass_br = Statement::If {
+            condition: Expression::Identifier(Identifier {
+                name: result_name.clone(),
+                data_type: DataType::Bool,
+                line: 0,
+                column: 0,
+            }),
+            then_branch: vec![
+                Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "  [PASS] {}",
+                        name
+                    )))],
+                    type_args: Vec::new(),
+                    data_type: DataType::None,
+                }),
+            ],
+            else_branch: Some(vec![Statement::Expression(Expression::Call {
+                name: "dasu".to_string(),
+                args: vec![Expression::Literal(Literal::Str(format!(
+                    "  [FAIL] {}",
+                    name
+                )))],
+                type_args: Vec::new(),
+                data_type: DataType::None,
+            })]),
+        };
+        body.push(pass_br);
+    }
+    body.push(Statement::Expression(Expression::Call {
+        name: "dasu".to_string(),
+        args: vec![Expression::Literal(Literal::Str(format!(
+            "test result: {} tests completed",
+            test_fns.len()
+        )))],
+        type_args: Vec::new(),
+        data_type: DataType::None,
+    }));
+    let harness = Statement::Function {
+        name: "main".to_string(),
+        attributes: Vec::new(),
+        type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
+        params: Vec::new(),
+        body,
+        return_type: DataType::None,
+        visibility: Visibility::Public,
+        is_method: false,
+    };
+    program.statements.retain(|s| !matches!(s, Statement::Function { name, .. } if name == "main"));
+    program.statements.push(harness);
+}
+
 pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> Result<BuildResult> {
     let build_start = std::time::Instant::now();
     let source = fs::read_to_string(source_path)?;
@@ -553,11 +639,19 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let mut phase_mir_time = phase_load;
     let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash) {
         match cached {
-            CachedAnalysis::Success(program) => program,
+            CachedAnalysis::Success(mut program) => {
+                if options.test_mode {
+                    inject_test_harness(&mut program);
+                }
+                program
+            }
             CachedAnalysis::Error(error) => return Err(error),
         }
     } else {
         let mut program = loaded.program;
+        if options.test_mode {
+            inject_test_harness(&mut program);
+        }
         let analysis_result = if let Some(cached) =
             cache.latest_successful_analysis(source_path, source_file_hash)
         {
