@@ -460,15 +460,7 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
         };
         body.push(pass_br);
     }
-    body.push(Statement::Expression(Expression::Call {
-        name: "dasu".to_string(),
-        args: vec![Expression::Literal(Literal::Str(format!(
-            "test result: {} tests completed",
-            test_fns.len()
-        )))],
-        type_args: Vec::new(),
-        data_type: DataType::None,
-    }));
+
     let harness = Statement::Function {
         name: "main".to_string(),
         attributes: Vec::new(),
