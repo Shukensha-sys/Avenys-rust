@@ -45,18 +45,27 @@ impl Parser {
 
     pub(super) fn parse_nominal_name_with_type_args(&mut self) -> Result<String> {
         let base = self.expect_ident()?;
+        // Support qualified names: module::Type
+        let name = if self.check_double_colon() {
+            self.advance();
+            self.advance();
+            let tail = self.expect_ident()?;
+            format!("{}.{}", base, tail)
+        } else {
+            base
+        };
         if self.check(TokenType::Lbracket) {
             let args = self.parse_type_args()?;
             return Ok(format!(
                 "{}[{}]",
-                base,
+                name,
                 args.iter()
                     .map(data_type_name)
                     .collect::<Vec<_>>()
                     .join(" ")
             ));
         }
-        Ok(base)
+        Ok(name)
     }
 
     pub(super) fn parse_type(&mut self) -> Result<DataType> {

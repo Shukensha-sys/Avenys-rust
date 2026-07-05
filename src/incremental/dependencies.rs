@@ -85,11 +85,21 @@ pub(crate) fn collect_statement_dependencies(statement: &Statement, deps: &mut V
                 collect_statement_dependencies(statement, deps);
             }
         }
-        Statement::Type { fields, .. }
-        | Statement::Unsafe { body: fields, .. }
-        | Statement::Impl {
-            methods: fields, ..
+        Statement::Type { fields, .. } | Statement::Unsafe { body: fields, .. } => {
+            for statement in fields {
+                collect_statement_dependencies(statement, deps);
+            }
+        }
+        Statement::Impl {
+            type_name,
+            trait_name,
+            methods: fields,
+            ..
         } => {
+            deps.push(type_name.clone());
+            if let Some(trait_name) = trait_name {
+                deps.push(trait_name.clone());
+            }
             for statement in fields {
                 collect_statement_dependencies(statement, deps);
             }
