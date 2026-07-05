@@ -185,6 +185,8 @@ pub struct Program {
     pub statements: Vec<Statement>,
     #[serde(default)]
     pub annotations: Vec<StatementAnnotation>,
+    #[serde(default)]
+    pub file_attributes: Vec<Attribute>,
 }
 
 impl Program {
@@ -611,6 +613,8 @@ pub enum Statement {
         visibility: Visibility,
     },
     Unsafe {
+        line: usize,
+        column: usize,
         body: Vec<Statement>,
     },
     Asm {

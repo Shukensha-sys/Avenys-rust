@@ -86,7 +86,7 @@ pub(crate) fn collect_statement_dependencies(statement: &Statement, deps: &mut V
             }
         }
         Statement::Type { fields, .. }
-        | Statement::Unsafe { body: fields }
+        | Statement::Unsafe { body: fields, .. }
         | Statement::Impl {
             methods: fields, ..
         } => {
@@ -241,7 +241,7 @@ pub(crate) fn collect_statement_bindings(statement: &Statement, bindings: &mut V
                 collect_statement_bindings(stmt, bindings);
             }
         }
-        Statement::Unsafe { body }
+        Statement::Unsafe { body, .. }
         | Statement::Type { fields: body, .. }
         | Statement::Impl { methods: body, .. } => {
             for stmt in body {

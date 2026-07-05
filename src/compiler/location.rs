@@ -27,6 +27,11 @@ pub fn statement_location(statement: &Statement) -> (usize, usize) {
             expression_location(iterable)
         }
         Statement::Match { value, .. } => expression_location(value),
+        Statement::Unsafe { line, column, .. } => {
+            let line = *line;
+            let column = *column;
+            (line.max(1), column.max(1))
+        }
         _ => NO_POSITION,
     }
 }

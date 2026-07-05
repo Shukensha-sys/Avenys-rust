@@ -27,6 +27,7 @@ pub fn parse_with_recovery(source: &str) -> (Program, Vec<MireError>) {
         Ok(tokens) => Parser::new(tokens).parse_with_recovery(),
         Err(e) => (
             Program {
+                file_attributes: vec![],
                 annotations: vec![],
                 statements: Vec::new(),
             },
@@ -202,6 +203,7 @@ impl Parser {
 
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<MireError>) {
         let mut statements = Vec::new();
+        let mut file_attributes: Vec<Attribute> = Vec::new();
         while !self.is_at_end() {
             self.skip_newlines();
             if self.is_at_end() {
@@ -216,8 +218,13 @@ impl Parser {
             }
             self.pending_attributes = attrs;
             match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => {
+                    let remaining = std::mem::take(&mut self.pending_attributes);
+                    file_attributes.extend(remaining);
+                    statements.push(stmt);
+                }
                 Err(err) => {
+                    self.pending_attributes.clear();
                     self.errors.push(err);
                     self.skip_to_statement_boundary();
                 }
@@ -228,6 +235,7 @@ impl Parser {
             Program {
                 statements,
                 annotations: vec![],
+                file_attributes,
             },
             std::mem::take(&mut self.errors),
         )

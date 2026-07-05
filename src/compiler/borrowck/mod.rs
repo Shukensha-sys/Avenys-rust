@@ -457,7 +457,7 @@ impl<'a> BorrowChecker<'a> {
                 self.check_statements(fields)?;
             }
             Statement::Skill { .. } => {}
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 self.unsafe_depth += 1;
                 self.push_scope();
                 let result = self.check_statements(body);
@@ -1058,6 +1058,7 @@ mod tests {
     #[test]
     fn rejects_assignment_while_shared_borrow_exists() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1086,6 +1087,7 @@ mod tests {
     #[test]
     fn rejects_mutable_borrow_while_shared_borrow_exists() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1118,6 +1120,7 @@ mod tests {
     #[test]
     fn rejects_use_after_move() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1139,6 +1142,7 @@ mod tests {
     #[test]
     fn releases_borrow_on_scope_exit() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1171,6 +1175,7 @@ mod tests {
     #[test]
     fn unsafe_allows_write_while_borrowed() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1184,6 +1189,8 @@ mod tests {
                     }),
                 ),
                 Statement::Unsafe {
+                    line: 1,
+                    column: 1,
                     body: vec![Statement::Assignment {
                         target: AssignmentTarget::Variable("x".to_string()),
                         value: Expression::Literal(Literal::Int(2)),
@@ -1201,6 +1208,7 @@ mod tests {
     #[test]
     fn rejects_returning_reference_to_local_binding() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Function {
                 name: "bad".to_string(),
@@ -1230,6 +1238,7 @@ mod tests {
     #[test]
     fn rejects_returning_reference_to_local_from_impl_method() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Type {
@@ -1278,6 +1287,7 @@ mod tests {
     #[test]
     fn rejects_call_that_requires_mut_ref_but_receives_shared_ref() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Function {
@@ -1316,6 +1326,7 @@ mod tests {
     #[test]
     fn explicit_move_call_consumes_binding() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -1347,6 +1358,7 @@ mod tests {
     #[test]
     fn passing_copy_type_by_value_does_not_consume_binding() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Function {
@@ -1377,6 +1389,7 @@ mod tests {
     #[test]
     fn partial_borrowck_skips_unselected_top_level_statements() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1418,6 +1431,7 @@ mod tests {
     #[test]
     fn partial_borrowck_can_skip_unchanged_impl_methods() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
@@ -1487,6 +1501,7 @@ mod tests {
     #[test]
     fn later_global_binding_does_not_hide_local_ref_escape() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Function {
@@ -1519,6 +1534,7 @@ mod tests {
     #[test]
     fn impl_method_returning_local_ref_is_rejected() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,

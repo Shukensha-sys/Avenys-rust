@@ -18,14 +18,14 @@ impl Parser {
             if self.check(TokenType::Lparen) {
                 self.advance();
                 while !self.check(TokenType::Rparen) && !self.is_at_end() {
-                    if self.check(TokenType::StrLit) {
+                    let token_type = self.peek().ttype;
+                    if token_type != TokenType::Rparen && token_type != TokenType::Comma {
                         let tok = self.advance();
                         args.push(AttributeArg {
                             name: None,
-                            value: tok.value.unwrap_or_default(),
+                            value: tok.value.clone().unwrap_or_default(),
                         });
-                    }
-                    if self.check(TokenType::Comma) {
+                    } else if token_type == TokenType::Comma {
                         self.advance();
                     }
                 }
@@ -39,14 +39,14 @@ impl Parser {
                 if self.check(TokenType::Lparen) {
                     self.advance();
                     while !self.check(TokenType::Rparen) && !self.is_at_end() {
-                        if self.check(TokenType::StrLit) {
+                        let token_type = self.peek().ttype;
+                        if token_type != TokenType::Rparen && token_type != TokenType::Comma {
                             let tok = self.advance();
                             attr_args.push(AttributeArg {
                                 name: None,
-                                value: tok.value.unwrap_or_default(),
+                                value: tok.value.clone().unwrap_or_default(),
                             });
-                        }
-                        if self.check(TokenType::Comma) {
+                        } else if token_type == TokenType::Comma {
                             self.advance();
                         }
                     }
@@ -66,14 +66,14 @@ impl Parser {
                 if self.check(TokenType::Lparen) {
                     self.advance();
                     while !self.check(TokenType::Rparen) && !self.is_at_end() {
-                        if self.check(TokenType::StrLit) {
+                        let token_type = self.peek().ttype;
+                        if token_type != TokenType::Rparen && token_type != TokenType::Comma {
                             let tok = self.advance();
                             chain_args.push(AttributeArg {
                                 name: None,
-                                value: tok.value.unwrap_or_default(),
+                                value: tok.value.clone().unwrap_or_default(),
                             });
-                        }
-                        if self.check(TokenType::Comma) {
+                        } else if token_type == TokenType::Comma {
                             self.advance();
                         }
                     }
@@ -712,13 +712,16 @@ impl Parser {
     }
 
     fn parse_unsafe_statement(&mut self) -> Result<Statement> {
+        let token = self.peek();
+        let line = token.line;
+        let column = token.column;
         self.expect(TokenType::Unsafe)?;
         self.expect_block_open()?;
         self.push_scope();
         let body = self.parse_block()?;
         self.pop_scope();
         self.expect_block_close()?;
-        Ok(Statement::Unsafe { body })
+        Ok(Statement::Unsafe { line, column, body })
     }
 
     fn parse_extern_statement(&mut self) -> Result<Statement> {

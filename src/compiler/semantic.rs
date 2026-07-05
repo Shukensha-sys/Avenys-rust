@@ -132,6 +132,7 @@ mod tests {
     #[test]
     fn registers_impl_methods_with_qualified_names() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
@@ -161,8 +162,11 @@ mod tests {
     #[test]
     fn tracks_unsafe_scope_and_drop_move_facts() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Unsafe {
+                line: 1,
+                column: 1,
                 body: vec![
                     Statement::Let {
                         name: "x".to_string(),
@@ -372,7 +376,7 @@ impl SemanticModelBuilder {
                 self.visit_statements(fields);
             }
             Statement::Skill { .. } => {}
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 self.model.unsafe_blocks += 1;
                 self.unsafe_depth += 1;
                 self.with_scope(|builder| builder.visit_statements(body));
