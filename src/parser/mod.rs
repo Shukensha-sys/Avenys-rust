@@ -206,8 +206,13 @@ impl Parser {
             if self.is_at_end() {
                 break;
             }
-            let attrs = self.parse_attributes().unwrap_or_default();
+            let mut attrs = self.parse_attributes().unwrap_or_default();
             self.skip_newlines();
+            while self.check(TokenType::At) && self.peek_n(1).ttype == TokenType::Lbracket {
+                let more = self.parse_attributes().unwrap_or_default();
+                self.skip_newlines();
+                attrs.extend(more);
+            }
             self.pending_attributes = attrs;
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),

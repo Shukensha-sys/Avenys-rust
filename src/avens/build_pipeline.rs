@@ -399,66 +399,100 @@ fn progress_phase(phase: &str, _file: &str, elapsed_ms: u64, total_ms: u64) {
 }
 
 fn inject_test_harness(program: &mut crate::parser::ast::Program) {
-    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement, Visibility};
-    let mut test_fns: Vec<String> = Vec::new();
+    use crate::parser::ast::{Attribute, DataType, Expression, Identifier, Literal, Statement, Visibility};
+    
+    struct TestFn {
+        name: String,
+        section: String,
+        ignored: bool,
+    }
+    
+    let mut tests: Vec<TestFn> = Vec::new();
     for stmt in &program.statements {
         if let Statement::Function { name, attributes, .. } = stmt {
             if attributes.iter().any(|a| a.name == "test") {
-                test_fns.push(name.clone());
+                let section = attributes.iter()
+                    .find(|a| a.name == "section")
+                    .and_then(|a| a.args.first())
+                    .map(|arg| arg.value.clone())
+                    .unwrap_or_default();
+                let ignored = attributes.iter().any(|a| a.name == "ignore");
+                tests.push(TestFn { name: name.clone(), section, ignored });
             }
         }
     }
-    if test_fns.is_empty() {
+    if tests.is_empty() {
         return;
     }
+
     let mut body: Vec<Statement> = Vec::new();
-    for name in &test_fns {
-        body.push(Statement::Let {
-            name: format!("_result_{}", name),
-            data_type: DataType::Bool,
-            value: Some(Expression::Call {
-                name: name.clone(),
-                args: Vec::new(),
-                type_args: Vec::new(),
-                data_type: DataType::Bool,
-            }),
-            is_constant: false,
-            is_mutable: false,
-            is_static: false,
-            visibility: Visibility::Private,
-            name_line: 0,
-            name_column: 0,
-        });
-        let result_name = format!("_result_{}", name);
-        let pass_br = Statement::If {
-            condition: Expression::Identifier(Identifier {
-                name: result_name.clone(),
-                data_type: DataType::Bool,
-                line: 0,
-                column: 0,
-            }),
-            then_branch: vec![
-                Statement::Expression(Expression::Call {
+    let mut current_section = String::new();
+    for test in &tests {
+        if test.section != current_section {
+            current_section = test.section.clone();
+            if !current_section.is_empty() {
+                body.push(Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str(format!(
-                        "  [PASS] {}",
-                        name
+                        "\n  [{}]", current_section
                     )))],
                     type_args: Vec::new(),
                     data_type: DataType::None,
-                }),
-            ],
-            else_branch: Some(vec![Statement::Expression(Expression::Call {
+                }));
+            }
+        }
+        if test.ignored {
+            body.push(Statement::Expression(Expression::Call {
                 name: "dasu".to_string(),
                 args: vec![Expression::Literal(Literal::Str(format!(
-                    "  [FAIL] {}",
-                    name
+                    "  [SKIP] {}", test.name
                 )))],
                 type_args: Vec::new(),
                 data_type: DataType::None,
-            })]),
-        };
-        body.push(pass_br);
+            }));
+        } else {
+            body.push(Statement::Let {
+                name: format!("_result_{}", test.name),
+                data_type: DataType::Bool,
+                value: Some(Expression::Call {
+                    name: test.name.clone(),
+                    args: Vec::new(),
+                    type_args: Vec::new(),
+                    data_type: DataType::Bool,
+                }),
+                is_constant: false,
+                is_mutable: false,
+                is_static: false,
+                visibility: Visibility::Private,
+                name_line: 0,
+                name_column: 0,
+            });
+            let result_name = format!("_result_{}", test.name);
+            body.push(Statement::If {
+                condition: Expression::Identifier(Identifier {
+                    name: result_name,
+                    data_type: DataType::Bool,
+                    line: 0,
+                    column: 0,
+                }),
+                then_branch: vec![Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "  [PASS] {}", test.name
+                    )))],
+                    type_args: Vec::new(),
+                    data_type: DataType::None,
+                })],
+                else_branch: Some(vec![Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "  [FAIL] {}", test.name
+                    )))],
+                    type_args: Vec::new(),
+                    data_type: DataType::None,
+                })]),
+            });
+        }
     }
 
     let harness = Statement::Function {

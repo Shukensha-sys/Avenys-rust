@@ -297,6 +297,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 
     let mut global_passed = 0u32;
     let mut global_failed = 0u32;
+    let mut global_skipped = 0u32;
 
     for file in &test_files {
         let display = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
@@ -332,6 +333,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                             let stdout = String::from_utf8_lossy(&output.stdout);
                             let mut file_passed = 0u32;
                             let mut file_failed = 0u32;
+                            let mut file_skipped = 0u32;
                             for line in stdout.lines() {
                                 let trimmed = line.trim();
                                 if trimmed.starts_with("[PASS]") {
@@ -344,11 +346,16 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                                         println!("  {}", trimmed);
                                     }
                                     file_failed += 1;
+                                } else if trimmed.starts_with("[SKIP]") {
+                                    if verbose {
+                                        println!("  {}", trimmed);
+                                    }
+                                    file_skipped += 1;
                                 } else if !trimmed.is_empty() && verbose {
                                     println!("  {}", trimmed);
                                 }
                             }
-                            let total = file_passed + file_failed;
+                            let total = file_passed + file_failed + file_skipped;
                             let status = if file_failed == 0 { "ok" } else { "FAILED" };
                             println!(
                                 "test {} ... {}",
@@ -357,6 +364,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                             );
                             global_passed += file_passed;
                             global_failed += file_failed;
+                            global_skipped += file_skipped;
                         }
                         Err(e) => {
                             println!("test {} ... FAILED (run error: {})", display, e);
@@ -375,14 +383,13 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         }
     }
 
-    let total = global_passed + global_failed;
-    let skipped = 0u32;
+    let total = global_passed + global_failed + global_skipped;
     let ok_count = global_passed;
     println!();
     println!("test result:");
     println!(
         "Ok: {} - Passed: {} - Failed: {} - Filtered Out: {}",
-        ok_count, global_passed, global_failed, skipped
+        ok_count, global_passed, global_failed, global_skipped
     );
     println!("Total: {}", total);
     let exit_code = if global_failed == 0 { 0 } else { 1 };
