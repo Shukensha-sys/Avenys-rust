@@ -766,6 +766,29 @@ impl Parser {
                     self.advance();
                     self.advance();
                     let member = self.expect_member_name()?;
+
+                    if self.check(TokenType::Dot) && self.peek_n(1).ttype == TokenType::Ident {
+                        if self.enum_names.contains(&member) {
+                            self.advance();
+                            let variant_name = self.advance().value.unwrap_or_default();
+                            let enum_name = format!("{}::{}", name, member);
+                            if self.check(TokenType::Lparen) {
+                                let payloads = self.parse_enum_variant_arguments()?;
+                                return Ok(Expression::EnumVariant {
+                                    enum_name: enum_name.clone(),
+                                    variant_name,
+                                    payloads,
+                                    data_type: DataType::EnumNamed(enum_name),
+                                });
+                            }
+                            return Ok(Expression::EnumVariantPath {
+                                enum_name: enum_name.clone(),
+                                variant_name,
+                                data_type: DataType::EnumNamed(enum_name),
+                            });
+                        }
+                    }
+
                     return Ok(Expression::MemberAccess {
                         target: Box::new(identifier_expr_with_pos(&name, token.line, token.column)),
                         member,
