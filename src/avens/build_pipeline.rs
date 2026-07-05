@@ -399,26 +399,33 @@ fn progress_phase(phase: &str, _file: &str, elapsed_ms: u64, total_ms: u64) {
 }
 
 fn inject_test_harness(program: &mut crate::parser::ast::Program) {
-    use crate::parser::ast::{Attribute, DataType, Expression, Identifier, Literal, Statement, Visibility};
-    
+    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement, Visibility};
+
     struct TestFn {
         name: String,
         section: String,
         ignored: bool,
     }
-    
+
     let mut tests: Vec<TestFn> = Vec::new();
     for stmt in &program.statements {
-        if let Statement::Function { name, attributes, .. } = stmt {
-            if attributes.iter().any(|a| a.name == "test") {
-                let section = attributes.iter()
-                    .find(|a| a.name == "section")
-                    .and_then(|a| a.args.first())
-                    .map(|arg| arg.value.clone())
-                    .unwrap_or_default();
-                let ignored = attributes.iter().any(|a| a.name == "ignore");
-                tests.push(TestFn { name: name.clone(), section, ignored });
-            }
+        if let Statement::Function {
+            name, attributes, ..
+        } = stmt
+            && attributes.iter().any(|a| a.name == "test")
+        {
+            let section = attributes
+                .iter()
+                .find(|a| a.name == "section")
+                .and_then(|a| a.args.first())
+                .map(|arg| arg.value.clone())
+                .unwrap_or_default();
+            let ignored = attributes.iter().any(|a| a.name == "ignore");
+            tests.push(TestFn {
+                name: name.clone(),
+                section,
+                ignored,
+            });
         }
     }
     if tests.is_empty() {
@@ -434,7 +441,8 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                 body.push(Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str(format!(
-                        "\n  [{}]", current_section
+                        "\n  [{}]",
+                        current_section
                     )))],
                     type_args: Vec::new(),
                     data_type: DataType::None,
@@ -445,7 +453,8 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
             body.push(Statement::Expression(Expression::Call {
                 name: "dasu".to_string(),
                 args: vec![Expression::Literal(Literal::Str(format!(
-                    "  [SKIP] {}", test.name
+                    "  [SKIP] {}",
+                    test.name
                 )))],
                 type_args: Vec::new(),
                 data_type: DataType::None,
@@ -478,7 +487,8 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                 then_branch: vec![Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str(format!(
-                        "  [PASS] {}", test.name
+                        "  [PASS] {}",
+                        test.name
                     )))],
                     type_args: Vec::new(),
                     data_type: DataType::None,
@@ -486,7 +496,8 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                 else_branch: Some(vec![Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str(format!(
-                        "  [FAIL] {}", test.name
+                        "  [FAIL] {}",
+                        test.name
                     )))],
                     type_args: Vec::new(),
                     data_type: DataType::None,
@@ -506,7 +517,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
         visibility: Visibility::Public,
         is_method: false,
     };
-    program.statements.retain(|s| !matches!(s, Statement::Function { name, .. } if name == "main"));
+    program
+        .statements
+        .retain(|s| !matches!(s, Statement::Function { name, .. } if name == "main"));
     program.statements.push(harness);
 }
 

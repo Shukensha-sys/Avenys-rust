@@ -24,7 +24,6 @@ pub struct WarningAnalyzer {
     statement_origins: Vec<PathBuf>,
     entry_path: Option<PathBuf>,
     suppress_library_warnings: bool,
-    test_function_indices: HashSet<usize>,
     test_function_names: HashSet<String>,
     deprecated_functions: HashMap<String, String>,
     allow_dead_code: HashSet<String>,
@@ -56,7 +55,6 @@ impl WarningAnalyzer {
             statement_origins: Vec::new(),
             entry_path: None,
             suppress_library_warnings: false,
-            test_function_indices: HashSet::new(),
             test_function_names: HashSet::new(),
             deprecated_functions: HashMap::new(),
             allow_dead_code: HashSet::new(),
@@ -77,20 +75,27 @@ impl WarningAnalyzer {
         filename: Option<&str>,
     ) -> Vec<Diagnostic> {
         for stmt in &program.statements {
-            if let Statement::Function { name, attributes, .. } = stmt {
+            if let Statement::Function {
+                name, attributes, ..
+            } = stmt
+            {
                 if attributes.iter().any(|a| a.name == "test") {
                     self.test_function_names.insert(name.clone());
                 }
                 if let Some(dep) = attributes.iter().find(|a| a.name == "deprecated") {
-                    let msg = dep.args.first().map(|a| a.value.clone()).unwrap_or_else(|| "deprecated".to_string());
+                    let msg = dep
+                        .args
+                        .first()
+                        .map(|a| a.value.clone())
+                        .unwrap_or_else(|| "deprecated".to_string());
                     self.deprecated_functions.insert(name.clone(), msg);
                 }
-                if attributes.iter().any(|a| a.name == "allow") {
-                    if attributes.iter().any(|a| {
+                if attributes.iter().any(|a| a.name == "allow")
+                    && attributes.iter().any(|a| {
                         a.name == "allow" && a.args.iter().any(|arg| arg.value == "dead_code")
-                    }) {
-                        self.allow_dead_code.insert(name.clone());
-                    }
+                    })
+                {
+                    self.allow_dead_code.insert(name.clone());
                 }
             }
         }
@@ -145,7 +150,9 @@ impl WarningAnalyzer {
 
         let defined_functions: Vec<String> = self.defined_functions.iter().cloned().collect();
         for name in &defined_functions {
-            if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name)
+            if name != "main"
+                && !name.starts_with('_')
+                && !self.used_functions.contains(name)
                 && !self.test_function_names.contains(name)
                 && !self.allow_dead_code.contains(name)
             {
@@ -190,16 +197,17 @@ impl WarningAnalyzer {
 
         let mutable_vars = self.mutable_vars.clone();
         for var in &mutable_vars {
-            if !self.mutated_vars.contains(var) {
-                if let Some(&(line, column)) = self.variable_positions.get(var) {
-                    self.push_warn(
-                        DiagnosticCode::W0044,
-                        "Unnecessary Mutable",
-                        format!("Variable '{}' is declared `mut` but never reassigned", var),
-                        line, column,
-                        Some("remove the `mut` modifier".to_string()),
-                    );
-                }
+            if !self.mutated_vars.contains(var)
+                && let Some(&(line, column)) = self.variable_positions.get(var)
+            {
+                self.push_warn(
+                    DiagnosticCode::W0044,
+                    "Unnecessary Mutable",
+                    format!("Variable '{}' is declared `mut` but never reassigned", var),
+                    line,
+                    column,
+                    Some("remove the `mut` modifier".to_string()),
+                );
             }
         }
 
@@ -218,7 +226,11 @@ impl WarningAnalyzer {
         self.current_column = column;
         match stmt {
             Statement::Let {
-                name, data_type, value, is_mutable, ..
+                name,
+                data_type,
+                value,
+                is_mutable,
+                ..
             } => {
                 self.defined_variables.insert(name.clone());
                 self.variable_positions.insert(name.clone(), (line, column));
@@ -230,7 +242,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0041,
                         "Uninitialized Variable",
                         format!("Variable '{}' is declared without a value", name),
-                        1, 1,
+                        self.current_line,
+                        self.current_column,
                         Some("initialize with a value to avoid undefined behavior".to_string()),
                     );
                 }
@@ -242,8 +255,8 @@ impl WarningAnalyzer {
                             "Variable '{}' starts with uppercase; prefer snake_case",
                             name
                         ),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("rename to snake_case, e.g. `my_variable`".to_string()),
                     );
                 }
@@ -252,8 +265,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0004,
                         "Implicit Type Annotation",
                         format!("Variable '{}' relies on implicit typing", name),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider adding an explicit type annotation: `:type`".to_string()),
                     );
                 }
@@ -275,8 +288,8 @@ impl WarningAnalyzer {
                             "Function '{}' contains uppercase characters; prefer snake_case",
                             name
                         ),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("rename to snake_case, e.g. `my_function`".to_string()),
                     );
                 }
@@ -285,8 +298,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0005,
                         "Implicit Return Type",
                         format!("Function '{}' has implicit return type", name),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider declaring an explicit return type: `:type`".to_string()),
                     );
                 }
@@ -295,8 +308,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0006,
                         "Empty Function Body",
                         format!("Function '{}' has an empty body", name),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("add statements to the function body".to_string()),
                     );
                 }
@@ -309,8 +322,8 @@ impl WarningAnalyzer {
                             name,
                             body.len()
                         ),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider splitting this function into smaller ones".to_string()),
                     );
                 }
@@ -319,8 +332,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0012,
                         "Many Parameters",
                         format!("Function '{}' has many parameters ({})", name, params.len()),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider grouping related parameters into a struct".to_string()),
                     );
                 }
@@ -333,8 +346,8 @@ impl WarningAnalyzer {
                             name,
                             params.len()
                         ),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("use a struct to group related parameters".to_string()),
                     );
                 }
@@ -346,8 +359,8 @@ impl WarningAnalyzer {
                             "Function '{}' declares a return type but has no explicit return",
                             name
                         ),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("add an explicit `return` statement for clarity".to_string()),
                     );
                 }
@@ -428,8 +441,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0014,
                         "Empty If Branches",
                         "if statement has empty branches".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("add statements or remove the empty if".to_string()),
                     );
                 }
@@ -438,18 +451,21 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0043,
                         "Deeply Nested If",
                         format!("if statement at nesting depth {}", self.if_depth),
-                        1, 1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider extracting to a function or using match".to_string()),
                     );
                 }
-                if is_return_bool(&then_branch, true)
-                    && else_branch.as_ref().is_some_and(|e| is_return_bool(e, false))
+                if is_return_bool(then_branch, true)
+                    && else_branch
+                        .as_ref()
+                        .is_some_and(|e| is_return_bool(e, false))
                 {
                     self.push_warn(
                         DiagnosticCode::W0046,
                         "Simplifiable if-return-bool",
                         "if cond { return true } else { return false } can be simplified to 'return cond'".to_string(),
-                        1, 1,
+                        self.current_line, self.current_column,
                         Some("use 'return cond' directly".to_string()),
                     );
                 }
@@ -466,24 +482,27 @@ impl WarningAnalyzer {
             Statement::While { condition, body } => {
                 self.loop_depth += 1;
                 self.scan_expr(condition);
-                if let Expression::Literal(Literal::Bool(true)) = condition {
-                    if !has_break(body) {
-                        self.push_warn(
-                            DiagnosticCode::W0042,
-                            "Genuine Infinite Loop",
-                            "while true loop has no break statement — will never exit".to_string(),
-                            1, 1,
-                            Some("add a break condition or use a terminating loop construct".to_string()),
-                        );
-                    }
+                if let Expression::Literal(Literal::Bool(true)) = condition
+                    && !has_break(body)
+                {
+                    self.push_warn(
+                        DiagnosticCode::W0042,
+                        "Genuine Infinite Loop",
+                        "while true loop has no break statement — will never exit".to_string(),
+                        self.current_line,
+                        self.current_column,
+                        Some(
+                            "add a break condition or use a terminating loop construct".to_string(),
+                        ),
+                    );
                 }
                 if let Expression::Literal(Literal::Bool(false)) = condition {
                     self.push_warn(
                         DiagnosticCode::W0017,
                         "Unreachable Loop",
                         "while false body is unreachable".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("remove this loop or fix the condition".to_string()),
                     );
                 }
@@ -492,8 +511,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0018,
                         "Deep Loop Nesting",
                         format!("loop nesting depth is {}", self.loop_depth),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider extracting inner loops into a function".to_string()),
                     );
                 }
@@ -502,8 +521,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0013,
                         "Empty Loop Body",
                         "loop has an empty body".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("add statements to the loop body or remove it".to_string()),
                     );
                 }
@@ -525,8 +544,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0039,
                         "Variable Shadowing",
                         format!("Loop variable '{}' shadows an existing binding", variable),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("rename the loop variable to avoid confusion".to_string()),
                     );
                 }
@@ -535,8 +554,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0013,
                         "Empty Loop Body",
                         "loop has an empty body".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         None,
                     );
                 }
@@ -561,8 +580,8 @@ impl WarningAnalyzer {
                     DiagnosticCode::W0019,
                     "Control Flow",
                     "break or continue used outside a loop".to_string(),
-                    1,
-                    1,
+                    self.current_line,
+                    self.current_column,
                     Some("these statements are only valid inside loops".to_string()),
                 );
             }
@@ -607,15 +626,18 @@ impl WarningAnalyzer {
             Expression::Call { name, args, .. } => {
                 self.used_functions.insert(name.clone());
                 let bare_name = name.split("::").last().unwrap_or(name);
-                let dot_name = name.split('.').last().unwrap_or(name);
-                if let Some(msg) = self.deprecated_functions.get(bare_name)
+                let dot_name = name.split('.').next_back().unwrap_or(name);
+                if let Some(msg) = self
+                    .deprecated_functions
+                    .get(bare_name)
                     .or_else(|| self.deprecated_functions.get(dot_name))
                 {
                     self.push_warn(
                         DiagnosticCode::W0034,
                         "Deprecated Function",
                         format!("'{}' is deprecated: {}", name, msg),
-                        1, 1,
+                        self.current_line,
+                        self.current_column,
                         None,
                     );
                 }
@@ -624,8 +646,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0037,
                         "Large Call Arity",
                         format!("Call to '{}' has {} arguments", name, args.len()),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider grouping arguments into a struct".to_string()),
                     );
                 }
@@ -646,22 +668,29 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0045,
                         "Redundant Boolean Comparison",
                         "comparing a value to true/false is redundant".to_string(),
-                        1, 1,
+                        self.current_line,
+                        self.current_column,
                         Some("use the value directly or negate with !".to_string()),
                     );
                 }
-                if operator == "+" && self.loop_depth > 0 {
-                    if let Expression::Identifier(id) = left.as_ref() {
-                        if is_str_type(id) {
-                            self.push_warn(
-                                DiagnosticCode::W0047,
-                                "String Concatenation in Loop",
-                                format!("'{}' is built via += inside a loop — consider lists::join", id.name),
-                                1, 1,
-                                Some("collect parts in a vec[str] and use join() after the loop".to_string()),
-                            );
-                        }
-                    }
+                if operator == "+"
+                    && self.loop_depth > 0
+                    && let Expression::Identifier(id) = left.as_ref()
+                    && is_str_type(id)
+                {
+                    self.push_warn(
+                        DiagnosticCode::W0047,
+                        "String Concatenation in Loop",
+                        format!(
+                            "'{}' is built via += inside a loop — consider lists::join",
+                            id.name
+                        ),
+                        self.current_line,
+                        self.current_column,
+                        Some(
+                            "collect parts in a vec[str] and use join() after the loop".to_string(),
+                        ),
+                    );
                 }
                 if matches!(operator.as_str(), "==" | "!=" | "<=" | ">=" | "<" | ">")
                     && expr_fingerprint(left) == expr_fingerprint(right)
@@ -670,8 +699,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0036,
                         "Self Comparison",
                         format!("Expression compares a value to itself with '{}'", operator),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("this comparison is always true or always false".to_string()),
                     );
                 }
@@ -681,24 +710,24 @@ impl WarningAnalyzer {
                             DiagnosticCode::W0007,
                             "Multiplication by Zero",
                             "multiplication by zero always yields zero".to_string(),
-                            1,
-                            1,
+                            self.current_line,
+                            self.current_column,
                             Some("this expression always evaluates to 0".to_string()),
                         ),
                         "/" if *n == 0 => self.push_warn(
                             DiagnosticCode::W0008,
                             "Division by Zero",
                             "division by zero is undefined".to_string(),
-                            1,
-                            1,
+                            self.current_line,
+                            self.current_column,
                             Some("replace with a non-zero divisor".to_string()),
                         ),
                         "%" if *n == 0 => self.push_warn(
                             DiagnosticCode::W0009,
                             "Modulo by Zero",
                             "modulo by zero is undefined".to_string(),
-                            1,
-                            1,
+                            self.current_line,
+                            self.current_column,
                             Some("replace with a non-zero divisor".to_string()),
                         ),
                         _ => {}
@@ -718,8 +747,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0025,
                         "Large List Literal",
                         "large list literal may impact compile-time memory".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider building the list at runtime instead".to_string()),
                     );
                 }
@@ -734,8 +763,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0025,
                         "Large Dict Literal",
                         "large dict literal may impact compile-time memory".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider building the dict at runtime instead".to_string()),
                     );
                 }
@@ -750,8 +779,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0021,
                         "Negative Index",
                         "negative index may produce unexpected results".to_string(),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("ensure the index is non-negative".to_string()),
                     );
                 }
@@ -764,8 +793,8 @@ impl WarningAnalyzer {
                         DiagnosticCode::W0024,
                         "Long String Literal",
                         format!("string literal is {} characters long", s.len()),
-                        1,
-                        1,
+                        self.current_line,
+                        self.current_column,
                         Some("consider storing the string in a file or constant".to_string()),
                     );
                 }
@@ -825,11 +854,8 @@ impl WarningAnalyzer {
         if !self.filter.matches(code) {
             return;
         }
-        let (line, column) = if line == 1 && column == 1 {
-            (self.current_line.max(1), self.current_column.max(1))
-        } else {
-            (line.max(1), column.max(1))
-        };
+        let line = line.max(1);
+        let column = column.max(1);
         let severity = if self.deny.contains(&code) {
             Severity::Error
         } else {
@@ -857,8 +883,8 @@ impl WarningAnalyzer {
                     DiagnosticCode::W0038,
                     "Duplicate Match Pattern",
                     format!("Duplicate literal pattern '{}' in match", key),
-                    1,
-                    1,
+                    self.current_line,
+                    self.current_column,
                     Some("remove the duplicate pattern or merge with the first one".to_string()),
                 );
             }
@@ -939,13 +965,30 @@ fn expr_fingerprint(expr: &Expression) -> String {
 
 fn has_break(statements: &[Statement]) -> bool {
     for stmt in statements {
-        if matches!(stmt, Statement::Break) { return true; }
-        if let Statement::If { then_branch, else_branch, .. } = stmt {
-            if has_break(then_branch) { return true; }
-            if let Some(else_b) = else_branch { if has_break(else_b) { return true; } }
+        if matches!(stmt, Statement::Break) {
+            return true;
         }
-        if let Statement::While { body, .. } | Statement::For { body, .. } | Statement::Unsafe { body } = stmt {
-            if has_break(body) { return true; }
+        if let Statement::If {
+            then_branch,
+            else_branch,
+            ..
+        } = stmt
+        {
+            if has_break(then_branch) {
+                return true;
+            }
+            if let Some(else_b) = else_branch
+                && has_break(else_b)
+            {
+                return true;
+            }
+        }
+        if let Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Unsafe { body } = stmt
+            && has_break(body)
+        {
+            return true;
         }
     }
     false
@@ -960,10 +1003,10 @@ fn is_str_type(_ident: &Identifier) -> bool {
 }
 
 fn is_return_bool(statements: &[Statement], expected: bool) -> bool {
-    if statements.len() == 1 {
-        if let Statement::Return(Some(Expression::Literal(Literal::Bool(val)))) = &statements[0] {
-            return *val == expected;
-        }
+    if statements.len() == 1
+        && let Statement::Return(Some(Expression::Literal(Literal::Bool(val)))) = &statements[0]
+    {
+        return *val == expected;
     }
     false
 }

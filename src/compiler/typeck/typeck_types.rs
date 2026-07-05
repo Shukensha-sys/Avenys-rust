@@ -47,10 +47,14 @@ impl TypeChecker {
                     return Ok(Self::promote_numeric(left, right));
                 }
 
-                Err(type_error(self.current_line, self.current_column, format!(
-                    "Operator '{}' not supported for {:?} and {:?}",
-                    operator, left, right
-                )))
+                Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "Operator '{}' not supported for {:?} and {:?}",
+                        operator, left, right
+                    ),
+                ))
             }
             "==" | "!=" | "<" | "<=" | ">" | ">=" => Ok(DataType::Bool),
             "&&" | "||" => {
@@ -60,10 +64,14 @@ impl TypeChecker {
                 if Self::is_bool_like(left) && Self::is_bool_like(right) {
                     Ok(DataType::Bool)
                 } else {
-                    Err(type_error(self.current_line, self.current_column, format!(
-                        "Logical operator '{}' requires bool operands, got {:?} and {:?}",
-                        operator, left, right
-                    )))
+                    Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Logical operator '{}' requires bool operands, got {:?} and {:?}",
+                            operator, left, right
+                        ),
+                    ))
                 }
             }
             "^" => {
@@ -75,10 +83,14 @@ impl TypeChecker {
                 } else if Self::is_integer_type(left) && Self::is_integer_type(right) {
                     Ok(left.clone())
                 } else {
-                    Err(type_error(self.current_line, self.current_column, format!(
-                        "XOR operator '^' requires either bool or integer operands, got {:?} and {:?}",
-                        left, right
-                    )))
+                    Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "XOR operator '^' requires either bool or integer operands, got {:?} and {:?}",
+                            left, right
+                        ),
+                    ))
                 }
             }
             "&" | "|" | "<<" | ">>" => {
@@ -88,10 +100,14 @@ impl TypeChecker {
                 if Self::is_integer_type(left) && Self::is_integer_type(right) {
                     Ok(left.clone())
                 } else {
-                    Err(type_error(self.current_line, self.current_column, format!(
-                        "Bitwise operator '{}' requires integer operands, got {:?} and {:?}",
-                        operator, left, right
-                    )))
+                    Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Bitwise operator '{}' requires integer operands, got {:?} and {:?}",
+                            operator, left, right
+                        ),
+                    ))
                 }
             }
             _ => Ok(DataType::Unknown),
@@ -143,40 +159,55 @@ impl TypeChecker {
     pub(super) fn validate_int_literal_range(data_type: &DataType, value: i64) -> Result<()> {
         match data_type {
             DataType::I8 if (!(-128..=127).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds i8 range (-128 to 127)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!("Integer literal {} exceeds i8 range (-128 to 127)", value),
+                ));
             }
             DataType::I16 if (!(-32768..=32767).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds i16 range (-32768 to 32767)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!(
+                        "Integer literal {} exceeds i16 range (-32768 to 32767)",
+                        value
+                    ),
+                ));
             }
             DataType::I32 if (!(-2147483648..=2147483647).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds i32 range (-2147483648 to 2147483647)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!(
+                        "Integer literal {} exceeds i32 range (-2147483648 to 2147483647)",
+                        value
+                    ),
+                ));
             }
             DataType::U8 if (!(0..=255).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds u8 range (0 to 255)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!("Integer literal {} exceeds u8 range (0 to 255)", value),
+                ));
             }
             DataType::U16 if (!(0..=65535).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds u16 range (0 to 65535)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!("Integer literal {} exceeds u16 range (0 to 65535)", value),
+                ));
             }
             DataType::U32 if (!(0..=4294967295).contains(&value)) => {
-                return Err(type_error(0, 0, format!(
-                    "Integer literal {} exceeds u32 range (0 to 4294967295)",
-                    value
-                )));
+                return Err(type_error(
+                    0,
+                    0,
+                    format!(
+                        "Integer literal {} exceeds u32 range (0 to 4294967295)",
+                        value
+                    ),
+                ));
             }
             _ => {}
         }
@@ -190,12 +221,14 @@ impl TypeChecker {
 
         if left.is_struct_like() && right.is_struct_like() {
             return match (left.struct_name(), right.struct_name()) {
-                (Some(left_name), Some(right_name)) if left_name != right_name => {
-                    Err(type_error(0, 0, format!(
+                (Some(left_name), Some(right_name)) if left_name != right_name => Err(type_error(
+                    0,
+                    0,
+                    format!(
                         "Cannot unify incompatible struct types {:?} and {:?}",
                         left, right
-                    )))
-                }
+                    ),
+                )),
                 (Some(_), _) => Ok(left.clone()),
                 (_, Some(_)) => Ok(right.clone()),
                 _ => Ok(DataType::Struct),
@@ -204,12 +237,14 @@ impl TypeChecker {
 
         if left.is_enum_like() && right.is_enum_like() {
             return match (left.enum_name(), right.enum_name()) {
-                (Some(left_name), Some(right_name)) if left_name != right_name => {
-                    Err(type_error(0, 0, format!(
+                (Some(left_name), Some(right_name)) if left_name != right_name => Err(type_error(
+                    0,
+                    0,
+                    format!(
                         "Cannot unify incompatible enum types {:?} and {:?}",
                         left, right
-                    )))
-                }
+                    ),
+                )),
                 (Some(_), _) => Ok(left.clone()),
                 (_, Some(_)) => Ok(right.clone()),
                 _ => Ok(DataType::Enum),
@@ -323,10 +358,11 @@ impl TypeChecker {
             _ => {}
         }
 
-        Err(type_error(0, 0, format!(
-            "Cannot unify incompatible types {:?} and {:?}",
-            left, right
-        )))
+        Err(type_error(
+            0,
+            0,
+            format!("Cannot unify incompatible types {:?} and {:?}", left, right),
+        ))
     }
 
     pub(super) fn promote_numeric(left: &DataType, right: &DataType) -> DataType {

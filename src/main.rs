@@ -212,7 +212,7 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             warning_filter: options.common.warn.filter,
             deny_warnings: options.common.warn.deny,
             test_mode: false,
-        module_paths: Vec::new(),
+            module_paths: Vec::new(),
         },
     )?;
 
@@ -278,10 +278,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             entries.sort();
             test_files = entries;
         }
-        let main_candidates = [
-            cwd.join("code/main.mire"),
-            cwd.join("main.mire"),
-        ];
+        let main_candidates = [cwd.join("code/main.mire"), cwd.join("main.mire")];
         for candidate in &main_candidates {
             if candidate.exists() {
                 test_files.push(candidate.clone());
@@ -322,7 +319,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             warning_filter: WarningFilter::Default,
             deny_warnings: HashSet::new(),
             test_mode: true,
-        module_paths: Vec::new(),
+            module_paths: Vec::new(),
         };
 
         match compile_file_with_avenys(file, &options) {
@@ -355,8 +352,6 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                                     println!("  {}", trimmed);
                                 }
                             }
-                            let total = file_passed + file_failed + file_skipped;
-                            let status = if file_failed == 0 { "ok" } else { "FAILED" };
                             println!(
                                 "test {} ... {}",
                                 display,

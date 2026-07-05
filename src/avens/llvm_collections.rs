@@ -163,7 +163,7 @@ impl LlvmIrGen {
                 ty: LlType::I64,
                 data_type: param_type.clone(),
                 owns_heap_string: false,
-                        needs_init: true,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -272,7 +272,7 @@ impl LlvmIrGen {
                     ty: ll_ty,
                     data_type: data_type.clone(),
                     owns_heap_string: false,
-                        needs_init: true,
+                    needs_init: true,
                     struct_name: data_type.struct_name().map(ToOwned::to_owned),
                 },
             );

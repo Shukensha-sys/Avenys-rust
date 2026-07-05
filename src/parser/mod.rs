@@ -26,7 +26,8 @@ pub fn parse_with_recovery(source: &str) -> (Program, Vec<MireError>) {
     match tokenize(source) {
         Ok(tokens) => Parser::new(tokens).parse_with_recovery(),
         Err(e) => (
-            Program { annotations: vec![],
+            Program {
+                annotations: vec![],
                 statements: Vec::new(),
             },
             vec![e],
@@ -223,7 +224,13 @@ impl Parser {
             }
             self.skip_newlines();
         }
-        (Program { statements, annotations: vec![] }, std::mem::take(&mut self.errors))
+        (
+            Program {
+                statements,
+                annotations: vec![],
+            },
+            std::mem::take(&mut self.errors),
+        )
     }
 
     fn skip_to_statement_boundary(&mut self) {
