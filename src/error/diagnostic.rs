@@ -314,6 +314,7 @@ impl WarningFilter {
             DiagnosticCode::W0003,
             DiagnosticCode::W0004,
             DiagnosticCode::W0005,
+            DiagnosticCode::W0034,
         ]
         .into_iter()
         .collect()
