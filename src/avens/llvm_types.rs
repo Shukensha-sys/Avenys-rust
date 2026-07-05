@@ -23,6 +23,7 @@ pub(super) struct VarInfo {
     pub(super) ty: LlType,
     pub(super) data_type: DataType,
     pub(super) owns_heap_string: bool,
+    pub(super) needs_init: bool,
     pub(super) struct_name: Option<String>,
 }
 

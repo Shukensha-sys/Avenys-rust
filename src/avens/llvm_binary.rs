@@ -675,13 +675,13 @@ impl LlvmIrGen {
         value: LlValue,
     ) -> Result<()> {
         if data_type == DataType::Str && ty == LlType::Ptr {
-            let old_owned = self
+            let needs_free = self
                 .vars
                 .get(name)
-                .map(|var| var.owns_heap_string)
+                .map(|var| var.owns_heap_string && !var.needs_init)
                 .unwrap_or(false);
 
-            if old_owned {
+            if needs_free {
                 let old_ptr = self.tmp();
                 self.body.push(format!("  {old_ptr} = load ptr, ptr {ptr}"));
                 self.body
@@ -704,6 +704,7 @@ impl LlvmIrGen {
             if let Some(var) = self.vars.get_mut(name) {
                 var.data_type = data_type;
                 var.owns_heap_string = true;
+                var.needs_init = false;
             }
             return Ok(());
         }

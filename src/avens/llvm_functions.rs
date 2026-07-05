@@ -87,6 +87,7 @@ impl LlvmIrGen {
                         ty: LlType::Ptr,
                         data_type: DataType::EnumNamed(name.clone()),
                         owns_heap_string: false,
+                        needs_init: true,
                         struct_name: None,
                     },
                 );
@@ -471,6 +472,7 @@ impl LlvmIrGen {
                         ty: ll_ty.clone(),
                         data_type: data_type.clone(),
                         owns_heap_string: false,
+                        needs_init: true,
                         struct_name: value
                             .as_ref()
                             .and_then(|expr| self.struct_name_from_expr(expr)),
@@ -2271,6 +2273,7 @@ impl LlvmIrGen {
                     ty: param_ty.clone(),
                     data_type: final_data_type,
                     owns_heap_string: false,
+                        needs_init: true,
                     struct_name: final_struct_name,
                 },
             );
