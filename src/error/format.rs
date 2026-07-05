@@ -17,9 +17,7 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
         .labels
         .iter()
         .find(|label| label.style == LabelStyle::Primary);
-    let line = primary
-        .map(|label| label.line.max(1))
-        .unwrap_or(diag.line);
+    let line = primary.map(|label| label.line.max(1)).unwrap_or(diag.line);
     let col = primary
         .map(|label| label.column.max(1))
         .unwrap_or(diag.column);

@@ -195,11 +195,13 @@ impl DiagnosticCode {
             | DiagnosticCode::W0036
             | DiagnosticCode::W0038
             | DiagnosticCode::W0040 => Some(WarningCategory::Logic),
-            DiagnosticCode::W0041 | DiagnosticCode::W0042 | DiagnosticCode::W0043
-            | DiagnosticCode::W0044 | DiagnosticCode::W0045 | DiagnosticCode::W0046
-            | DiagnosticCode::W0047 => {
-                Some(WarningCategory::Complexity)
-            }
+            DiagnosticCode::W0041
+            | DiagnosticCode::W0042
+            | DiagnosticCode::W0043
+            | DiagnosticCode::W0044
+            | DiagnosticCode::W0045
+            | DiagnosticCode::W0046
+            | DiagnosticCode::W0047 => Some(WarningCategory::Complexity),
             DiagnosticCode::W0025 => Some(WarningCategory::Memory),
             DiagnosticCode::W0010 => Some(WarningCategory::Deprecated),
             DiagnosticCode::W0034 | DiagnosticCode::W0035 | DiagnosticCode::W0037 => {

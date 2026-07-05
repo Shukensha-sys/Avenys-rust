@@ -119,12 +119,8 @@ impl LlvmIrGen {
                 } else {
                     self.ty(ret.clone())
                 };
-                self.extern_decls.push(format!(
-                    "declare {} {}({})",
-                    ret_str,
-                    llvm_name,
-                    sig
-                ));
+                self.extern_decls
+                    .push(format!("declare {} {}({})", ret_str, llvm_name, sig));
                 self.user_functions.insert(
                     name.clone(),
                     FnInfo {
@@ -2055,10 +2051,8 @@ impl LlvmIrGen {
         };
 
         let input = self.tmp();
-        self.body.push(format!(
-            "  {input} = call ptr @ireru(ptr {})",
-            prompt.repr
-        ));
+        self.body
+            .push(format!("  {input} = call ptr @ireru(ptr {})", prompt.repr));
 
         match data_type {
             DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8 => {
@@ -2273,7 +2267,7 @@ impl LlvmIrGen {
                     ty: param_ty.clone(),
                     data_type: final_data_type,
                     owns_heap_string: false,
-                        needs_init: true,
+                    needs_init: true,
                     struct_name: final_struct_name,
                 },
             );

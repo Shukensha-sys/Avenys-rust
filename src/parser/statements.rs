@@ -20,9 +20,14 @@ impl Parser {
                 while !self.check(TokenType::Rparen) && !self.is_at_end() {
                     if self.check(TokenType::StrLit) {
                         let tok = self.advance();
-                        args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                        args.push(AttributeArg {
+                            name: None,
+                            value: tok.value.unwrap_or_default(),
+                        });
                     }
-                    if self.check(TokenType::Comma) { self.advance(); }
+                    if self.check(TokenType::Comma) {
+                        self.advance();
+                    }
                 }
                 self.expect(TokenType::Rparen)?;
             }
@@ -36,13 +41,21 @@ impl Parser {
                     while !self.check(TokenType::Rparen) && !self.is_at_end() {
                         if self.check(TokenType::StrLit) {
                             let tok = self.advance();
-                            attr_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                            attr_args.push(AttributeArg {
+                                name: None,
+                                value: tok.value.unwrap_or_default(),
+                            });
                         }
-                        if self.check(TokenType::Comma) { self.advance(); }
+                        if self.check(TokenType::Comma) {
+                            self.advance();
+                        }
                     }
                     self.expect(TokenType::Rparen)?;
                 }
-                attrs.push(Attribute { name: attr_name, args: attr_args });
+                attrs.push(Attribute {
+                    name: attr_name,
+                    args: attr_args,
+                });
             }
             self.expect(TokenType::Rbracket)?;
             // Support chained brackets: @[test][section("math")]
@@ -55,13 +68,21 @@ impl Parser {
                     while !self.check(TokenType::Rparen) && !self.is_at_end() {
                         if self.check(TokenType::StrLit) {
                             let tok = self.advance();
-                            chain_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                            chain_args.push(AttributeArg {
+                                name: None,
+                                value: tok.value.unwrap_or_default(),
+                            });
                         }
-                        if self.check(TokenType::Comma) { self.advance(); }
+                        if self.check(TokenType::Comma) {
+                            self.advance();
+                        }
                     }
                     self.expect(TokenType::Rparen)?;
                 }
-                attrs.push(Attribute { name: chain_name, args: chain_args });
+                attrs.push(Attribute {
+                    name: chain_name,
+                    args: chain_args,
+                });
                 while self.check(TokenType::Comma) {
                     self.advance();
                     let comma_name = self.expect_ident()?;
@@ -71,13 +92,21 @@ impl Parser {
                         while !self.check(TokenType::Rparen) && !self.is_at_end() {
                             if self.check(TokenType::StrLit) {
                                 let tok = self.advance();
-                                comma_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                                comma_args.push(AttributeArg {
+                                    name: None,
+                                    value: tok.value.unwrap_or_default(),
+                                });
                             }
-                            if self.check(TokenType::Comma) { self.advance(); }
+                            if self.check(TokenType::Comma) {
+                                self.advance();
+                            }
                         }
                         self.expect(TokenType::Rparen)?;
                     }
-                    attrs.push(Attribute { name: comma_name, args: comma_args });
+                    attrs.push(Attribute {
+                        name: comma_name,
+                        args: comma_args,
+                    });
                 }
                 self.expect(TokenType::Rbracket)?;
             }

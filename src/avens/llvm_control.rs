@@ -733,7 +733,7 @@ impl LlvmIrGen {
                 ty: LlType::I64,
                 data_type: DataType::I64,
                 owns_heap_string: false,
-                        needs_init: true,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -749,7 +749,7 @@ impl LlvmIrGen {
                     ty: LlType::I64,
                     data_type: DataType::I64,
                     owns_heap_string: false,
-                        needs_init: true,
+                    needs_init: true,
                     struct_name: None,
                 },
             );
@@ -899,7 +899,7 @@ impl LlvmIrGen {
                 ty: var_ll_ty.clone(),
                 data_type: element_type.clone(),
                 owns_heap_string: false,
-                        needs_init: true,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -912,7 +912,7 @@ impl LlvmIrGen {
                     ty: LlType::I64,
                     data_type: DataType::I64,
                     owns_heap_string: false,
-                        needs_init: true,
+                    needs_init: true,
                     struct_name: None,
                 },
             )

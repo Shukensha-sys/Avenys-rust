@@ -27,7 +27,9 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
                 extra.push(format!("{} = load ptr, ptr {}", old_ptr, dst_s));
                 extra.push(format!("call void @rt_managed_free(ptr {})", old_ptr));
             }
-            if src_ty == "ptr" && let MirValue::Temp(s_id) = src {
+            if src_ty == "ptr"
+                && let MirValue::Temp(s_id) = src
+            {
                 ctx.owned_string_temps.remove(s_id);
             }
             format!("store {} {}, ptr {}", src_ty, src_s, dst_s)

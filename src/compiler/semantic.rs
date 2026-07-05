@@ -131,7 +131,8 @@ mod tests {
 
     #[test]
     fn registers_impl_methods_with_qualified_names() {
-        let program = Program { annotations: vec![],
+        let program = Program {
+            annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),
@@ -159,7 +160,8 @@ mod tests {
 
     #[test]
     fn tracks_unsafe_scope_and_drop_move_facts() {
-        let program = Program { annotations: vec![],
+        let program = Program {
+            annotations: vec![],
             statements: vec![Statement::Unsafe {
                 body: vec![
                     Statement::Let {
