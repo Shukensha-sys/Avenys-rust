@@ -29,6 +29,8 @@ pub struct WarningAnalyzer {
     deprecated_functions: HashMap<String, String>,
     allow_dead_code: HashSet<String>,
     if_depth: usize,
+    mutable_vars: HashSet<String>,
+    mutated_vars: HashSet<String>,
 }
 
 impl WarningAnalyzer {
@@ -47,6 +49,8 @@ impl WarningAnalyzer {
             used_imports: HashSet::new(),
             loop_depth: 0,
             if_depth: 0,
+            mutable_vars: HashSet::new(),
+            mutated_vars: HashSet::new(),
             current_line: 1,
             current_column: 1,
             statement_origins: Vec::new(),
@@ -184,6 +188,21 @@ impl WarningAnalyzer {
             }
         }
 
+        let mutable_vars = self.mutable_vars.clone();
+        for var in &mutable_vars {
+            if !self.mutated_vars.contains(var) {
+                if let Some(&(line, column)) = self.variable_positions.get(var) {
+                    self.push_warn(
+                        DiagnosticCode::W0044,
+                        "Unnecessary Mutable",
+                        format!("Variable '{}' is declared `mut` but never reassigned", var),
+                        line, column,
+                        Some("remove the `mut` modifier".to_string()),
+                    );
+                }
+            }
+        }
+
         for diag in &mut self.diagnostics {
             diag.source = Some(source.to_string());
             if let Some(filename) = filename {
@@ -199,10 +218,13 @@ impl WarningAnalyzer {
         self.current_column = column;
         match stmt {
             Statement::Let {
-                name, data_type, value, ..
+                name, data_type, value, is_mutable, ..
             } => {
                 self.defined_variables.insert(name.clone());
                 self.variable_positions.insert(name.clone(), (line, column));
+                if *is_mutable {
+                    self.mutable_vars.insert(name.clone());
+                }
                 if value.is_none() && *data_type != DataType::Unknown {
                     self.push_warn(
                         DiagnosticCode::W0041,
@@ -386,7 +408,10 @@ impl WarningAnalyzer {
                 value: Some(value), ..
             } => self.scan_expr(value),
             Statement::Let { .. } => {}
-            Statement::Assignment { value, .. } => {
+            Statement::Assignment { target, value, .. } => {
+                if let crate::parser::ast::AssignmentTarget::Variable(name) = target {
+                    self.mutated_vars.insert(name.clone());
+                }
                 self.scan_expr(value);
             }
             Statement::Return(Some(expr)) => self.scan_expr(expr),
@@ -417,6 +442,17 @@ impl WarningAnalyzer {
                         Some("consider extracting to a function or using match".to_string()),
                     );
                 }
+                if is_return_bool(&then_branch, true)
+                    && else_branch.as_ref().is_some_and(|e| is_return_bool(e, false))
+                {
+                    self.push_warn(
+                        DiagnosticCode::W0046,
+                        "Simplifiable if-return-bool",
+                        "if cond { return true } else { return false } can be simplified to 'return cond'".to_string(),
+                        1, 1,
+                        Some("use 'return cond' directly".to_string()),
+                    );
+                }
                 for s in then_branch {
                     self.scan_usage(s);
                 }
@@ -431,14 +467,15 @@ impl WarningAnalyzer {
                 self.loop_depth += 1;
                 self.scan_expr(condition);
                 if let Expression::Literal(Literal::Bool(true)) = condition {
-                    self.push_warn(
-                        DiagnosticCode::W0016,
-                        "Infinite Loop",
-                        "while true can loop forever".to_string(),
-                        1,
-                        1,
-                        Some("ensure this loop has a break condition".to_string()),
-                    );
+                    if !has_break(body) {
+                        self.push_warn(
+                            DiagnosticCode::W0042,
+                            "Genuine Infinite Loop",
+                            "while true loop has no break statement — will never exit".to_string(),
+                            1, 1,
+                            Some("add a break condition or use a terminating loop construct".to_string()),
+                        );
+                    }
                 }
                 if let Expression::Literal(Literal::Bool(false)) = condition {
                     self.push_warn(
@@ -604,6 +641,28 @@ impl WarningAnalyzer {
             } => {
                 self.scan_expr(left);
                 self.scan_expr(right);
+                if operator == "==" && (is_bool_literal(left) || is_bool_literal(right)) {
+                    self.push_warn(
+                        DiagnosticCode::W0045,
+                        "Redundant Boolean Comparison",
+                        "comparing a value to true/false is redundant".to_string(),
+                        1, 1,
+                        Some("use the value directly or negate with !".to_string()),
+                    );
+                }
+                if operator == "+" && self.loop_depth > 0 {
+                    if let Expression::Identifier(id) = left.as_ref() {
+                        if is_str_type(id) {
+                            self.push_warn(
+                                DiagnosticCode::W0047,
+                                "String Concatenation in Loop",
+                                format!("'{}' is built via += inside a loop — consider lists::join", id.name),
+                                1, 1,
+                                Some("collect parts in a vec[str] and use join() after the loop".to_string()),
+                            );
+                        }
+                    }
+                }
                 if matches!(operator.as_str(), "==" | "!=" | "<=" | ">=" | "<" | ">")
                     && expr_fingerprint(left) == expr_fingerprint(right)
                 {
@@ -876,6 +935,37 @@ fn expr_fingerprint(expr: &Expression) -> String {
         }
         _ => format!("{expr:?}"),
     }
+}
+
+fn has_break(statements: &[Statement]) -> bool {
+    for stmt in statements {
+        if matches!(stmt, Statement::Break) { return true; }
+        if let Statement::If { then_branch, else_branch, .. } = stmt {
+            if has_break(then_branch) { return true; }
+            if let Some(else_b) = else_branch { if has_break(else_b) { return true; } }
+        }
+        if let Statement::While { body, .. } | Statement::For { body, .. } | Statement::Unsafe { body } = stmt {
+            if has_break(body) { return true; }
+        }
+    }
+    false
+}
+
+fn is_bool_literal(expr: &Expression) -> bool {
+    matches!(expr, Expression::Literal(Literal::Bool(_)))
+}
+
+fn is_str_type(_ident: &Identifier) -> bool {
+    true // In scan_expr we can't easily check types; warn on any += in loop
+}
+
+fn is_return_bool(statements: &[Statement], expected: bool) -> bool {
+    if statements.len() == 1 {
+        if let Statement::Return(Some(Expression::Literal(Literal::Bool(val)))) = &statements[0] {
+            return *val == expected;
+        }
+    }
+    false
 }
 
 use super::location::{expression_location, statement_location};
