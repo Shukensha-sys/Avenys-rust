@@ -48,14 +48,6 @@ impl ErrorKind {
         ErrorKind::Runtime { message }
     }
 
-    pub fn type_error(message: String) -> Self {
-        ErrorKind::Type {
-            line: 0,
-            column: 0,
-            message,
-        }
-    }
-
     pub fn type_error_at(line: usize, column: usize, message: String) -> Self {
         ErrorKind::Type {
             line,
@@ -144,8 +136,6 @@ impl MireError {
     }
 
     pub fn with_position(mut self, line: usize, column: usize) -> Self {
-        let line = line.max(1);
-        let column = column.max(1);
         self.line = line;
         self.column = column;
         self.diagnostic.line = line;
@@ -265,14 +255,6 @@ impl MireError {
         error
     }
 
-    pub fn type_error(message: String) -> Self {
-        Self::new(ErrorKind::Type {
-            line: 0,
-            column: 0,
-            message,
-        })
-    }
-
     pub fn type_error_at(line: usize, column: usize, message: String) -> Self {
         Self::new(ErrorKind::Type {
             line,
@@ -283,6 +265,14 @@ impl MireError {
 
     pub fn ownership_error(line: usize, column: usize, kind: MssError) -> Self {
         Self::new(ErrorKind::Ownership { line, column, kind })
+    }
+
+    pub fn unknown(message: String) -> Self {
+        Self::new(ErrorKind::Type {
+            line: usize::MAX,
+            column: usize::MAX,
+            message,
+        })
     }
 }
 

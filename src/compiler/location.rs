@@ -2,6 +2,8 @@ use crate::parser::ast::{Expression, Statement};
 
 pub const NO_POSITION: (usize, usize) = (0, 0);
 
+pub const UNKNOWN_POSITION: (usize, usize) = (usize::MAX, usize::MAX);
+
 pub fn statement_location(statement: &Statement) -> (usize, usize) {
     match statement {
         Statement::Let {
