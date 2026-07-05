@@ -83,6 +83,9 @@ pub enum DiagnosticCode {
     W0038,
     W0039,
     W0040,
+    W0041,
+    W0042,
+    W0043,
 }
 
 impl DiagnosticCode {
@@ -143,6 +146,9 @@ impl DiagnosticCode {
             DiagnosticCode::W0038 => "W0038",
             DiagnosticCode::W0039 => "W0039",
             DiagnosticCode::W0040 => "W0040",
+            DiagnosticCode::W0041 => "W0041",
+            DiagnosticCode::W0042 => "W0042",
+            DiagnosticCode::W0043 => "W0043",
         }
     }
 
@@ -181,6 +187,9 @@ impl DiagnosticCode {
             | DiagnosticCode::W0036
             | DiagnosticCode::W0038
             | DiagnosticCode::W0040 => Some(WarningCategory::Logic),
+            DiagnosticCode::W0041 | DiagnosticCode::W0042 | DiagnosticCode::W0043 => {
+                Some(WarningCategory::Complexity)
+            }
             DiagnosticCode::W0025 => Some(WarningCategory::Memory),
             DiagnosticCode::W0010 => Some(WarningCategory::Deprecated),
             DiagnosticCode::W0034 | DiagnosticCode::W0035 | DiagnosticCode::W0037 => {
@@ -237,6 +246,9 @@ impl DiagnosticCode {
             DiagnosticCode::W0038 => "duplicate_match_pattern",
             DiagnosticCode::W0039 => "variable_shadowing",
             DiagnosticCode::W0040 => "missing_explicit_return",
+            DiagnosticCode::W0041 => "uninitialized_variable",
+            DiagnosticCode::W0042 => "infinite_while_true",
+            DiagnosticCode::W0043 => "deeply_nested_if",
             _ => self.as_str(),
         }
     }

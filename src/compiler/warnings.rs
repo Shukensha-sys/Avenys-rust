@@ -28,6 +28,7 @@ pub struct WarningAnalyzer {
     test_function_names: HashSet<String>,
     deprecated_functions: HashMap<String, String>,
     allow_dead_code: HashSet<String>,
+    if_depth: usize,
 }
 
 impl WarningAnalyzer {
@@ -45,6 +46,7 @@ impl WarningAnalyzer {
             imported_modules: Vec::new(),
             used_imports: HashSet::new(),
             loop_depth: 0,
+            if_depth: 0,
             current_line: 1,
             current_column: 1,
             statement_origins: Vec::new(),
@@ -197,10 +199,19 @@ impl WarningAnalyzer {
         self.current_column = column;
         match stmt {
             Statement::Let {
-                name, data_type, ..
+                name, data_type, value, ..
             } => {
                 self.defined_variables.insert(name.clone());
                 self.variable_positions.insert(name.clone(), (line, column));
+                if value.is_none() && *data_type != DataType::Unknown {
+                    self.push_warn(
+                        DiagnosticCode::W0041,
+                        "Uninitialized Variable",
+                        format!("Variable '{}' is declared without a value", name),
+                        1, 1,
+                        Some("initialize with a value to avoid undefined behavior".to_string()),
+                    );
+                }
                 if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
                     self.push_warn(
                         DiagnosticCode::W0034,
@@ -385,6 +396,7 @@ impl WarningAnalyzer {
                 then_branch,
                 else_branch,
             } => {
+                self.if_depth += 1;
                 self.scan_expr(condition);
                 if then_branch.is_empty() && else_branch.as_ref().is_none_or(|v| v.is_empty()) {
                     self.push_warn(
@@ -396,6 +408,15 @@ impl WarningAnalyzer {
                         Some("add statements or remove the empty if".to_string()),
                     );
                 }
+                if self.if_depth > 3 {
+                    self.push_warn(
+                        DiagnosticCode::W0043,
+                        "Deeply Nested If",
+                        format!("if statement at nesting depth {}", self.if_depth),
+                        1, 1,
+                        Some("consider extracting to a function or using match".to_string()),
+                    );
+                }
                 for s in then_branch {
                     self.scan_usage(s);
                 }
@@ -404,6 +425,7 @@ impl WarningAnalyzer {
                         self.scan_usage(s);
                     }
                 }
+                self.if_depth -= 1;
             }
             Statement::While { condition, body } => {
                 self.loop_depth += 1;
