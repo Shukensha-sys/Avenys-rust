@@ -26,6 +26,8 @@ pub struct WarningAnalyzer {
     suppress_library_warnings: bool,
     test_function_indices: HashSet<usize>,
     test_function_names: HashSet<String>,
+    deprecated_functions: HashMap<String, String>,
+    allow_dead_code: HashSet<String>,
 }
 
 impl WarningAnalyzer {
@@ -50,6 +52,8 @@ impl WarningAnalyzer {
             suppress_library_warnings: false,
             test_function_indices: HashSet::new(),
             test_function_names: HashSet::new(),
+            deprecated_functions: HashMap::new(),
+            allow_dead_code: HashSet::new(),
         }
     }
 
@@ -70,6 +74,17 @@ impl WarningAnalyzer {
             if let Statement::Function { name, attributes, .. } = stmt {
                 if attributes.iter().any(|a| a.name == "test") {
                     self.test_function_names.insert(name.clone());
+                }
+                if let Some(dep) = attributes.iter().find(|a| a.name == "deprecated") {
+                    let msg = dep.args.first().map(|a| a.value.clone()).unwrap_or_else(|| "deprecated".to_string());
+                    self.deprecated_functions.insert(name.clone(), msg);
+                }
+                if attributes.iter().any(|a| a.name == "allow") {
+                    if attributes.iter().any(|a| {
+                        a.name == "allow" && a.args.iter().any(|arg| arg.value == "dead_code")
+                    }) {
+                        self.allow_dead_code.insert(name.clone());
+                    }
                 }
             }
         }
@@ -126,6 +141,7 @@ impl WarningAnalyzer {
         for name in &defined_functions {
             if name != "main" && !name.starts_with('_') && !self.used_functions.contains(name)
                 && !self.test_function_names.contains(name)
+                && !self.allow_dead_code.contains(name)
             {
                 let pos = self
                     .function_positions
@@ -531,6 +547,19 @@ impl WarningAnalyzer {
             }
             Expression::Call { name, args, .. } => {
                 self.used_functions.insert(name.clone());
+                let bare_name = name.split("::").last().unwrap_or(name);
+                let dot_name = name.split('.').last().unwrap_or(name);
+                if let Some(msg) = self.deprecated_functions.get(bare_name)
+                    .or_else(|| self.deprecated_functions.get(dot_name))
+                {
+                    self.push_warn(
+                        DiagnosticCode::W0034,
+                        "Deprecated Function",
+                        format!("'{}' is deprecated: {}", name, msg),
+                        1, 1,
+                        None,
+                    );
+                }
                 if args.len() > 16 {
                     self.push_warn(
                         DiagnosticCode::W0037,
