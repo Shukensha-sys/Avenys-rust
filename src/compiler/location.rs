@@ -1,5 +1,7 @@
 use crate::parser::ast::{Expression, Statement};
 
+pub const NO_POSITION: (usize, usize) = (0, 0);
+
 pub fn statement_location(statement: &Statement) -> (usize, usize) {
     match statement {
         Statement::Let {
@@ -25,7 +27,7 @@ pub fn statement_location(statement: &Statement) -> (usize, usize) {
             expression_location(iterable)
         }
         Statement::Match { value, .. } => expression_location(value),
-        _ => (1, 1),
+        _ => NO_POSITION,
     }
 }
 
@@ -45,20 +47,23 @@ pub fn expression_location(expression: &Expression) -> (usize, usize) {
         Expression::Call { args, .. }
         | Expression::List { elements: args, .. }
         | Expression::Tuple { elements: args, .. } => {
-            args.first().map(expression_location).unwrap_or((1, 1))
+            args.first().map(expression_location).unwrap_or(NO_POSITION)
         }
         Expression::Dict { entries, .. } => entries
             .first()
             .map(|(key, _)| expression_location(key))
-            .unwrap_or((1, 1)),
+            .unwrap_or(NO_POSITION),
         Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
             expression_location(target)
         }
-        Expression::Closure { body, .. } => body.first().map(statement_location).unwrap_or((1, 1)),
-        Expression::Match { value, .. } => expression_location(value),
-        Expression::EnumVariant { payloads, .. } => {
-            payloads.first().map(expression_location).unwrap_or((1, 1))
+        Expression::Closure { body, .. } => {
+            body.first().map(statement_location).unwrap_or(NO_POSITION)
         }
-        Expression::Literal(_) | Expression::EnumVariantPath { .. } => (0, 0),
+        Expression::Match { value, .. } => expression_location(value),
+        Expression::EnumVariant { payloads, .. } => payloads
+            .first()
+            .map(expression_location)
+            .unwrap_or(NO_POSITION),
+        Expression::Literal(_) | Expression::EnumVariantPath { .. } => NO_POSITION,
     }
 }

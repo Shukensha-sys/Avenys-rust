@@ -1987,7 +1987,7 @@ impl LlvmIrGen {
                 Self::expression_location(iterable)
             }
             Statement::Match { value, .. } => Self::expression_location(value),
-            _ => (1, 1),
+            _ => crate::compiler::location::NO_POSITION,
         }
     }
 
@@ -2009,23 +2009,26 @@ impl LlvmIrGen {
             | Expression::Tuple { elements: args, .. } => args
                 .first()
                 .map(Self::expression_location)
-                .unwrap_or((1, 1)),
+                .unwrap_or(crate::compiler::location::NO_POSITION),
             Expression::Dict { entries, .. } => entries
                 .first()
                 .map(|(key, _)| Self::expression_location(key))
-                .unwrap_or((1, 1)),
+                .unwrap_or(crate::compiler::location::NO_POSITION),
             Expression::Index { target, .. } | Expression::MemberAccess { target, .. } => {
                 Self::expression_location(target)
             }
-            Expression::Closure { body, .. } => {
-                body.first().map(Self::statement_location).unwrap_or((1, 1))
-            }
+            Expression::Closure { body, .. } => body
+                .first()
+                .map(Self::statement_location)
+                .unwrap_or(crate::compiler::location::NO_POSITION),
             Expression::Match { value, .. } => Self::expression_location(value),
             Expression::EnumVariant { payloads, .. } => payloads
                 .first()
                 .map(Self::expression_location)
-                .unwrap_or((1, 1)),
-            Expression::Literal(_) | Expression::EnumVariantPath { .. } => (1, 1),
+                .unwrap_or(crate::compiler::location::NO_POSITION),
+            Expression::Literal(_) | Expression::EnumVariantPath { .. } => {
+                crate::compiler::location::NO_POSITION
+            }
         }
     }
 

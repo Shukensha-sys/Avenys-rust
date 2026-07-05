@@ -131,7 +131,7 @@ impl WarningAnalyzer {
                     .variable_positions
                     .get(name)
                     .copied()
-                    .filter(|(l, c)| !(*l == 1 && *c == 1))
+                    .filter(|(l, c)| (*l, *c) != NO_POSITION)
                     .or_else(|| find_position_for_var(source, name));
                 let Some((line, column)) = pos else {
                     continue;
@@ -160,7 +160,7 @@ impl WarningAnalyzer {
                     .function_positions
                     .get(name)
                     .copied()
-                    .filter(|(l, c)| !(*l == 1 && *c == 1))
+                    .filter(|(l, c)| (*l, *c) != NO_POSITION)
                     .or_else(|| find_position_for_fn(source, name));
                 let Some((line, column)) = pos else {
                     continue;
@@ -179,8 +179,8 @@ impl WarningAnalyzer {
         let imported_modules = self.imported_modules.clone();
         for load in &imported_modules {
             if !self.used_imports.contains(&load.name) {
-                let (line, column) = if load.line == 1 && load.column == 1 {
-                    find_position_for_load(source, &load.name).unwrap_or((1, 1))
+                let (line, column) = if load.line == 0 && load.column == 0 {
+                    find_position_for_load(source, &load.name).unwrap_or(NO_POSITION)
                 } else {
                     (load.line, load.column)
                 };
@@ -222,8 +222,10 @@ impl WarningAnalyzer {
 
     fn scan_defs(&mut self, stmt: &Statement) {
         let (line, column) = statement_location(stmt);
-        self.current_line = line;
-        self.current_column = column;
+        if line > 0 {
+            self.current_line = line;
+            self.current_column = column;
+        }
         match stmt {
             Statement::Let {
                 name,
@@ -233,7 +235,9 @@ impl WarningAnalyzer {
                 ..
             } => {
                 self.defined_variables.insert(name.clone());
-                self.variable_positions.insert(name.clone(), (line, column));
+                if line > 0 {
+                    self.variable_positions.insert(name.clone(), (line, column));
+                }
                 if *is_mutable {
                     self.mutable_vars.insert(name.clone());
                 }
@@ -279,7 +283,9 @@ impl WarningAnalyzer {
                 ..
             } => {
                 self.defined_functions.insert(name.clone());
-                self.function_positions.insert(name.clone(), (line, column));
+                if line > 0 {
+                    self.function_positions.insert(name.clone(), (line, column));
+                }
                 if name.chars().any(|c| c.is_ascii_uppercase()) {
                     self.push_warn(
                         DiagnosticCode::W0035,
@@ -372,8 +378,8 @@ impl WarningAnalyzer {
                 self.imported_modules.push(Identifier {
                     name: path.join("::"),
                     data_type: DataType::Unknown,
-                    line: 1,
-                    column: 1,
+                    line: 0,
+                    column: 0,
                 });
             }
             Statement::If {
@@ -413,8 +419,10 @@ impl WarningAnalyzer {
 
     fn scan_usage(&mut self, stmt: &Statement) {
         let (line, column) = statement_location(stmt);
-        self.current_line = line;
-        self.current_column = column;
+        if line > 0 {
+            self.current_line = line;
+            self.current_column = column;
+        }
         match stmt {
             Statement::Expression(expr) => self.scan_expr(expr),
             Statement::Let {
@@ -617,8 +625,10 @@ impl WarningAnalyzer {
 
     fn scan_expr(&mut self, expr: &Expression) {
         let (line, column) = expression_location(expr);
-        self.current_line = line;
-        self.current_column = column;
+        if line > 0 {
+            self.current_line = line;
+            self.current_column = column;
+        }
         match expr {
             Expression::Identifier(id) => {
                 self.used_variables.insert(id.name.clone());
@@ -854,8 +864,16 @@ impl WarningAnalyzer {
         if !self.filter.matches(code) {
             return;
         }
-        let line = line.max(1);
-        let column = column.max(1);
+        let line = if line == 0 {
+            self.current_line.max(1)
+        } else {
+            line
+        };
+        let column = if column == 0 {
+            self.current_column.max(1)
+        } else {
+            column
+        };
         let severity = if self.deny.contains(&code) {
             Severity::Error
         } else {
@@ -1011,7 +1029,7 @@ fn is_return_bool(statements: &[Statement], expected: bool) -> bool {
     false
 }
 
-use super::location::{expression_location, statement_location};
+use super::location::{NO_POSITION, expression_location, statement_location};
 
 fn find_position_for_load(source: &str, module: &str) -> Option<(usize, usize)> {
     find_position_for_any_pattern(
