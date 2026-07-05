@@ -244,14 +244,6 @@ impl MireError {
         })
     }
 
-    pub fn backend(message: String) -> Self {
-        Self::new(ErrorKind::Backend {
-            line: 0,
-            column: 0,
-            message,
-        })
-    }
-
     pub fn backend_at(line: usize, column: usize, message: String) -> Self {
         Self::new(ErrorKind::Backend {
             line,

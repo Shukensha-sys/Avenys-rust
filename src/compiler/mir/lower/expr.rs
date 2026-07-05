@@ -3,7 +3,7 @@ use super::collections::lower_index_read;
 use super::types::{
     data_type_to_kind, extract_data_type, is_map_or_dict_type, is_trivial_deref, llvm_elem_type_str,
 };
-use crate::compiler::location::expression_location;
+use crate::compiler::location::{NO_POSITION, expression_location};
 use crate::compiler::mir::*;
 use crate::parser::ast::{DataType, Expression, Literal, Statement};
 
@@ -947,7 +947,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_map(&mut self, args: &[Expression]) -> MirValue {
-        let loc = args.first().map(expression_location).unwrap_or((1, 1));
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1141,7 +1141,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_filter(&mut self, args: &[Expression]) -> MirValue {
-        let loc = args.first().map(expression_location).unwrap_or((1, 1));
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1368,7 +1368,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_fold(&mut self, args: &[Expression]) -> MirValue {
-        let loc = args.first().map(expression_location).unwrap_or((1, 1));
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let acc_init = self.lower_expression(&args[0]);
         let closure_val = self.lower_expression(&args[1]);
         let list_val = self.lower_expression(&args[2]);
