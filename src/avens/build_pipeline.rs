@@ -398,6 +398,25 @@ fn progress_phase(phase: &str, _file: &str, elapsed_ms: u64, total_ms: u64) {
     }
 }
 
+fn apply_cfg_filter(program: &mut crate::parser::ast::Program) {
+    let is_linux = cfg!(target_os = "linux");
+    program.statements.retain(|stmt| {
+        let attributes = match stmt {
+            crate::parser::ast::Statement::Function { attributes, .. } => attributes,
+            _ => return true,
+        };
+        let cfg_attr = attributes.iter().find(|a| a.name == "cfg");
+        let Some(cfg_attr) = cfg_attr else {
+            return true;
+        };
+        let target = cfg_attr.args.first().map(|a| a.value.as_str());
+        match target {
+            Some("linux") => is_linux,
+            _ => false,
+        }
+    });
+}
+
 fn inject_test_harness(program: &mut crate::parser::ast::Program) {
     use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement, Visibility};
 
@@ -679,6 +698,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash) {
         match cached {
             CachedAnalysis::Success(mut program) => {
+                apply_cfg_filter(&mut program);
                 if options.test_mode {
                     inject_test_harness(&mut program);
                 }
@@ -688,6 +708,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         }
     } else {
         let mut program = loaded.program;
+        apply_cfg_filter(&mut program);
         if options.test_mode {
             inject_test_harness(&mut program);
         }

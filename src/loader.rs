@@ -69,6 +69,7 @@ pub fn load_program_with_metadata_with_settings(
         cache.save()?;
         return Ok(LoadedProgram {
             program: Program {
+                file_attributes: vec![],
                 annotations: vec![],
                 statements: program_statements,
             },
@@ -91,6 +92,7 @@ pub fn load_program_with_metadata_with_settings(
     cache.save()?;
     Ok(LoadedProgram {
         program: Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: program_statements,
         },
@@ -130,6 +132,7 @@ pub fn load_program_with_cache(
         let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
         return Ok(LoadedProgram {
             program: Program {
+                file_attributes: vec![],
                 annotations: vec![],
                 statements: program_statements,
             },
@@ -146,6 +149,7 @@ pub fn load_program_with_cache(
     let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
     Ok(LoadedProgram {
         program: Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: program_statements,
         },
@@ -948,7 +952,11 @@ impl<'a> ModuleRenamer<'a> {
                 return_type: self.rename_data_type(return_type, scope_stack),
                 visibility,
             },
-            Statement::Unsafe { body } => Statement::Unsafe {
+            Statement::Unsafe {
+                line, column, body, ..
+            } => Statement::Unsafe {
+                line,
+                column,
                 body: self.rename_statement_block(body, &mut scope_stack.clone()),
             },
             Statement::Asm { instructions } => Statement::Asm {

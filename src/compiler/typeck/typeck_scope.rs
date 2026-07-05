@@ -617,7 +617,7 @@ fn collect_used_identifiers_in_statement(
             let mut fn_declared: HashSet<String> = params.iter().map(|(n, _)| n.clone()).collect();
             collect_used_identifiers_in_statements(body, &mut fn_declared, used);
         }
-        Statement::Unsafe { body } => {
+        Statement::Unsafe { body, .. } => {
             let mut unsafe_declared = declared.clone();
             collect_used_identifiers_in_statements(body, &mut unsafe_declared, used);
         }

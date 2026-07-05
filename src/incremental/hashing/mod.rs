@@ -384,6 +384,7 @@ mod tests {
     #[test]
     fn analysis_units_include_nested_children_for_supported_containers() {
         let program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Type {
@@ -677,6 +678,7 @@ mod tests {
     #[test]
     fn invalidation_report_matches_member_access_to_type_field_units() {
         let previous = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Type {

@@ -356,7 +356,7 @@ impl TypeChecker {
                 cases,
                 default,
             } => self.check_match_statement(value, cases, default),
-            Statement::Unsafe { body } => self.check_scoped_body(body),
+            Statement::Unsafe { body, .. } => self.check_scoped_body(body),
             Statement::Asm { instructions } => self.check_asm_statement(instructions),
             Statement::Drop { value } => self.check_drop_statement(value),
             Statement::New {
@@ -417,6 +417,7 @@ mod tests {
     #[test]
     fn infers_unknown_let_from_literal() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Let {
                 name: "x".to_string(),
@@ -442,6 +443,7 @@ mod tests {
     #[test]
     fn resolves_identifier_type() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -477,6 +479,7 @@ mod tests {
     #[test]
     fn infers_function_call_return_type() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Function {
@@ -532,6 +535,7 @@ mod tests {
     #[test]
     fn fails_on_undefined_identifier() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Expression(Expression::Identifier(Identifier {
                 name: "missing".to_string(),
@@ -548,6 +552,7 @@ mod tests {
     #[test]
     fn fails_on_assignment_type_mismatch() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -579,6 +584,7 @@ mod tests {
     #[test]
     fn accepts_builtin_calls() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Expression(Expression::Call {
@@ -618,6 +624,7 @@ mod tests {
     #[test]
     fn allows_unknown_in_logical_binary_ops() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -667,6 +674,7 @@ mod tests {
     #[test]
     fn partial_typecheck_rechecks_only_selected_top_level_statements() {
         let mut previous = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -701,6 +709,7 @@ mod tests {
         check_program_types(&mut previous, "").expect("baseline type check must pass");
 
         let mut current = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -752,6 +761,7 @@ mod tests {
     #[test]
     fn partial_typecheck_can_skip_unchanged_impl_methods() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
@@ -811,6 +821,7 @@ mod tests {
     #[test]
     fn partial_typecheck_can_skip_nested_members_in_type_and_impl_members() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Type {
@@ -973,6 +984,7 @@ mod tests {
     #[test]
     fn map_assignment_rejects_vector_values() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Let {
@@ -1062,6 +1074,7 @@ mod tests {
     #[test]
     fn mutable_reference_expectation_rejects_shared_reference_argument() {
         let mut program = Program {
+            file_attributes: vec![],
             annotations: vec![],
             statements: vec![
                 Statement::Function {

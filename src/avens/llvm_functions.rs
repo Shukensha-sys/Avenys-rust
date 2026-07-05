@@ -656,7 +656,7 @@ impl LlvmIrGen {
                     .push(format!("  ret {} {}", self.ty(ret_ty), ret.repr));
                 Ok(())
             }
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 for stmt in body {
                     self.compile_statement(stmt)?;
                 }
@@ -1987,6 +1987,11 @@ impl LlvmIrGen {
                 Self::expression_location(iterable)
             }
             Statement::Match { value, .. } => Self::expression_location(value),
+            Statement::Unsafe { line, column, .. } => {
+                let line = *line;
+                let column = *column;
+                (line.max(1), column.max(1))
+            }
             _ => crate::compiler::location::NO_POSITION,
         }
     }

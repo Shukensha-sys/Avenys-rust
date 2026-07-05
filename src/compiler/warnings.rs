@@ -211,6 +211,8 @@ impl WarningAnalyzer {
             }
         }
 
+        self.check_deny_unsafe(program, filename);
+
         for diag in &mut self.diagnostics {
             diag.source = Some(source.to_string());
             if let Some(filename) = filename {
@@ -908,6 +910,60 @@ impl WarningAnalyzer {
             }
         }
     }
+
+    fn check_deny_unsafe(&mut self, program: &Program, filename: Option<&str>) {
+        let file_denies_unsafe = program
+            .file_attributes
+            .iter()
+            .any(|a| a.name == "deny" && a.args.iter().any(|arg| arg.value == "unsafe"));
+
+        for stmt in &program.statements {
+            if let Statement::Function {
+                name,
+                body,
+                attributes,
+                ..
+            } = stmt
+            {
+                let function_denies = attributes
+                    .iter()
+                    .any(|a| a.name == "deny" && a.args.iter().any(|arg| arg.value == "unsafe"));
+
+                if !file_denies_unsafe && !function_denies {
+                    continue;
+                }
+
+                if let Some((line, column)) = find_unsafe_block_position(body) {
+                    let mut diag = Diagnostic::new(
+                        Severity::Error,
+                        DiagnosticCode::E0016,
+                        "unsafe not allowed",
+                        format!(
+                            "Function '{}' contains an unsafe block but @[deny(unsafe)] forbids it",
+                            name
+                        ),
+                        line,
+                        column,
+                    );
+                    diag.labels.push(Label {
+                        line,
+                        column,
+                        length: 6,
+                        message: "unsafe block here".to_string(),
+                        style: LabelStyle::Primary,
+                    });
+                    diag.help = Some(
+                        "remove the unsafe block or remove the @[deny(unsafe)] attribute"
+                            .to_string(),
+                    );
+                    if let Some(filename) = filename {
+                        diag.filename = Some(filename.to_string());
+                    }
+                    self.diagnostics.push(diag);
+                }
+            }
+        }
+    }
 }
 
 fn contains_explicit_return(statements: &[Statement]) -> bool {
@@ -929,7 +985,7 @@ fn contains_explicit_return(statements: &[Statement]) -> bool {
             | Statement::For { body, .. }
             | Statement::Find { body, .. }
             | Statement::Function { body, .. }
-            | Statement::Unsafe { body }
+            | Statement::Unsafe { body, .. }
                 if contains_explicit_return(body) =>
             {
                 return true;
@@ -1003,7 +1059,7 @@ fn has_break(statements: &[Statement]) -> bool {
         }
         if let Statement::While { body, .. }
         | Statement::For { body, .. }
-        | Statement::Unsafe { body } = stmt
+        | Statement::Unsafe { body, .. } = stmt
             && has_break(body)
         {
             return true;
@@ -1018,6 +1074,52 @@ fn is_bool_literal(expr: &Expression) -> bool {
 
 fn is_str_type(_ident: &Identifier) -> bool {
     true // In scan_expr we can't easily check types; warn on any += in loop
+}
+
+fn find_unsafe_block_position(body: &[Statement]) -> Option<(usize, usize)> {
+    for stmt in body {
+        if let Statement::Unsafe { .. } = stmt {
+            let (line, column) = statement_location(stmt);
+            return Some((line.max(1), column.max(1)));
+        }
+        match stmt {
+            Statement::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                if let Some(pos) = find_unsafe_block_position(then_branch) {
+                    return Some(pos);
+                }
+                if let Some(else_b) = else_branch
+                    && let Some(pos) = find_unsafe_block_position(else_b)
+                {
+                    return Some(pos);
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Find { body, .. }
+            | Statement::Function { body, .. }
+            | Statement::Unsafe { body, .. } => {
+                if let Some(pos) = find_unsafe_block_position(body) {
+                    return Some(pos);
+                }
+            }
+            Statement::Match { cases, default, .. } => {
+                for (_, body) in cases {
+                    if let Some(pos) = find_unsafe_block_position(body) {
+                        return Some(pos);
+                    }
+                }
+                if let Some(pos) = find_unsafe_block_position(default) {
+                    return Some(pos);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn is_return_bool(statements: &[Statement], expected: bool) -> bool {

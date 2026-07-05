@@ -166,7 +166,7 @@ pub(super) fn hash_statement(statement: &Statement, hasher: &mut FxHasher) {
             hash_params(params, hasher);
             hash_data_type(return_type, hasher);
         }
-        Statement::Unsafe { body } => {
+        Statement::Unsafe { body, .. } => {
             hasher.write_u8(20);
             hash_statements(body, hasher);
         }

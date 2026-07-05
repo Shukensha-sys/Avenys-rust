@@ -57,7 +57,7 @@ fn statement_contains_self_placeholder(statement: &Statement) -> bool {
         Statement::Assignment { target, value, .. } => {
             contains_self_placeholder(&target.as_expression()) || contains_self_placeholder(value)
         }
-        Statement::Function { body, .. } | Statement::Unsafe { body } => {
+        Statement::Function { body, .. } | Statement::Unsafe { body, .. } => {
             body.iter().any(statement_contains_self_placeholder)
         }
         Statement::Return(expr) => expr.as_ref().is_some_and(contains_self_placeholder),

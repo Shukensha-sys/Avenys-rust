@@ -457,7 +457,7 @@ impl MirLower {
                 self.func.blocks[pre_for_block].terminator = MirTerminator::Br(cond_block);
                 self.current_block = end_block;
             }
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 for stmt in body {
                     self.lower_statement(stmt);
                 }
