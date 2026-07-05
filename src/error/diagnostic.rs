@@ -86,6 +86,10 @@ pub enum DiagnosticCode {
     W0041,
     W0042,
     W0043,
+    W0044,
+    W0045,
+    W0046,
+    W0047,
 }
 
 impl DiagnosticCode {
@@ -149,6 +153,10 @@ impl DiagnosticCode {
             DiagnosticCode::W0041 => "W0041",
             DiagnosticCode::W0042 => "W0042",
             DiagnosticCode::W0043 => "W0043",
+            DiagnosticCode::W0044 => "W0044",
+            DiagnosticCode::W0045 => "W0045",
+            DiagnosticCode::W0046 => "W0046",
+            DiagnosticCode::W0047 => "W0047",
         }
     }
 
@@ -187,7 +195,9 @@ impl DiagnosticCode {
             | DiagnosticCode::W0036
             | DiagnosticCode::W0038
             | DiagnosticCode::W0040 => Some(WarningCategory::Logic),
-            DiagnosticCode::W0041 | DiagnosticCode::W0042 | DiagnosticCode::W0043 => {
+            DiagnosticCode::W0041 | DiagnosticCode::W0042 | DiagnosticCode::W0043
+            | DiagnosticCode::W0044 | DiagnosticCode::W0045 | DiagnosticCode::W0046
+            | DiagnosticCode::W0047 => {
                 Some(WarningCategory::Complexity)
             }
             DiagnosticCode::W0025 => Some(WarningCategory::Memory),
@@ -249,6 +259,10 @@ impl DiagnosticCode {
             DiagnosticCode::W0041 => "uninitialized_variable",
             DiagnosticCode::W0042 => "infinite_while_true",
             DiagnosticCode::W0043 => "deeply_nested_if",
+            DiagnosticCode::W0044 => "unnecessary_mutable",
+            DiagnosticCode::W0045 => "redundant_bool_compare",
+            DiagnosticCode::W0046 => "simplifiable_if_return_bool",
+            DiagnosticCode::W0047 => "string_concat_in_loop",
             _ => self.as_str(),
         }
     }
