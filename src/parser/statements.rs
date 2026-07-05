@@ -11,8 +11,8 @@ impl Parser {
     pub(super) fn parse_attributes(&mut self) -> Result<Vec<Attribute>> {
         let mut attrs = Vec::new();
         while self.check(TokenType::At) && self.peek_n(1).ttype == TokenType::Lbracket {
-            self.advance();
-            self.advance();
+            self.advance(); // @
+            self.advance(); // [
             let name = self.expect_ident()?;
             let mut args = Vec::new();
             if self.check(TokenType::Lparen) {
@@ -45,6 +45,42 @@ impl Parser {
                 attrs.push(Attribute { name: attr_name, args: attr_args });
             }
             self.expect(TokenType::Rbracket)?;
+            // Support chained brackets: @[test][section("math")]
+            while self.check(TokenType::Lbracket) {
+                self.advance(); // [
+                let chain_name = self.expect_ident()?;
+                let mut chain_args = Vec::new();
+                if self.check(TokenType::Lparen) {
+                    self.advance();
+                    while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                        if self.check(TokenType::StrLit) {
+                            let tok = self.advance();
+                            chain_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                        }
+                        if self.check(TokenType::Comma) { self.advance(); }
+                    }
+                    self.expect(TokenType::Rparen)?;
+                }
+                attrs.push(Attribute { name: chain_name, args: chain_args });
+                while self.check(TokenType::Comma) {
+                    self.advance();
+                    let comma_name = self.expect_ident()?;
+                    let mut comma_args = Vec::new();
+                    if self.check(TokenType::Lparen) {
+                        self.advance();
+                        while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                            if self.check(TokenType::StrLit) {
+                                let tok = self.advance();
+                                comma_args.push(AttributeArg { name: None, value: tok.value.unwrap_or_default() });
+                            }
+                            if self.check(TokenType::Comma) { self.advance(); }
+                        }
+                        self.expect(TokenType::Rparen)?;
+                    }
+                    attrs.push(Attribute { name: comma_name, args: comma_args });
+                }
+                self.expect(TokenType::Rbracket)?;
+            }
         }
         Ok(attrs)
     }
