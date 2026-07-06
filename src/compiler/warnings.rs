@@ -637,6 +637,13 @@ impl WarningAnalyzer {
             }
             Expression::Call { name, args, .. } => {
                 self.used_functions.insert(name.clone());
+                if name.contains('.') {
+                    if let Some(base) = name.split('.').next() {
+                        if self.defined_variables.contains(base) {
+                            self.used_variables.insert(base.to_string());
+                        }
+                    }
+                }
                 let bare_name = name.split("::").last().unwrap_or(name);
                 let dot_name = name.split('.').next_back().unwrap_or(name);
                 if let Some(msg) = self
@@ -866,16 +873,6 @@ impl WarningAnalyzer {
         if !self.filter.matches(code) {
             return;
         }
-        let line = if line == 0 {
-            self.current_line.max(1)
-        } else {
-            line
-        };
-        let column = if column == 0 {
-            self.current_column.max(1)
-        } else {
-            column
-        };
         let severity = if self.deny.contains(&code) {
             Severity::Error
         } else {

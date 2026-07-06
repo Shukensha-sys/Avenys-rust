@@ -111,17 +111,39 @@ int rt_managed_contains(const char *data_ptr) {
     return managed_ht_contains(data_ptr);
 }
 
+int rt_managed_is_managed(const char *data_ptr) {
+    return data_ptr != NULL && managed_ht_contains(data_ptr);
+}
+
+// ── Header helpers ────────────────────────────────────────────────────
+
+MireManagedString *rt_string_header(const char *data) {
+    if (data == NULL) return NULL;
+    return (MireManagedString *)((char *)data - offsetof(MireManagedString, data));
+}
+
+static size_t utf8_codepoint_count(const char *s, size_t byte_len) {
+    size_t count = 0;
+    for (size_t i = 0; i < byte_len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c < 0x80 || c >= 0xC0) count++;
+    }
+    return count;
+}
+
+static void utf8_cache_cp(MireManagedString *hdr) {
+    if (hdr && !(hdr->flags & MIRE_STR_UTF8_KNOWN)) {
+        hdr->utf8_cp = (uint32_t)utf8_codepoint_count(hdr->data, hdr->len);
+        hdr->flags |= MIRE_STR_UTF8_KNOWN;
+    }
+}
+
 // ── String growth ────────────────────────────────────────────────────
 
 size_t rt_string_growth_cap(size_t min_cap) {
     size_t cap = 16;
     while (cap < min_cap) cap += cap >> 1;
     return cap;
-}
-
-static MireManagedString *string_header(char *value) {
-    if (value == NULL) return NULL;
-    return (MireManagedString *)((char *)value - offsetof(MireManagedString, data));
 }
 
 char *rt_strdup_raw(const char *src) {
@@ -146,6 +168,8 @@ char *rt_managed_alloc(size_t len) {
     if (header == NULL) return NULL;
     header->len = len;
     header->cap = cap;
+    header->flags = MIRE_STR_MANAGED;
+    header->utf8_cp = 0;
     header->data[len] = '\0';
     rt_managed_register(header->data);
     return header->data;
@@ -198,19 +222,17 @@ char *rt_alloc_printf_raw_i64(const char *fmt, long long value) {
 
 void rt_managed_free(char *value) {
     if (value == NULL) return;
-    if (!rt_managed_contains(value)) {
-        return;
-    }
+    if (!rt_managed_contains(value)) return;
     rt_managed_unregister(value);
-    MireManagedString *header = string_header(value);
-    free(header);
+    MireManagedString *header = rt_string_header(value);
+    if (header) free(header);
 }
 
 void rt_managed_cleanup_all(void) {
     MireManagedStringNode *node = managed_strings;
     while (node != NULL) {
         MireManagedStringNode *next = node->next;
-        MireManagedString *header = string_header(node->data_ptr);
+        MireManagedString *header = rt_string_header(node->data_ptr);
         if (header) free(header);
         free(node);
         node = next;
@@ -222,10 +244,109 @@ void rt_managed_cleanup_all(void) {
     managed_ht_len = 0;
 }
 
+// ── Optimized len: uses cached header length instead of strlen ────────
+
+int64_t rt_strings_len(const char *s) {
+    if (s == NULL) return 0;
+    if (rt_managed_is_managed(s)) {
+        MireManagedString *hdr = rt_string_header(s);
+        return (int64_t)hdr->len;
+    }
+    return (int64_t)strlen(s);
+}
+
 size_t rt_managed_len(const char *value) {
     if (value == NULL) return 0;
-    MireManagedString *header = string_header((char *)value);
-    return header ? header->len : strlen(value);
+    if (rt_managed_is_managed(value)) {
+        MireManagedString *header = rt_string_header(value);
+        return header->len;
+    }
+    return strlen(value);
+}
+
+// ── UTF-8 codepoint length ────────────────────────────────────────────
+
+int64_t rt_strings_len_utf8(const char *s) {
+    if (s == NULL) return 0;
+    size_t byte_len;
+    MireManagedString *hdr = NULL;
+    int managed = rt_managed_is_managed(s);
+    if (managed) {
+        hdr = rt_string_header(s);
+        if (hdr->flags & MIRE_STR_UTF8_KNOWN) {
+            return (int64_t)hdr->utf8_cp;
+        }
+        byte_len = hdr->len;
+    } else {
+        byte_len = strlen(s);
+    }
+    size_t cp = utf8_codepoint_count(s, byte_len);
+    if (managed) {
+        hdr->utf8_cp = (uint32_t)cp;
+        hdr->flags |= MIRE_STR_UTF8_KNOWN;
+    }
+    return (int64_t)cp;
+}
+
+// ── UTF-8 substring by codepoint ──────────────────────────────────────
+
+char *rt_strings_substr_utf8(const char *input, int64_t start_cp, int64_t count_cp) {
+    if (!input) return rt_managed_from_slice("", 0);
+    size_t byte_len;
+    if (rt_managed_is_managed(input)) {
+        MireManagedString *hdr = rt_string_header(input);
+        byte_len = hdr->len;
+    } else {
+        byte_len = strlen(input);
+    }
+    if (start_cp < 0) start_cp = 0;
+
+    // Walk UTF-8 bytes to find start byte offset
+    size_t byte_start = 0;
+    int64_t cp = 0;
+    for (size_t i = 0; i < byte_len && cp < start_cp; i++) {
+        unsigned char c = (unsigned char)input[i];
+        if (c < 0x80 || c >= 0xC0) {
+            if (cp == start_cp) break;
+            cp++;
+            byte_start = i;
+        }
+    }
+    if (cp < start_cp) return rt_managed_from_slice("", 0);
+
+    // Now find the byte offset where we've counted count_cp codepoints
+    size_t byte_end = byte_len;
+    if (count_cp > 0) {
+        int64_t remaining = count_cp;
+        size_t i = byte_start;
+        while (i < byte_len && remaining > 0) {
+            unsigned char c = (unsigned char)input[i];
+            if (c < 0x80 || c >= 0xC0) remaining--;
+            if (remaining == 0) { byte_end = i; break; }
+            i++;
+        }
+        if (remaining > 0) byte_end = byte_len;
+    }
+
+    if (byte_end <= byte_start) return rt_managed_from_slice("", 0);
+    return rt_managed_from_slice(input + byte_start, byte_end - byte_start);
+}
+
+// ── UTF-8 index_of ────────────────────────────────────────────────────
+
+int64_t rt_strings_index_of_utf8(const char *s, const char *sub) {
+    if (!s || !sub) return -1;
+    if (*sub == '\0') return 0;
+    const char *pos = strstr(s, sub);
+    if (!pos) return -1;
+    // Count codepoints from start to pos
+    size_t byte_offset = (size_t)(pos - s);
+    int64_t cp_count = 0;
+    for (size_t i = 0; i < byte_offset; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c < 0x80 || c >= 0xC0) cp_count++;
+    }
+    return cp_count;
 }
 
 // ── Runtime utilities ────────────────────────────────────────────────

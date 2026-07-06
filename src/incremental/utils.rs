@@ -105,12 +105,28 @@ pub(crate) fn normalize_path_key(path: &Path) -> String {
 
 pub fn statement_export_name(statement: &Statement) -> Option<&str> {
     match statement {
-        Statement::Let { name, .. }
-        | Statement::Function { name, .. }
-        | Statement::Type { name, .. }
+        Statement::Let {
+            name, visibility, ..
+        } => {
+            if *visibility == Visibility::Public {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        }
+        Statement::Function {
+            name, visibility, ..
+        } => {
+            if *visibility == Visibility::Public {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        }
+        Statement::Type { name, .. }
         | Statement::Skill { name, .. }
-        | Statement::Module { name, .. }
         | Statement::Enum { name, .. }
+        | Statement::Module { name, .. }
         | Statement::ExternLib { name, .. } => Some(name.as_str()),
         Statement::ExternFunction {
             name, visibility, ..
