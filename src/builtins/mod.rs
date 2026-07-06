@@ -242,6 +242,7 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
     builtins.insert("__do_while".to_string(), DataType::None);
     builtins.insert("__type_matches".to_string(), DataType::Bool);
     builtins.insert("__is".to_string(), DataType::Bool);
+    builtins.insert("thread_spawn".to_string(), DataType::I64);
     builtins.insert("new::".to_string(), DataType::Unknown);
     builtins.insert("own::".to_string(), DataType::Box);
     builtins.insert("move::".to_string(), DataType::Unknown);

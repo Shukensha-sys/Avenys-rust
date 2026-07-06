@@ -235,5 +235,6 @@ int64_t rt_rem_i64(int64_t a, int64_t b);
 void rt_check_bounds_i64(int64_t index, int64_t len);
 void *rt_closure_env_alloc(int64_t size);
 void  rt_closure_env_free(void *env);
+int64_t rt_thread_spawn_closure(void *fn_ptr, void *env_ptr);
 
 #endif // MIRE_RUNTIME_H

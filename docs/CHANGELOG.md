@@ -2,6 +2,30 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.11.43] - 2026-07-06
+
+### Added
+- **`thread_spawn` builtin**: Spawns an OS thread running a closure.
+  Internally calls `pal_thread_spawn` via `rt_thread_spawn_closure`
+  runtime helper. Supports both closure variables and inline closures.
+  Returns `i64` thread ID.
+- **PAL thread layer**: `pal_thread_spawn`, `pal_thread_join`,
+  `pal_thread_self`, `pal_thread_exit` with pthread implementation
+  on Linux. `-pthread` linker flag added automatically.
+- **Closure variable calls (`typeck_check_expression.rs:448`)**: When
+  a variable name has `Closure` or `Function` type, the call is accepted
+  and its return type used, instead of emitting "Unknown function".
+- **MIR indirect closure calls (`mir/lower/expr.rs:305`)**: Closure
+  variables lower to `MirValue::Temp(ptr)` instead of `FunctionRef`,
+  enabling codegen to emit indirect calls via the closure struct.
+
+### Changed
+- **Type checker**: `default_builtin_returns` in `src/builtins/mod.rs`
+  now includes `thread_spawn` → `I64`.
+
+### Docs
+- **CHANGELOG.md**: Bumped to 3.11.43.
+
 ## [3.11.38] - 2026-07-03
 
 ### Fixed
