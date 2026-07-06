@@ -128,6 +128,7 @@ pub(crate) fn pal_extern_decls() -> Vec<String> {
         "declare ptr @rt_dict_get_ptr(ptr, i64, i64, ptr, ptr)".to_string(),
         "declare ptr @rt_dict_set_i64(ptr, i64, i64, i64, ptr, i64)".to_string(),
         "declare ptr @rt_dict_set_ptr(ptr, i64, i64, i64, ptr, ptr)".to_string(),
+        "declare i64 @rt_thread_spawn_closure(ptr, ptr)".to_string(),
         "declare i64 @pal_fs_write(ptr, ptr)".to_string(),
         "declare i64 @pal_fs_append(ptr, ptr)".to_string(),
         "declare ptr @pal_fs_read(ptr)".to_string(),

@@ -1,7 +1,7 @@
 use super::builtins::{builtin_to_pal, compile_pal_builtin};
 use super::resolve::{coerce_to, coerce_to_bool, resolve_named_call, resolve_typed};
 use super::types::{llvm_type_str, render_struct_llvm_type};
-use super::{LlvmCtx, tmp_extra, tmp_result};
+use super::{sanitize_fn_name, LlvmCtx, tmp_extra, tmp_result};
 use crate::compiler::mir::{DataType, MirCmp, MirConst, MirInst, MirOp, MirValue};
 
 pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
@@ -354,6 +354,55 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
                     "%t{} = call ptr @rt_get_args(i32 {}, ptr {})",
                     result, argc, argv
                 )
+            } else if name_opt == Some("thread_spawn") {
+                if args.is_empty() {
+                    String::new()
+                } else {
+                    let result = tmp_result(ctx, "i64", inst.result);
+                    match &args[0] {
+                        MirValue::FunctionRef { name, env } => {
+                            let fn_name = format!("@fn_{}", sanitize_fn_name(name));
+                            let (env_str, env_ty) = resolve_typed(env, ctx);
+                            let env_cast = if env_ty != "ptr" {
+                                let tmp = tmp_extra(ctx, "ptr");
+                                extra.push(format!("{} = inttoptr {} {} to ptr", tmp, env_ty, env_str));
+                                tmp
+                            } else {
+                                env_str
+                            };
+                            format!(
+                                "%t{} = call i64 @rt_thread_spawn_closure(ptr {}, ptr {})",
+                                result, fn_name, env_cast
+                            )
+                        }
+                        MirValue::Temp(id) => {
+                            let callee = ctx
+                                .vars
+                                .get(id)
+                                .cloned()
+                                .unwrap_or_else(|| format!("%t{}", id));
+                            let fn_ptr = tmp_extra(ctx, "ptr");
+                            let env_ptr = tmp_extra(ctx, "ptr");
+                            extra.push(format!(
+                                "{} = getelementptr {{ ptr, ptr }}, ptr {}, i32 0, i32 0",
+                                fn_ptr, callee
+                            ));
+                            extra.push(format!(
+                                "{} = getelementptr {{ ptr, ptr }}, ptr {}, i32 0, i32 1",
+                                env_ptr, callee
+                            ));
+                            let fn_loaded = tmp_extra(ctx, "ptr");
+                            let env_loaded = tmp_extra(ctx, "ptr");
+                            extra.push(format!("{} = load ptr, ptr {}", fn_loaded, fn_ptr));
+                            extra.push(format!("{} = load ptr, ptr {}", env_loaded, env_ptr));
+                            format!(
+                                "%t{} = call i64 @rt_thread_spawn_closure(ptr {}, ptr {})",
+                                result, fn_loaded, env_loaded
+                            )
+                        }
+                        _ => String::new(),
+                    }
+                }
             } else if let Some(llvm_name) = builtin_to_pal(name_opt.unwrap_or("")) {
                 compile_pal_builtin(inst, args, llvm_name, ctx, &mut extra)
             } else if name_opt == Some("call") {
