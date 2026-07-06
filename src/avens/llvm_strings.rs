@@ -398,8 +398,8 @@ impl LlvmIrGen {
             }
             LlType::Struct(_) => {
                 return Err(MireError::new(ErrorKind::Backend {
-                    line: self.current_line.max(1),
-                    column: self.current_column.max(1),
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Struct type not supported here".to_string(),
                 }));
             }

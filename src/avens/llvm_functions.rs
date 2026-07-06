@@ -681,8 +681,8 @@ impl LlvmIrGen {
             | Statement::Impl { .. }
             | Statement::Enum { .. }
             | Statement::Query { .. } => Err(MireError::new(ErrorKind::Backend {
-                line: self.current_line.max(1),
-                column: self.current_column.max(1),
+                line: self.current_line,
+                column: self.current_column,
                 message: "Avenys statement is parsed/typechecked but not lowered in backend yet"
                     .to_string(),
             })),
@@ -976,8 +976,8 @@ impl LlvmIrGen {
                             })
                         }
                         LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
-                            line: self.current_line.max(1),
-                            column: self.current_column.max(1),
+                            line: self.current_line,
+                            column: self.current_column,
                             message: "Cannot convert struct to string".to_string(),
                         })),
                     },
@@ -1044,8 +1044,8 @@ impl LlvmIrGen {
                                 }
                             } else {
                                 return Err(MireError::new(ErrorKind::Backend {
-                                    line: self.current_line.max(1),
-                                    column: self.current_column.max(1),
+                                    line: self.current_line,
+                                    column: self.current_column,
                                     message: format!(
                                         "Avenys call(...) callback '{}' has no inferable signature; reject dynamic lowering",
                                         ident.name
@@ -1054,8 +1054,8 @@ impl LlvmIrGen {
                             }
                             if matches!(data_type, DataType::Unknown | DataType::Function) {
                                 return Err(MireError::new(ErrorKind::Backend {
-                                    line: self.current_line.max(1),
-                                    column: self.current_column.max(1),
+                                    line: self.current_line,
+                                    column: self.current_column,
                                     message: format!(
                                         "Avenys call(...) callback '{}' produced unresolved return type; dynamic lowering rejected",
                                         ident.name
@@ -1065,8 +1065,8 @@ impl LlvmIrGen {
                             let callback_ptr = self.compile_expr(&args[0])?;
                             if callback_ptr.ty != LlType::Ptr {
                                 return Err(MireError::new(ErrorKind::Backend {
-                                    line: self.current_line.max(1),
-                                    column: self.current_column.max(1),
+                                    line: self.current_line,
+                                    column: self.current_column,
                                     message: format!(
                                         "Avenys dynamic callback '{}' is not a function pointer",
                                         ident.name
@@ -1091,8 +1091,8 @@ impl LlvmIrGen {
                                     LlType::Ptr => ("ptr".to_string(), value.repr),
                                     LlType::Struct(_) => {
                                         return Err(MireError::new(ErrorKind::Backend {
-                                            line: self.current_line.max(1),
-                                            column: self.current_column.max(1),
+                                            line: self.current_line,
+                                            column: self.current_column,
                                             message: "Cannot pass struct to callback".to_string(),
                                         }));
                                     }
@@ -1192,8 +1192,8 @@ impl LlvmIrGen {
                     callback_expr => {
                         if matches!(data_type, DataType::Unknown | DataType::Function) {
                             return Err(MireError::new(ErrorKind::Backend {
-                                line: self.current_line.max(1),
-                                column: self.current_column.max(1),
+                                line: self.current_line,
+                                column: self.current_column,
                                 message:
                                     "Avenys call(...) callback expression has unresolved return type; dynamic lowering rejected"
                                         .to_string(),
@@ -1202,8 +1202,8 @@ impl LlvmIrGen {
                         let callback_ptr = self.compile_expr(callback_expr)?;
                         if callback_ptr.ty != LlType::Ptr {
                             return Err(MireError::new(ErrorKind::Backend {
-                                line: self.current_line.max(1),
-                                column: self.current_column.max(1),
+                                line: self.current_line,
+                                column: self.current_column,
                                 message:
                                     "Avenys call(...) dynamic callback must be a function pointer"
                                         .to_string(),
@@ -1227,8 +1227,8 @@ impl LlvmIrGen {
                                 LlType::Ptr => ("ptr".to_string(), value.repr),
                                 LlType::Struct(_) => {
                                     return Err(MireError::new(ErrorKind::Backend {
-                                        line: self.current_line.max(1),
-                                        column: self.current_column.max(1),
+                                        line: self.current_line,
+                                        column: self.current_column,
                                         message: "Cannot pass struct to callback".to_string(),
                                     }));
                                 }
@@ -1740,8 +1740,8 @@ impl LlvmIrGen {
                     })
                     .ok_or_else(|| {
                         MireError::new(ErrorKind::Backend {
-                            line: self.current_line.max(1),
-                            column: self.current_column.max(1),
+                            line: self.current_line,
+                            column: self.current_column,
                             message: format!("Avenys unknown function '{}'", name),
                         })
                     })?;
@@ -1823,8 +1823,8 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
-                                line: self.current_line.max(1),
-                                column: self.current_column.max(1),
+                                line: self.current_line,
+                                column: self.current_column,
                                 message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
@@ -1866,8 +1866,8 @@ impl LlvmIrGen {
 
                         let fn_info = self.user_functions.get(name).cloned().ok_or_else(|| {
                             MireError::new(ErrorKind::Backend {
-                                line: self.current_line.max(1),
-                                column: self.current_column.max(1),
+                                line: self.current_line,
+                                column: self.current_column,
                                 message: format!("Avenys unknown function '{}'", name),
                             })
                         })?;
@@ -1924,7 +1924,7 @@ impl LlvmIrGen {
 
     pub(super) fn attach_context(&self, err: MireError) -> MireError {
         if err.line == 1 && err.column == 1 {
-            err.with_position(self.current_line.max(1), self.current_column.max(1))
+            err.with_position(self.current_line, self.current_column)
         } else {
             err
         }
@@ -1987,18 +1987,14 @@ impl LlvmIrGen {
                 Self::expression_location(iterable)
             }
             Statement::Match { value, .. } => Self::expression_location(value),
-            Statement::Unsafe { line, column, .. } => {
-                let line = *line;
-                let column = *column;
-                (line.max(1), column.max(1))
-            }
+            Statement::Unsafe { line, column, .. } => (*line, *column),
             _ => crate::compiler::location::NO_POSITION,
         }
     }
 
     pub(super) fn expression_location(expression: &Expression) -> (usize, usize) {
         match expression {
-            Expression::Identifier(ident) => (ident.line.max(1), ident.column.max(1)),
+            Expression::Identifier(ident) => (ident.line, ident.column),
             Expression::BinaryOp { left, .. }
             | Expression::NamedArg { value: left, .. }
             | Expression::Reference { expr: left, .. }

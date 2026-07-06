@@ -1076,8 +1076,7 @@ fn is_str_type(_ident: &Identifier) -> bool {
 fn find_unsafe_block_position(body: &[Statement]) -> Option<(usize, usize)> {
     for stmt in body {
         if let Statement::Unsafe { .. } = stmt {
-            let (line, column) = statement_location(stmt);
-            return Some((line.max(1), column.max(1)));
+            return Some(statement_location(stmt));
         }
         match stmt {
             Statement::If {

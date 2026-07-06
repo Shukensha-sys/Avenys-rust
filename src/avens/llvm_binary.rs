@@ -86,8 +86,8 @@ impl LlvmIrGen {
                 })
             }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
-                line: self.current_line.max(1),
-                column: self.current_column.max(1),
+                line: self.current_line,
+                column: self.current_column,
                 message: "Cannot cast struct to i64".to_string(),
             })),
         }
@@ -130,8 +130,8 @@ impl LlvmIrGen {
                 message: "Cannot convert pointer to boolean".to_string(),
             })),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
-                line: self.current_line.max(1),
-                column: self.current_column.max(1),
+                line: self.current_line,
+                column: self.current_column,
                 message: "Cannot cast struct to i1".to_string(),
             })),
         }
@@ -567,8 +567,8 @@ impl LlvmIrGen {
             LlType::I8 => self.cast_to_i64(value),
             LlType::Struct(_) if value.ty == ty => Ok(value),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
-                line: self.current_line.max(1),
-                column: self.current_column.max(1),
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr if value.ty == LlType::Ptr => Ok(value),
@@ -600,8 +600,8 @@ impl LlvmIrGen {
             LlType::Struct(_) if value.ty == ty => value,
             LlType::Struct(_) => {
                 return Err(MireError::new(ErrorKind::Backend {
-                    line: self.current_line.max(1),
-                    column: self.current_column.max(1),
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Struct type not supported here".to_string(),
                 }));
             }
@@ -656,8 +656,8 @@ impl LlvmIrGen {
                 self.cast_to_f64(as_i64)
             }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
-                line: self.current_line.max(1),
-                column: self.current_column.max(1),
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {

@@ -888,8 +888,8 @@ impl<'a> BorrowChecker<'a> {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if !is_mutable {
                         return Err(MireError::type_error_at(
-                            self.current_line.max(1),
-                            self.current_column.max(1),
+                            self.current_line,
+                            self.current_column,
                             format!(
                                 "Function '{}' argument {} requires a mutable reference",
                                 callee,
@@ -956,7 +956,7 @@ impl<'a> BorrowChecker<'a> {
     }
 
     fn ownership_error(&self, kind: MssError) -> MireError {
-        MireError::ownership_error(self.current_line.max(1), self.current_column.max(1), kind)
+        MireError::ownership_error(self.current_line, self.current_column, kind)
     }
 
     fn statement_location(statement: &Statement) -> (usize, usize) {
