@@ -150,6 +150,7 @@ impl LlvmIrGen {
             | DataType::RefMut { .. } => Ok(LlType::Ptr),
             DataType::Pointer(_)
             | DataType::Function
+            | DataType::Closure { .. }
             | DataType::Db
             | DataType::Datetime
             | DataType::Box

@@ -160,6 +160,14 @@ impl TypeChecker {
                 self.lookup_function_value_signature(&ident.name)
             }
             Expression::Call { name, .. } => self.function_return_signatures.get(name).cloned(),
+            Expression::Closure { params, return_type, .. } => {
+                Some(FunctionSig {
+                    type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
+                    params: params.iter().map(|(_, t)| t.clone()).collect(),
+                    return_type: return_type.clone(),
+                })
+            }
             _ => None,
         }
     }
