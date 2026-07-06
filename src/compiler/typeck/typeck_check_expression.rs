@@ -269,7 +269,7 @@ impl TypeChecker {
                         }
                         callback_expr => {
                             let callback_ty = self.check_expression(callback_expr)?;
-                            if callback_ty != DataType::Function && callback_ty != DataType::Unknown
+                            if !matches!(callback_ty, DataType::Function | DataType::Closure { .. } | DataType::Unknown)
                             {
                                 return Err(type_error(
                                     self.current_line,
@@ -690,7 +690,10 @@ impl TypeChecker {
                 }
 
                 self.pop_scope();
-                Ok(DataType::Function)
+                Ok(DataType::Closure {
+                    params: params.iter().map(|(_, t)| t.clone()).collect(),
+                    return_type: Box::new(return_type.clone()),
+                })
             }
             Expression::Reference {
                 expr,

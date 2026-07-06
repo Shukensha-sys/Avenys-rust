@@ -73,6 +73,12 @@ pub enum DataType {
         ok: Box<DataType>,
         err: Box<DataType>,
     },
+    /// Closure as a first-class value with explicit signature.
+    /// Stores params and return type for type-safe closure usage.
+    Closure {
+        params: Vec<DataType>,
+        return_type: Box<DataType>,
+    },
     Generic(String),
 }
 
