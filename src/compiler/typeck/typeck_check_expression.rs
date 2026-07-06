@@ -447,6 +447,39 @@ impl TypeChecker {
                     return Ok(DataType::EnumNamed(enum_name));
                 }
 
+                if let Some((var_type, _)) = self.lookup_var(name) {
+                    if matches!(var_type, DataType::Closure { .. } | DataType::Function) {
+                        let closure_type = var_type.clone();
+                        if let DataType::Closure { params, return_type } = closure_type {
+                            if params.len() != arg_types.len() {
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "Closure expects {} argument(s), got {}",
+                                        params.len(),
+                                        arg_types.len()
+                                    ),
+                                ));
+                            }
+                            for (actual_ty, expected_ty) in arg_types.iter().zip(params.iter()) {
+                                if !self.is_assignable(expected_ty, actual_ty) {
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "Closure expects {:?}, got {:?}",
+                                            expected_ty, actual_ty
+                                        ),
+                                    ));
+                                }
+                            }
+                            *data_type = return_type.as_ref().clone();
+                            return Ok(return_type.as_ref().clone());
+                        }
+                    }
+                }
+
                 Err(type_error(
                     self.current_line,
                     self.current_column,
