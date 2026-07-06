@@ -10,7 +10,7 @@ impl LlvmIrGen {
             DataType::Str => {
                 let tmp = self.tmp();
                 self.body
-                    .push(format!("  {tmp} = call i64 @strlen(ptr {})", value.repr));
+                    .push(format!("  {tmp} = call i64 @rt_strings_len(ptr {})", value.repr));
                 Ok(LlValue {
                     ty: LlType::I64,
                     repr: tmp,
@@ -1301,7 +1301,7 @@ impl LlvmIrGen {
                 let index = self.cast_to_i64(index)?;
                 let len = self.tmp();
                 self.body
-                    .push(format!("  {len} = call i64 @strlen(ptr {})", target.repr));
+                    .push(format!("  {len} = call i64 @rt_strings_len(ptr {})", target.repr));
                 self.emit_bounds_check(
                     index.clone(),
                     LlValue {

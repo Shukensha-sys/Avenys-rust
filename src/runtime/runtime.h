@@ -5,11 +5,18 @@
 #include <stdint.h>
 
 // ── Managed strings ──────────────────────────────────────────────────
-// Format: header (len, cap) + data[cap+1] (inline, no pointer indirection)
+// Format: header (len, cap, flags) + data[cap+1] (inline, no pointer indirection)
+// All strings are NUL-terminated UTF-8. len = byte length (not codepoint count).
+// flags bits:
+#define MIRE_STR_MANAGED     1  // allocated via managed allocator
+#define MIRE_STR_UTF8_KNOWN  2  // utf8_cp field is valid
+
 typedef struct {
-    size_t len;
-    size_t cap;
-    char data[];
+    size_t len;       // byte length (excluding NUL)
+    size_t cap;       // allocated capacity (bytes)
+    uint32_t flags;   // MIRE_STR_* flags
+    uint32_t utf8_cp; // cached codepoint count (valid when MIRE_STR_UTF8_KNOWN set)
+    char data[];      // flexible array member — UTF-8 bytes + NUL
 } MireManagedString;
 
 char *rt_managed_alloc(size_t len);
@@ -20,6 +27,7 @@ char *rt_managed_printf_i64(const char *fmt, long long value);
 char *rt_managed_printf_f64(const char *fmt, double value);
 void  rt_managed_free(char *value);
 void  rt_managed_cleanup_all(void);
+int   rt_managed_is_managed(const char *value);
 size_t rt_managed_len(const char *value);
 int   rt_managed_contains(const char *data_ptr);
 void  rt_managed_register(char *data_ptr);
@@ -30,12 +38,19 @@ char *rt_strdup_raw(const char *src);
 char *rt_strdup_raw_n(const char *src, size_t len);
 char *rt_alloc_printf_raw_i64(const char *fmt, long long value);
 size_t rt_string_growth_cap(size_t min_cap);
+MireManagedString *rt_string_header(const char *data);
 
 // ── String operations ────────────────────────────────────────────────
 char *rt_string_copy(const char *value);
 char *rt_string_concat(const char *left, const char *right);
 char *rt_strings_repeat(const char *input, int64_t count);
 char *rt_string_append_owned(char *value, const char *suffix);
+int64_t rt_strings_len(const char *s);
+
+// UTF-8 aware operations (work on codepoints, not bytes)
+int64_t rt_strings_len_utf8(const char *s);
+char   *rt_strings_substr_utf8(const char *input, int64_t start_cp, int64_t count_cp);
+int64_t rt_strings_index_of_utf8(const char *s, const char *sub);
 
 char *rt_i64_to_string(int64_t value);
 char *rt_bool_to_string(int64_t value);

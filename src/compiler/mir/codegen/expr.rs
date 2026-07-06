@@ -11,7 +11,12 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
         MirOp::Alloca(ty) => {
             let llty = llvm_type_str(&ty.data_type);
             let result = tmp_result(ctx, "ptr", inst.result);
-            format!("%t{} = alloca {}", result, llty)
+            extra.push(format!("%t{} = alloca {}", result, llty));
+            if llty == "ptr" {
+                // Zero-initialize string pointer vars so first Store doesn't free garbage
+                extra.push(format!("store ptr null, ptr %t{}", result));
+            }
+            String::new()
         }
         MirOp::Load(src, ty) => {
             let (src_s, _) = resolve_typed(src, ctx);

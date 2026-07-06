@@ -96,16 +96,19 @@ void *rt_list_concat(void *left_ptr, void *right_ptr) {
     int64_t llen = rt_list_len(left_ptr);
     int64_t rlen = rt_list_len(right_ptr);
     int64_t total = llen + rlen;
-    void *result = malloc(16 + total * 8);
+    int64_t *result = (int64_t *)malloc(16 + total * 8);
     if (!result) return left_ptr;
-    ((int64_t *)result)[0] = total;
-    ((int64_t *)result)[1] = total;
-    int64_t *out = (int64_t *)result + 2;
+    result[0] = total;  // capacity
+    result[1] = total;  // length
+    int64_t *out = result + 2;
     int64_t *larr = (int64_t *)left_ptr + 1;
     int64_t *rarr = (int64_t *)right_ptr + 1;
     for (int64_t i = 0; i < llen; i++) out[i] = larr[i];
     for (int64_t i = 0; i < rlen; i++) out[llen + i] = rarr[i];
-    return out;
+    // Return a pointer that conforms to the list layout:
+    // list_ptr[-1] = cap, list_ptr[0] = len, list_ptr[1..] = data
+    // result[0]=cap, result[1]=len → return result+1
+    return result + 1;
 }
 
 void *rt_list_slice(void *list_ptr, int64_t start, int64_t end) {
@@ -114,14 +117,14 @@ void *rt_list_slice(void *list_ptr, int64_t start, int64_t end) {
     if (end > len) end = len;
     if (start >= end) return rt_list_create(4, 8);
     int64_t new_len = end - start;
-    void *result = malloc(16 + new_len * 8);
+    int64_t *result = (int64_t *)malloc(16 + new_len * 8);
     if (!result) return rt_list_create(4, 8);
-    ((int64_t *)result)[0] = new_len;
-    ((int64_t *)result)[1] = new_len;
-    int64_t *out = (int64_t *)result + 2;
+    result[0] = new_len;  // capacity
+    result[1] = new_len;  // length
+    int64_t *out = result + 2;
     int64_t *arr = (int64_t *)list_ptr + 1;
     for (int64_t i = 0; i < new_len; i++) out[i] = arr[start + i];
-    return out;
+    return result + 1;
 }
 
 void *rt_list_remove(void *list_ptr, int64_t index) {
