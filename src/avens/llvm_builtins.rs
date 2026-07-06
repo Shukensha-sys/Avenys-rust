@@ -492,6 +492,25 @@ impl LlvmIrGen {
         })
     }
 
+    pub(super) fn compile_fs_walk(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                message: "fs_walk expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!(
+            "  {tmp} = call ptr @pal_fs_walk(ptr {})",
+            path.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
     pub(super) fn compile_fs_join(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
