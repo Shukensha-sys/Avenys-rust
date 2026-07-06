@@ -301,15 +301,33 @@ impl MirLower {
                         .unwrap_or_else(|| name.clone());
                     (resolved, mir_args)
                 };
+
+                let is_closure_var = self.var_types.get(name)
+                    .map(|ty| matches!(ty, DataType::Closure { .. } | DataType::Function))
+                    .unwrap_or(false);
+
+                let callee = if is_closure_var {
+                    if let Some(&ptr) = self.vars.get(name) {
+                        MirValue::Temp(ptr)
+                    } else {
+                        MirValue::FunctionRef {
+                            name: resolved_name,
+                            env: Box::new(MirValue::Const(MirConst::None)),
+                        }
+                    }
+                } else {
+                    MirValue::FunctionRef {
+                        name: resolved_name,
+                        env: Box::new(MirValue::Const(MirConst::None)),
+                    }
+                };
+
                 let last = self.current_block;
                 if matches!(data_type, DataType::None) {
                     self.func.blocks[last].push(
                         None,
                         MirOp::Call(
-                            MirValue::FunctionRef {
-                                name: resolved_name,
-                                env: Box::new(MirValue::Const(MirConst::None)),
-                            },
+                            callee,
                             mir_args,
                             MirType {
                                 data_type: data_type.clone(),
@@ -323,10 +341,7 @@ impl MirLower {
                     self.func.blocks[last].push(
                         Some(result),
                         MirOp::Call(
-                            MirValue::FunctionRef {
-                                name: resolved_name,
-                                env: Box::new(MirValue::Const(MirConst::None)),
-                            },
+                            callee,
                             mir_args,
                             MirType {
                                 data_type: data_type.clone(),

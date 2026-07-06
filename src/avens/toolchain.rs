@@ -69,6 +69,7 @@ pub(super) fn compile_binary_from_ir(
         clang.arg("-lm");
         clang.arg("-lssl");
         clang.arg("-lcrypto");
+        clang.arg("-pthread");
     }
 
     if std::env::var("MIRE_DEBUG_LINK").is_ok() {

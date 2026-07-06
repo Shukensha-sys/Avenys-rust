@@ -114,6 +114,12 @@ int     pal_tls_send(int64_t fd, const char *data);
 char   *pal_tls_recv(int64_t fd, int64_t max_bytes);
 int     pal_tls_close(int64_t fd);
 
+// ── Threads ──────────────────────────────────────────────────────────
+int64_t pal_thread_spawn(void *(*fn)(void*), void *arg);
+int64_t pal_thread_join(int64_t tid, void **result);
+void    pal_thread_exit(void *result);
+int64_t pal_thread_self(void);
+
 // ── I/O helpers ──────────────────────────────────────────────────────
 void    pal_io_print(const char *msg);
 void    pal_io_print_err(const char *msg);
