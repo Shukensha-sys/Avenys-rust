@@ -352,6 +352,7 @@ impl LlvmIrGen {
             "declare i64 @pal_fs_is_file(ptr)".to_string(),
             "declare i64 @pal_fs_size(ptr)".to_string(),
             "declare ptr @pal_fs_list(ptr)".to_string(),
+            "declare ptr @pal_fs_walk(ptr)".to_string(),
             "declare ptr @pal_fs_join(ptr, ptr)".to_string(),
             "declare ptr @pal_fs_dir(ptr)".to_string(),
             "declare ptr @pal_fs_name(ptr)".to_string(),
@@ -1597,6 +1598,7 @@ impl LlvmIrGen {
             }
             Expression::Call { name, args, .. } if name == "fs_size" => self.compile_fs_size(args),
             Expression::Call { name, args, .. } if name == "fs_list" => self.compile_fs_list(args),
+            Expression::Call { name, args, .. } if name == "fs_walk" => self.compile_fs_walk(args),
             Expression::Call { name, args, .. } if name == "fs_join" => self.compile_fs_join(args),
             Expression::Call { name, args, .. } if name == "fs_dir" => self.compile_fs_dir(args),
             Expression::Call { name, args, .. } if name == "fs_name" => self.compile_fs_name(args),

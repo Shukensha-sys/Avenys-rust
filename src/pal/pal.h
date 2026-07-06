@@ -22,6 +22,7 @@ int64_t pal_fs_is_dir(const char *path);
 int64_t pal_fs_is_file(const char *path);
 int64_t pal_fs_size(const char *path);
 void   *pal_fs_list(const char *path);
+void   *pal_fs_walk(const char *path);
 char   *pal_fs_join(const char *a, const char *b);
 char   *pal_fs_dir(const char *path);
 char   *pal_fs_name(const char *path);

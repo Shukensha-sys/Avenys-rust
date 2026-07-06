@@ -174,6 +174,38 @@ void *pal_fs_list(const char *path) {
     return list;
 }
 
+static void walk_recursive(const char *path, void *result_list) {
+    extern void *rt_list_push_ptr(void *list_ptr, void *value);
+    extern char *rt_strdup_raw(const char *src);
+    DIR *dir = opendir(path);
+    if (!dir) return;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.' && (entry->d_name[1] == '\0' || (entry->d_name[1] == '.' && entry->d_name[2] == '\0')))
+            continue;
+        char *full_path;
+        if (asprintf(&full_path, "%s/%s", path, entry->d_name) == -1) continue;
+        char *copied = rt_strdup_raw(full_path);
+        void *pushed = rt_list_push_ptr(result_list, copied);
+        if (pushed) result_list = pushed;
+        struct stat st;
+        if (stat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            walk_recursive(full_path, result_list);
+        }
+        free(full_path);
+    }
+    closedir(dir);
+}
+
+void *pal_fs_walk(const char *path) {
+    extern void *rt_list_create(int64_t initial_cap, int64_t elem_size);
+    void *list = rt_list_create(64, 8);
+    EXPAND_TILDE(path);
+    walk_recursive(path_real, list);
+    EXPAND_TILDE_END(path);
+    return list;
+}
+
 char *pal_fs_join(const char *a, const char *b) {
     size_t alen = strlen(a);
     size_t blen = strlen(b);
