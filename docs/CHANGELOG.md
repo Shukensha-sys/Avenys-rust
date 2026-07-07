@@ -2,6 +2,57 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.11.45] - 2026-07-07
+
+### Fixed
+- **Analysis cache invalidation**: `analysis_cache_key` now includes `dep_fingerprint`
+  (combined hash of all loaded files + dependency edges). Previously, changing a
+  loaded module's source would not invalidate the importing file's cached analysis.
+- **`store_analysis_error`**: Now writes a `::latest` entry (same as `store_analysis`),
+  so partial re-analysis always finds the most recent snapshot even after errors.
+- **LRU tracking for `::latest` keys**: Both fingerprint-keyed and `::latest` entries
+  are LRU-tracked; `store_analysis` and `store_analysis_error` both maintain the
+  latest key.
+- **`blob_hash` clone**: Fixed borrow-after-move when computing blob hash for
+  analysis entries.
+- **Flat builtin aliases**: Both MIR and LLVM codegen now accept flat names
+  (`fs_exists`, `fs_read`, `fs_drop`, `fs_list`, `proc_run`, `proc_exit`,
+  `env_get`, `env_cwd`, `env_all`, `time_unix_ms`, `mem_used`, `cpu_count`)
+  alongside the canonical `::` names. This provides backward compatibility for
+  code using the legacy flat style.
+
+### Added
+- **`dependency_fingerprint()`**: New utility in `src/incremental/utils.rs` that
+  hashes all loaded file paths, content hashes, and dependency edges into a single
+  `u64` for the analysis cache key.
+
+### Docs
+- **`docs/incremental-design.md`**: Added §"Analysis Cache Invalidation (v3.11.45+)"
+  documenting `dependency_fingerprint`, three-param `analysis_cache_key`,
+  `latest_analysis_key`, two-entry store, and cache migration.
+- **CHANGELOG.md**: Bumped to 3.11.45.
+
+## [3.11.44] - 2026-07-06
+
+### Added
+- **Phase 1 builtin modularization**: Namespace syntax for builtins replacing
+  legacy flat names:
+  - `thread::spawn` / `thread::join` (was `thread_spawn` / `thread_join`)
+  - `time::now::ms` (was `time_unix_ms`)
+  - `cpu::count` (was `cpu_count`)
+  - `mem::used` (was `mem_used`)
+  - `env::get` (was `env_get`)
+- **Parser `::` member access**: `check_double_colon()` in parser helpers
+  recognizes `::` as member access, building `MemberAccess { target, member }`
+  AST nodes. The chain `module::sub::fn(...)` lowers to `module.sub.fn(...)` for
+  call resolution.
+
+### Changed
+- **Builtin registry**: `default_builtin_returns` updated for all new namespace
+  builtins.
+- **Kioto adapters**: `core/async/mod.mire` uses `thread::spawn`/`thread::join`
+  instead of legacy `thread_spawn`/`thread_join`.
+
 ## [3.11.43] - 2026-07-06
 
 ### Added
