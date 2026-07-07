@@ -4,11 +4,11 @@
 
 static void* closure_thread_start(void* arg) {
     void** closure = (void**)arg;
-    void* (*fn)(void*) = (void* (*)(void*))closure[0];
+    int64_t (*fn)(void*) = (int64_t (*)(void*))closure[0];
     void* env = closure[1];
     free(arg);
-    fn(env);
-    return NULL;
+    int64_t result = fn(env);
+    return (void*)result;
 }
 
 int64_t rt_thread_spawn_closure(void* fn_ptr, void* env_ptr) {

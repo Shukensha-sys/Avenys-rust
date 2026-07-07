@@ -464,7 +464,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                         current_section
                     )))],
                     type_args: Vec::new(),
-                    data_type: DataType::None,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
                 }));
             }
         }
@@ -476,7 +478,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                     test.name
                 )))],
                 type_args: Vec::new(),
-                data_type: DataType::None,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
             }));
         } else {
             body.push(Statement::Let {
@@ -486,7 +490,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                     name: test.name.clone(),
                     args: Vec::new(),
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 }),
                 is_constant: false,
                 is_mutable: false,
@@ -510,7 +516,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                         test.name
                     )))],
                     type_args: Vec::new(),
-                    data_type: DataType::None,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
                 })],
                 else_branch: Some(vec![Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
@@ -519,7 +527,9 @@ fn inject_test_harness(program: &mut crate::parser::ast::Program) {
                         test.name
                     )))],
                     type_args: Vec::new(),
-                    data_type: DataType::None,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
                 })]),
             });
         }

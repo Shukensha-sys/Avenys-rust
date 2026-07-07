@@ -99,6 +99,8 @@ impl TypeChecker {
                 name,
                 args,
                 type_args,
+                name_line: _,
+                name_column: _,
                 data_type,
             } => {
                 if name == "ireru" && *data_type != DataType::Unknown {

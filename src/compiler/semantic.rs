@@ -151,6 +151,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: true,
+                    attributes: Vec::new(),
                 }],
             }],
         };

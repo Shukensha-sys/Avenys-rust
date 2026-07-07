@@ -17,6 +17,9 @@ pub(crate) fn llvm_type_str(dt: &DataType) -> String {
         DataType::Pointer(_) => "ptr".to_string(),
         DataType::EnumNamed(_) => "i64".to_string(),
         DataType::Generic(_) => "i64".to_string(),
+        DataType::Closure { .. } => "{ ptr, ptr }".to_string(),
+        DataType::Function => "ptr".to_string(),
+        DataType::Ref { .. } | DataType::RefMut { .. } => "ptr".to_string(),
         _ => "ptr".to_string(),
     }
 }

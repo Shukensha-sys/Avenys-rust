@@ -1,0 +1,14 @@
+// Test: multi-statement closure body, with captures, via thread_spawn/thread_join.
+load kioto
+
+pub fn main: () {
+    set data = 100 :i64
+    set task = () => {
+        use dasu("in thread")
+        set x = data + 1
+        x * 2
+    }
+    set tid = thread_spawn(task)
+    set ret = thread_join(tid)
+    use dasu("thread result: " + str(ret))
+}

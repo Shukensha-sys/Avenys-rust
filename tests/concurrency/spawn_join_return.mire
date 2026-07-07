@@ -1,0 +1,8 @@
+// Test: thread_spawn/thread_join return the closure's i64 result.
+load kioto
+
+pub fn main: () {
+    set tid = thread_spawn(() => 42)
+    set ret = thread_join(tid)
+    use dasu("joined: " + str(ret))
+}

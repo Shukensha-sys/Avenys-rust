@@ -171,7 +171,9 @@ impl TypeChecker {
                 name: struct_name.clone(),
                 args: new_fields,
                 type_args: Vec::new(),
-                data_type: owner_type.clone(),
+                name_line: 0,
+            name_column: 0,
+            data_type: owner_type.clone(),
             };
 
             self.insert_var(owner.to_string(), owner_type.clone(), owner_mutable);

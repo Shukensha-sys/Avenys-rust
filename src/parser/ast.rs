@@ -246,6 +246,10 @@ pub enum Expression {
         args: Vec<Expression>,
         #[serde(default)]
         type_args: Vec<DataType>,
+        #[serde(default)]
+        name_line: usize,
+        #[serde(default)]
+        name_column: usize,
         data_type: DataType,
     },
     List {

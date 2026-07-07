@@ -322,7 +322,18 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             module_paths: Vec::new(),
         };
 
-        match compile_file_with_avenys(file, &options) {
+        let source = std::fs::read_to_string(file).unwrap_or_default();
+        let has_main = source.contains("pub fn main");
+        let target_file = if !has_main {
+            let patched = format!("pub fn main: () {{\n{}\n}}\n", source);
+            let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
+            let _ = std::fs::write(&tmp, &patched);
+            tmp
+        } else {
+            file.clone()
+        };
+
+        match compile_file_with_avenys(&target_file, &options) {
             Ok(build) => {
                 if run {
                     match Command::new(&build.binary_path).output() {
@@ -883,6 +894,8 @@ fn runtime_err(err: std::io::Error) -> MireError {
 fn print_help() {
     println!("Mire / Avenys v{}", env!("CARGO_PKG_VERSION"));
     println!("Usage: mire <run|build|check|debug> [file] [options]\n");
+    println!("Mire is the Avenys compiler. For project management, dependencies,");
+    println!("and scaffolding, use Owl (owl new / owl run / owl import).\n");
     println!("Profiles:");
     println!("  --debug               Build profile debug (default)");
     println!("  --release             Build profile release");
@@ -893,16 +906,9 @@ fn print_help() {
     println!("  build [file]          Compile only");
     println!("  check [file]          Analyze only");
     println!("  debug [file]          Debug build, emits IR");
-
     println!("  test [paths...]       Run integration tests from tests/");
     println!("    --no-run            Compile only, skip execution");
     println!("    --verbose, -v       Show per-test results");
-    println!("\nManifest commands:");
-    println!("  validate              Validate owl.toml");
-    println!("  owl add <name>        Add dependency to [dependencies]");
-    println!("    --path <path>       Path dependency");
-    println!("    --version <ver>     Version dependency");
-    println!("  owl remove <name>     Remove dependency from [dependencies]");
 }
 
 fn set_owl_home_env(path: Option<&PathBuf>) {

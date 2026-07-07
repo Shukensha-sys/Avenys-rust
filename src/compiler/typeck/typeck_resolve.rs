@@ -141,6 +141,8 @@ impl TypeChecker {
                 name,
                 args,
                 type_args: _,
+                name_line: _,
+                name_column: _,
                 data_type,
             } => {
                 let arg_types: Vec<DataType> = std::iter::once(Ok(input_type.clone()))

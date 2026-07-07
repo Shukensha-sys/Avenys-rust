@@ -158,5 +158,6 @@ pub(crate) fn pal_extern_decls() -> Vec<String> {
         "declare i32 @pal_env_set(ptr, ptr)".to_string(),
         "declare ptr @pal_env_cwd()".to_string(),
         "declare ptr @pal_env_all()".to_string(),
+        "declare i64 @pal_thread_join(i64, ptr)".to_string(),
     ]
 }
