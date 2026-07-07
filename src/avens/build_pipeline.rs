@@ -641,6 +641,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let phase_load = build_start.elapsed().as_millis() as u64;
     progress_phase("load", &source_filename, phase_load, phase_load);
     let source_file_hash = source_hash(&source);
+    let dep_fingerprint = dependency_fingerprint(&loaded.files);
     if options.debug_dump
         && let Some(report) =
             cache.analysis_invalidation_report(source_path, source_file_hash, &loaded.program)
@@ -705,7 +706,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
 
     let mut phase_analyse_time = phase_load;
     let mut phase_mir_time = phase_load;
-    let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash) {
+    let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash, dep_fingerprint) {
         match cached {
             CachedAnalysis::Success(mut program) => {
                 apply_cfg_filter(&mut program);
@@ -763,11 +764,11 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             } else {
                 err
             };
-            cache.store_analysis_error(source_path, source_file_hash, &program, &err)?;
+            cache.store_analysis_error(source_path, source_file_hash, dep_fingerprint, &program, &err)?;
             cache.save()?;
             return Err(err);
         }
-        cache.store_analysis(source_path, source_file_hash, &program)?;
+        cache.store_analysis(source_path, source_file_hash, dep_fingerprint, &program)?;
         phase_analyse_time = build_start.elapsed().as_millis() as u64;
         progress_phase(
             "analyse",

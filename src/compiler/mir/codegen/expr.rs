@@ -379,7 +379,7 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
                     "%t{} = call ptr @rt_get_args(i32 {}, ptr {})",
                     result, argc, argv
                 )
-            } else if name_opt == Some("thread_spawn") {
+            } else if name_opt == Some("thread.spawn") {
                 if args.is_empty() {
                     String::new()
                 } else {
@@ -428,7 +428,7 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
                         _ => String::new(),
                     }
                 }
-            } else if name_opt == Some("thread_join") {
+            } else if name_opt == Some("thread.join") {
                 if args.is_empty() {
                     let result = tmp_result(ctx, "i64", inst.result);
                     format!("%t{result} = call i64 @pal_thread_join(i64 0, ptr null)")

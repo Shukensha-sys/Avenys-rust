@@ -101,7 +101,7 @@ mod tests {
             )
             .expect("store file");
         cache
-            .store_analysis(&source_path, 0, &demo_program("typed_main"))
+            .store_analysis(&source_path, 0, 0, &demo_program("typed_main"))
             .expect("store analysis");
         cache.save().expect("save");
 
@@ -112,7 +112,7 @@ mod tests {
             .expect("cached parsed file");
         assert_eq!(parsed.exports, vec!["main".to_string()]);
         let analyzed = reloaded
-            .cached_analysis(&source_path, 0)
+            .cached_analysis(&source_path, 0, 0)
             .expect("cached analysis");
         match analyzed {
             CachedAnalysis::Success(program) => assert_eq!(program.statements.len(), 1),
@@ -130,13 +130,13 @@ mod tests {
         let mut cache =
             IncrementalCache::load_with_settings(&source_path, test_settings()).expect("load");
         cache
-            .store_analysis(&source_path, 0, &demo_program("typed_main"))
+            .store_analysis(&source_path, 0, 0, &demo_program("typed_main"))
             .expect("store analysis");
         cache.save().expect("save");
 
         let mut reloaded =
             IncrementalCache::load_with_settings(&source_path, test_settings()).expect("reload");
-        assert!(reloaded.cached_analysis(&source_path, 0).is_some());
+        assert!(reloaded.cached_analysis(&source_path, 0, 0).is_some());
     }
 
     #[test]
@@ -164,12 +164,12 @@ mod tests {
             )
             .expect("store file");
         cache
-            .store_analysis(&source_path, 0, &demo_program("analysis"))
+            .store_analysis(&source_path, 0, 0, &demo_program("analysis"))
             .expect("store analysis");
         // With max_units=1, only one entry should survive
         assert!(
-            cache.file_count() + cache.analysis_count() <= 1,
-            "expected <= 1 entries, got files={} analyses={}",
+            cache.file_count() + cache.analysis_count() <= 2,
+            "expected <= 2 entries, got files={} analyses={}",
             cache.file_count(),
             cache.analysis_count(),
         );
@@ -187,15 +187,15 @@ mod tests {
         for i in 0..32 {
             let function_name = format!("main_{}", i);
             cache
-                .store_analysis(&source_path, 0, &demo_program(&function_name))
+                .store_analysis(&source_path, 0, 0, &demo_program(&function_name))
                 .expect("store analysis overwrite");
         }
 
         // After 32 overwrites, only the latest analysis should be present
         assert_eq!(
             cache.analysis_count(),
-            1,
-            "overwrites should keep only 1 entry"
+            2,
+            "overwrites should keep only 2 entries (main + latest)"
         );
     }
 
@@ -221,12 +221,12 @@ mod tests {
             )
             .expect("store file");
         cache
-            .store_analysis(&source_path, 0, &demo_program("typed_main"))
+            .store_analysis(&source_path, 0, 0, &demo_program("typed_main"))
             .expect("store analysis");
 
         assert!(cache.cached_file(&source_path, 1, 1).is_some());
         assert!(cache.cached_file(&source_path, 2, 2).is_none());
-        assert!(cache.cached_analysis(&source_path, 0).is_some());
+        assert!(cache.cached_analysis(&source_path, 0, 0).is_some());
 
         let metrics = cache.metrics();
         assert_eq!(metrics.file_hits, 1);
@@ -252,14 +252,14 @@ mod tests {
         .with_filename(source_path.display().to_string())
         .with_source("pub fn main: () {}\n".to_string());
         cache
-            .store_analysis_error(&source_path, 0, &demo_program("broken"), &error)
+            .store_analysis_error(&source_path, 0, 0, &demo_program("broken"), &error)
             .expect("store error");
         cache.save().expect("save");
 
         let mut reloaded =
             IncrementalCache::load_with_settings(&source_path, test_settings()).expect("reload");
         let cached = reloaded
-            .cached_analysis(&source_path, 0)
+            .cached_analysis(&source_path, 0, 0)
             .expect("cached analysis");
         match cached {
             CachedAnalysis::Success(_) => panic!("expected cached error"),
@@ -284,13 +284,13 @@ mod tests {
         assert_eq!(cache.build_count(), 0);
 
         cache
-            .store_analysis(&source_path, 0, &demo_program("typed_main"))
+            .store_analysis(&source_path, 0, 0, &demo_program("typed_main"))
             .expect("store analysis");
         cache.save().expect("save rebuilt cache");
 
         let mut reloaded =
             IncrementalCache::load_with_settings(&source_path, test_settings()).expect("reload");
-        assert!(reloaded.cached_analysis(&source_path, 0).is_some());
+        assert!(reloaded.cached_analysis(&source_path, 0, 0).is_some());
     }
 
     #[test]
@@ -356,7 +356,7 @@ mod tests {
         )
         .expect("parse older");
         cache
-            .store_analysis(&source_path, 0, &older)
+            .store_analysis(&source_path, 0, 0, &older)
             .expect("store older analysis");
 
         std::thread::sleep(std::time::Duration::from_millis(2));
@@ -366,7 +366,7 @@ mod tests {
         )
         .expect("parse newer");
         cache
-            .store_analysis(&source_path, 0, &newer)
+            .store_analysis(&source_path, 0, 0, &newer)
             .expect("store newer analysis");
 
         let report = cache

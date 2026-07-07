@@ -221,11 +221,11 @@ project-root/
 ### Key files
 
 | File | Purpose |
-|---|---|
+|---|---|---|
 | `src/incremental/lru.rs` | `LruMap<K, V>` — generic O(1) LRU with HashMap + VecDeque |
 | `src/incremental/cache.rs` | `IncrementalCache` — WAL, blob store, index, LRU, metrics |
 | `src/incremental/mod.rs` | Types, re-exports, error serialization |
-| `src/incremental/utils.rs` | Cache path, hashing, key generation |
+| `src/incremental/utils.rs` | Cache path, hashing, key generation (`dependency_fingerprint`, `analysis_cache_key`, `latest_analysis_key`) |
 | `src/incremental/analysis.rs` | Analysis units, invalidation reports |
 | `src/incremental/dependencies.rs` | Statement dependency tracking |
 
@@ -239,6 +239,20 @@ project-root/
 | Blob write | O(1) per blob (one `write()` syscall) |
 | Blob dedup | Automatic (content-hash naming) |
 | Crash recovery | Full (WAL replay) |
+
+### Analysis Cache Invalidation (v3.11.45+)
+
+The analysis cache now invalidates correctly when dependency files change:
+
+- **`dependency_fingerprint(files)`**: Computes a combined hash of all loaded file paths + content hashes + dependency edges (`FxHasher`, sorted by path, includes `CARGO_PKG_VERSION`). Called after `load_program_with_cache`.
+
+- **`analysis_cache_key(path, source_hash, dep_fingerprint)`**: Key format is `{path}::analysis::{source_hash}::{dep_fingerprint}`. Previously only used `source_hash`, so changing a loaded module (different dep_fingerprint) would still hit the old cache entry. Now `dep_fingerprint` is part of the key, so any change to a loaded file causes a cache miss.
+
+- **`latest_analysis_key(path)`**: Fixed key `{path}::analysis::latest` that always points to the most recently stored analysis, regardless of hash/fingerprint. Used by `latest_successful_analysis()` and `analysis_invalidation_report()` for partial re-analysis reuse.
+
+- **`store_analysis` writes TWO entries**: The specific fingerprint-keyed entry (for exact cache lookup) AND the `::latest` entry (for partial re-analysis). Both are tracked in the LRU for eviction.
+
+- **Cache migration**: Old cache keys (without `{dep_fingerprint}` suffix) never match new lookups, causing a single cold re-analysis on first run after upgrade. The `::latest` entry is refreshed on every store, so partial re-analysis always has access to the most recent snapshot.
 
 ### Removed (from old format)
 

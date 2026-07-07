@@ -1,4 +1,4 @@
-// Test: multi-statement closure used as a callable variable (not thread_spawn).
+// Test: multi-statement closure used as a callable variable (not thread::spawn).
 load kioto
 
 pub fn main: () {

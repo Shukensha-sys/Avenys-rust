@@ -88,12 +88,37 @@ pub(crate) fn mir_cache_key(
     )
 }
 
-pub(crate) fn analysis_cache_key(source_path: &Path, source_hash: u64) -> String {
+pub fn dependency_fingerprint(files: &HashMap<PathBuf, LoadedFile>) -> u64 {
+    let mut hasher = FxHasher::new();
+    env!("CARGO_PKG_VERSION").hash(&mut hasher);
+
+    let mut file_entries: Vec<_> = files.iter().collect();
+    file_entries.sort_by_key(|(left, _)| *left);
+    for (path, info) in file_entries {
+        normalize_path_key(path).hash(&mut hasher);
+        info.hash.hash(&mut hasher);
+
+        let mut deps = info.direct_dependencies.clone();
+        deps.sort();
+        for dependency in deps {
+            normalize_path_key(&dependency).hash(&mut hasher);
+        }
+    }
+
+    hasher.finish()
+}
+
+pub(crate) fn analysis_cache_key(source_path: &Path, source_hash: u64, dep_fingerprint: u64) -> String {
     format!(
-        "{}::analysis::{:#x}",
+        "{}::analysis::{:#x}::{:#x}",
         normalize_path_key(source_path),
-        source_hash
+        source_hash,
+        dep_fingerprint,
     )
+}
+
+pub(crate) fn latest_analysis_key(source_path: &Path) -> String {
+    format!("{}::analysis::latest", normalize_path_key(source_path))
 }
 
 pub(crate) fn normalize_path_key(path: &Path) -> String {
