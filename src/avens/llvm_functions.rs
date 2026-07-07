@@ -1578,33 +1578,33 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "exit" => self.compile_exit(args),
             Expression::Call { name, args, .. } if name == "env_args" => self.compile_env_args(),
             // FS functions
-            Expression::Call { name, args, .. } if name == "fs.write" => {
+            Expression::Call { name, args, .. } if name == "fs.write" || name == "fs_write" => {
                 self.compile_fs_write(args)
             }
             Expression::Call { name, args, .. } if name == "fs.append" => {
                 self.compile_fs_append(args)
             }
-            Expression::Call { name, args, .. } if name == "fs.read" => self.compile_fs_read(args),
+            Expression::Call { name, args, .. } if name == "fs.read" || name == "fs_read" => self.compile_fs_read(args),
             Expression::Call { name, args, .. } if name == "fs.copy" => self.compile_fs_copy(args),
             Expression::Call { name, args, .. } if name == "fs.move" => self.compile_fs_move(args),
-            Expression::Call { name, args, .. } if name == "fs.drop" => self.compile_fs_drop(args),
+            Expression::Call { name, args, .. } if name == "fs.drop" || name == "fs_drop" => self.compile_fs_drop(args),
             Expression::Call { name, args, .. } if name == "fs.mkdir" => {
                 self.compile_fs_mkdir(args)
             }
             Expression::Call { name, args, .. } if name == "fs.rmdir" => {
                 self.compile_fs_rmdir(args)
             }
-            Expression::Call { name, args, .. } if name == "fs.exists" => {
+            Expression::Call { name, args, .. } if name == "fs.exists" || name == "fs_exists" => {
                 self.compile_fs_exists(args)
             }
-            Expression::Call { name, args, .. } if name == "fs.is_dir" => {
+            Expression::Call { name, args, .. } if name == "fs.is_dir" || name == "fs_is_dir" => {
                 self.compile_fs_is_dir(args)
             }
-            Expression::Call { name, args, .. } if name == "fs.is_file" => {
+            Expression::Call { name, args, .. } if name == "fs.is_file" || name == "fs_is_file" => {
                 self.compile_fs_is_file(args)
             }
             Expression::Call { name, args, .. } if name == "fs.size" => self.compile_fs_size(args),
-            Expression::Call { name, args, .. } if name == "fs.list" => self.compile_fs_list(args),
+            Expression::Call { name, args, .. } if name == "fs.list" || name == "fs_list" => self.compile_fs_list(args),
             Expression::Call { name, args, .. } if name == "fs.walk" => self.compile_fs_walk(args),
             Expression::Call { name, args, .. } if name == "fs.join" => self.compile_fs_join(args),
             Expression::Call { name, args, .. } if name == "fs.dir" => self.compile_fs_dir(args),
