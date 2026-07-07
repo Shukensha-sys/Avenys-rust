@@ -44,7 +44,9 @@ impl Parser {
                 data_type: slot, ..
             }
             | Expression::Call {
-                data_type: slot, ..
+                name_line: 0,
+            name_column: 0,
+            data_type: slot, ..
             }
             | Expression::List {
                 data_type: slot,
@@ -186,7 +188,9 @@ impl Parser {
                     name: "__is".to_string(),
                     args: vec![expr, right],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             } else {
                 break;
@@ -289,7 +293,9 @@ impl Parser {
                     name: "__type_matches".to_string(),
                     args: vec![expr, string_expr(&ty)],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             } else if self.check(TokenType::At) {
                 self.advance();
@@ -306,7 +312,9 @@ impl Parser {
                     name: "range".to_string(),
                     args: vec![expr, right],
                     type_args: Vec::new(),
-                    data_type: DataType::List,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::List,
                 };
             } else {
                 break;
@@ -475,7 +483,9 @@ impl Parser {
                         name,
                         args,
                         type_args,
-                        data_type: DataType::Unknown,
+                        name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                     };
                     continue;
                 }
@@ -550,6 +560,10 @@ impl Parser {
                         };
                         continue;
                     }
+                    let (name_line, name_column) = match &expr {
+                        Expression::Identifier(ident) => (ident.line, ident.column),
+                        _ => (0, 0),
+                    };
                     if matches!(name.as_str(), "dasu" | "ireru") {
                         expr = self.parse_io_call(name)?;
                     } else {
@@ -558,6 +572,8 @@ impl Parser {
                             name,
                             args,
                             type_args: Vec::new(),
+                            name_line,
+                            name_column,
                             data_type: DataType::Unknown,
                         };
                     }
@@ -569,6 +585,8 @@ impl Parser {
                         name: "call".to_string(),
                         args: call_args,
                         type_args: Vec::new(),
+                        name_line: 0,
+                        name_column: 0,
                         data_type: DataType::Unknown,
                     };
                 }
@@ -759,7 +777,9 @@ impl Parser {
                         name: "type".to_string(),
                         args: vec![expr],
                         type_args: Vec::new(),
-                        data_type: DataType::Str,
+                        name_line: 0,
+            name_column: 0,
+            data_type: DataType::Str,
                     });
                 }
                 if self.check_double_colon() && Self::is_member_name_token(self.peek_n(2).ttype) {
@@ -873,7 +893,9 @@ impl Parser {
                             name: full_name,
                             args,
                             type_args: Vec::new(),
-                            data_type: DataType::Unknown,
+                            name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                         });
                     }
                 }
@@ -931,7 +953,9 @@ impl Parser {
                                 name: type_name,
                                 args,
                                 type_args: Vec::new(),
-                                data_type: DataType::Unknown,
+                                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                             });
                         }
                     }
@@ -948,11 +972,11 @@ impl Parser {
                         self.expect_ident()?
                     };
                     self.advance();
-                    let body_expr = self.parse_or()?;
+                    let body = self.parse_closure_body()?;
                     self.expect(TokenType::Rparen)?;
                     return Ok(Expression::Closure {
                         params: vec![(param_name, DataType::Unknown)],
-                        body: vec![Statement::Return(Some(body_expr))],
+                        body,
                         return_type: DataType::Unknown,
                         capture: Vec::new(),
                     });
@@ -1017,6 +1041,8 @@ impl Parser {
             name,
             args,
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Unknown,
         })
     }
@@ -1038,14 +1064,31 @@ impl Parser {
 
         self.advance();
         self.advance();
-        let body_expr = self.parse_or()?;
+        let body = self.parse_closure_body()?;
 
         Ok(Some(Expression::Closure {
             params,
-            body: vec![Statement::Return(Some(body_expr))],
+            body,
             return_type: DataType::Unknown,
             capture: Vec::new(),
         }))
+    }
+
+    fn parse_closure_body(&mut self) -> Result<Vec<Statement>> {
+        if self.check(TokenType::Lbrace) {
+            self.advance();
+            let mut stmts = self.parse_block()?;
+            self.expect_block_close()?;
+            if let Some(Statement::Expression(_)) = stmts.last() {
+                if let Statement::Expression(expr) = stmts.pop().unwrap() {
+                    stmts.push(Statement::Return(Some(expr)));
+                }
+            }
+            Ok(stmts)
+        } else {
+            let body_expr = self.parse_or()?;
+            Ok(vec![Statement::Return(Some(body_expr))])
+        }
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression> {
@@ -1077,6 +1120,8 @@ impl Parser {
                 },
             ],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Unknown,
         })
     }
@@ -1090,7 +1135,9 @@ impl Parser {
                 name: ident.name.clone(),
                 args: Vec::new(),
                 type_args: Vec::new(),
-                data_type: DataType::Unknown,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
             }
         } else {
             expr
@@ -1263,6 +1310,8 @@ impl Parser {
             name,
             args,
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type,
         })
     }
@@ -1366,7 +1415,9 @@ impl Parser {
                 name: "__mire_fmt".to_string(),
                 args: vec![expr, string_expr(&spec)],
                 type_args: Vec::new(),
-                data_type: DataType::Str,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Str,
             });
         }
 
@@ -1379,6 +1430,8 @@ impl Parser {
             name: "str".to_string(),
             args: vec![expr],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Str,
         })
     }

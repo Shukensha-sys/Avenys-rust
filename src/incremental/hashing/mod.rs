@@ -41,6 +41,8 @@ mod tests {
 
     fn demo_program(name: &str) -> Program {
         Program {
+            annotations: Vec::new(),
+            file_attributes: Vec::new(),
             statements: vec![Statement::Function {
                 name: name.to_string(),
                 type_params: Vec::new(),
@@ -50,6 +52,7 @@ mod tests {
                 return_type: crate::parser::ast::DataType::None,
                 visibility: crate::parser::ast::Visibility::Public,
                 is_method: false,
+                attributes: Vec::new(),
             }],
         }
     }
@@ -419,6 +422,7 @@ mod tests {
                         return_type: DataType::None,
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     }],
                 },
             ],
@@ -454,6 +458,7 @@ mod tests {
             return_type: DataType::I64,
             visibility: Visibility::Public,
             is_method: false,
+            attributes: Vec::new(),
         };
 
         let h1 = stable_statement_hash(&stmt);
@@ -475,6 +480,7 @@ mod tests {
             return_type: DataType::I64,
             visibility: Visibility::Public,
             is_method: false,
+            attributes: Vec::new(),
         };
         let stmt_b = Statement::Function {
             name: "main".to_string(),
@@ -487,6 +493,7 @@ mod tests {
             return_type: DataType::I64,
             visibility: Visibility::Public,
             is_method: false,
+            attributes: Vec::new(),
         };
 
         let h1 = stable_statement_hash(&stmt_a);
@@ -717,6 +724,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
             ],
         };

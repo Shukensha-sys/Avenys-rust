@@ -151,6 +151,8 @@ pub(super) fn replace_self_placeholder(expr: Expression, replacement: &Expressio
             name,
             args,
             type_args,
+            name_line,
+            name_column,
             data_type,
         } => Expression::Call {
             name,
@@ -159,6 +161,8 @@ pub(super) fn replace_self_placeholder(expr: Expression, replacement: &Expressio
                 .map(|arg| replace_self_placeholder(arg, replacement))
                 .collect(),
             type_args,
+            name_line,
+            name_column,
             data_type,
         },
         Expression::List {
@@ -419,7 +423,9 @@ impl Parser {
                     name: "__match_guard".to_string(),
                     args: vec![pattern, guard],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             }
             self.skip_newlines();
@@ -494,7 +500,9 @@ impl Parser {
                     name: "__match_guard".to_string(),
                     args: vec![pattern_expr, guard],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             }
             self.skip_newlines();
@@ -551,7 +559,9 @@ impl Parser {
                 name: "__match_or".to_string(),
                 args: vec![pattern, rhs],
                 type_args: Vec::new(),
-                data_type: DataType::Bool,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
             };
         }
         Ok(pattern)
@@ -630,7 +640,9 @@ impl Parser {
                         name: "__match_range".to_string(),
                         args: vec![base, end],
                         type_args: Vec::new(),
-                        data_type: DataType::Bool,
+                        name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                     });
                 }
                 Ok(base)

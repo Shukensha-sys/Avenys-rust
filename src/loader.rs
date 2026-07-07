@@ -1203,6 +1203,8 @@ impl<'a> ModuleRenamer<'a> {
                 name,
                 args,
                 type_args,
+                name_line,
+                name_column,
                 data_type,
             } if name == "__match_guard" || name == "__match_or" => Expression::Call {
                 name,
@@ -1214,6 +1216,8 @@ impl<'a> ModuleRenamer<'a> {
                     .into_iter()
                     .map(|data_type| self.rename_data_type(data_type, scope_stack))
                     .collect(),
+                name_line,
+                name_column,
                 data_type,
             },
             other => self.rename_expression(other, scope_stack),
@@ -1270,6 +1274,8 @@ impl<'a> ModuleRenamer<'a> {
                 name,
                 args,
                 type_args,
+                name_line,
+                name_column,
                 data_type,
             } => {
                 let name = self.rename_type_name(name, scope_stack);
@@ -1283,6 +1289,8 @@ impl<'a> ModuleRenamer<'a> {
                         .into_iter()
                         .map(|data_type| self.rename_data_type(data_type, scope_stack))
                         .collect(),
+                    name_line,
+                    name_column,
                     data_type: self.rename_data_type(data_type, scope_stack),
                 }
             }

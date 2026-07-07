@@ -47,7 +47,18 @@ pub fn expression_location(expression: &Expression) -> (usize, usize) {
         | Expression::Ok { value: left, .. }
         | Expression::Err { value: left, .. } => expression_location(left),
         Expression::UnaryOp { operand, .. } => expression_location(operand),
-        Expression::Call { args, .. }
+        Expression::Call {
+            name_line,
+            name_column,
+            args,
+            ..
+        } => {
+            if *name_line > 0 {
+                (*name_line, *name_column)
+            } else {
+                args.first().map(expression_location).unwrap_or(NO_POSITION)
+            }
+        }
         | Expression::List { elements: args, .. }
         | Expression::Tuple { elements: args, .. } => {
             args.first().map(expression_location).unwrap_or(NO_POSITION)

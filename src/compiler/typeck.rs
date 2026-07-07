@@ -509,9 +509,12 @@ mod tests {
                     return_type: DataType::Unknown,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 Statement::Expression(Expression::Call {
                     name: "sum".to_string(),
+                    name_line: 0,
+                    name_column: 0,
                     args: vec![
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
@@ -591,10 +594,14 @@ mod tests {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str("hello".to_string()))],
                     type_args: Vec::new(),
+                    name_line: 0,
+                    name_column: 0,
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(Expression::Call {
                     name: "len".to_string(),
+                    name_line: 0,
+                    name_column: 0,
                     args: vec![Expression::Literal(Literal::List(vec![
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
@@ -780,6 +787,7 @@ mod tests {
                         return_type: DataType::I64,
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     },
                     Statement::Function {
                         name: "bad".to_string(),
@@ -797,6 +805,7 @@ mod tests {
                         return_type: DataType::I64,
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     },
                 ],
             }],
@@ -877,6 +886,7 @@ mod tests {
                             return_type: DataType::I64,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                         Statement::Function {
                             name: "bad".to_string(),
@@ -894,6 +904,7 @@ mod tests {
                             return_type: DataType::I64,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                     ],
                 },
@@ -1091,6 +1102,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 Statement::Function {
                     name: "main".to_string(),
@@ -1132,6 +1144,8 @@ mod tests {
                         },
                         Statement::Expression(Expression::Call {
                             name: "bump".to_string(),
+                            name_line: 0,
+                            name_column: 0,
                             args: vec![Expression::Identifier(Identifier {
                                 name: "shared".to_string(),
                                 data_type: DataType::Unknown,
@@ -1145,6 +1159,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
             ],
         };

@@ -901,6 +901,8 @@ impl Parser {
                 },
             ],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::None,
         }))
     }
@@ -920,7 +922,7 @@ impl Parser {
         Ok(Statement::Module { name })
     }
 
-    fn parse_block(&mut self) -> Result<Vec<Statement>> {
+    pub(super) fn parse_block(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
         loop {
             self.skip_newlines();

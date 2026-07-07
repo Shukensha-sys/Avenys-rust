@@ -46,6 +46,8 @@ pub(super) fn hash_expression(expr: &Expression, hasher: &mut FxHasher) {
             name,
             args,
             type_args,
+            name_line: _,
+            name_column: _,
             data_type,
         } => {
             hasher.write_u8(5);
