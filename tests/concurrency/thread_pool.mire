@@ -8,11 +8,11 @@ pub fn main: () {
     while i < tasks {
         // Capture a copy of the loop index so the mutable variable can advance.
         set idx = i
-        set t = thread_spawn(() => {
+        set t = thread::spawn(() => {
             set base = idx + 1
             base * 10
         })
-        set partial = thread_join(t)
+        set partial = thread::join(t)
         set sum = sum + partial
         set i = i + 1
     }

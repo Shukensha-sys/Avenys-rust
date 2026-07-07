@@ -638,12 +638,13 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
     ) -> Option<CachedAnalysis> {
         if !self.settings.analysis_cache {
             return None;
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
         let meta = match self.analyses.get(&key) {
             Some(m) => m.clone(),
             None => {
@@ -668,13 +669,15 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
         program: &Program,
     ) -> Result<()> {
         if !self.settings.analysis_cache {
             return Ok(());
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
+        let latest_key = latest_analysis_key(source_path);
         let units = analysis_units_for_program(program);
         let stored = StoredAnalysisPayload {
             outcome: StoredAnalysisOutcome::Success(StoredAnalyzedProgram {
@@ -692,7 +695,7 @@ impl IncrementalCache {
         let now = timestamp_ms();
         let wal_rec = WalRecord::StoreAnalysis {
             key: key.clone(),
-            fingerprint: 0,
+            fingerprint: dep_fingerprint,
             blob_hash: blob_hash.clone(),
             timestamp: now,
             created_ms: now,
@@ -703,7 +706,17 @@ impl IncrementalCache {
         self.analyses.insert(
             key.clone(),
             AnalysisMeta {
-                fingerprint: 0,
+                fingerprint: dep_fingerprint,
+                blob_hash: blob_hash.clone(),
+                last_access_ms: now,
+                created_ms: now,
+                unit_count: units.len() as u32,
+            },
+        );
+        self.analyses.insert(
+            latest_key.clone(),
+            AnalysisMeta {
+                fingerprint: dep_fingerprint,
                 blob_hash,
                 last_access_ms: now,
                 created_ms: now,
@@ -711,6 +724,7 @@ impl IncrementalCache {
             },
         );
         self.lru.insert(key, CacheEntryKind::Analysis);
+        self.lru.insert(latest_key, CacheEntryKind::Analysis);
         self.enforce_capacity();
         self.needs_checkpoint = true;
         Ok(())
@@ -720,6 +734,7 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
         program: &Program,
         error: &MireError,
     ) -> Result<()> {
@@ -727,7 +742,8 @@ impl IncrementalCache {
             return Ok(());
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
+        let latest_key = latest_analysis_key(source_path);
         let units = analysis_units_for_program(program);
         let stored = StoredAnalysisPayload {
             outcome: StoredAnalysisOutcome::Error(error.into()),
@@ -743,7 +759,7 @@ impl IncrementalCache {
         let now = timestamp_ms();
         let wal_rec = WalRecord::StoreAnalysis {
             key: key.clone(),
-            fingerprint: 0,
+            fingerprint: dep_fingerprint,
             blob_hash: blob_hash.clone(),
             timestamp: now,
             created_ms: now,
@@ -754,7 +770,17 @@ impl IncrementalCache {
         self.analyses.insert(
             key.clone(),
             AnalysisMeta {
-                fingerprint: 0,
+                fingerprint: dep_fingerprint,
+                blob_hash: blob_hash.clone(),
+                last_access_ms: now,
+                created_ms: now,
+                unit_count: units.len() as u32,
+            },
+        );
+        self.analyses.insert(
+            latest_key.clone(),
+            AnalysisMeta {
+                fingerprint: dep_fingerprint,
                 blob_hash,
                 last_access_ms: now,
                 created_ms: now,
@@ -762,6 +788,7 @@ impl IncrementalCache {
             },
         );
         self.lru.insert(key, CacheEntryKind::Analysis);
+        self.lru.insert(latest_key, CacheEntryKind::Analysis);
         self.enforce_capacity();
         self.needs_checkpoint = true;
         Ok(())
@@ -781,9 +808,9 @@ impl IncrementalCache {
     pub fn latest_successful_analysis(
         &mut self,
         source_path: &Path,
-        source_hash: u64,
+        _source_hash: u64,
     ) -> Option<CachedAnalysisSnapshot> {
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = latest_analysis_key(source_path);
         let meta = self.analyses.get(&key)?;
         let blob = read_blob(&self.cache_dir, &meta.blob_hash)?;
         let stored: StoredAnalysisPayload = bincode::deserialize(&blob).ok()?;
@@ -970,9 +997,9 @@ impl IncrementalCache {
     fn latest_analysis_units(
         &self,
         source_path: &Path,
-        source_hash: u64,
+        _source_hash: u64,
     ) -> Option<Vec<AnalysisUnitMetadata>> {
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = latest_analysis_key(source_path);
         let meta = self.analyses.get(&key)?;
         let blob = read_blob(&self.cache_dir, &meta.blob_hash)?;
         let stored: StoredAnalysisPayload = bincode::deserialize(&blob).ok()?;

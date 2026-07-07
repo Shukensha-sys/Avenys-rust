@@ -1,10 +1,10 @@
-// Test: closure stored in a variable captures an i64 and passes it to thread_spawn.
+// Test: closure stored in a variable captures an i64 and passes it to thread::spawn.
 load kioto
 
 pub fn main: () {
     set data = 42 :i64
     set f = () => data + 1
-    set tid = thread_spawn(f)
-    set ret = thread_join(tid)
+    set tid = thread::spawn(f)
+    set ret = thread::join(tid)
     use dasu("captured result: " + str(ret))
 }

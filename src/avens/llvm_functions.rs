@@ -409,6 +409,13 @@ impl LlvmIrGen {
             "declare i32 @pal_env_set(ptr, ptr)".to_string(),
             "declare ptr @pal_env_cwd()".to_string(),
             "declare ptr @pal_env_all()".to_string(),
+            // Time
+            "declare i64 @pal_time_unix_ms()".to_string(),
+            "declare i64 @pal_time_unix_ns()".to_string(),
+            // Memory
+            "declare i64 @pal_mem_used()".to_string(),
+            // CPU
+            "declare i64 @pal_cpu_count()".to_string(),
         ];
         out.extend(self.strings);
         // Deduplicate extern declarations by function name.
@@ -1571,71 +1578,83 @@ impl LlvmIrGen {
             Expression::Call { name, args, .. } if name == "exit" => self.compile_exit(args),
             Expression::Call { name, args, .. } if name == "env_args" => self.compile_env_args(),
             // FS functions
-            Expression::Call { name, args, .. } if name == "fs_write" => {
+            Expression::Call { name, args, .. } if name == "fs.write" => {
                 self.compile_fs_write(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_append" => {
+            Expression::Call { name, args, .. } if name == "fs.append" => {
                 self.compile_fs_append(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_read" => self.compile_fs_read(args),
-            Expression::Call { name, args, .. } if name == "fs_copy" => self.compile_fs_copy(args),
-            Expression::Call { name, args, .. } if name == "fs_move" => self.compile_fs_move(args),
-            Expression::Call { name, args, .. } if name == "fs_drop" => self.compile_fs_drop(args),
-            Expression::Call { name, args, .. } if name == "fs_mkdir" => {
+            Expression::Call { name, args, .. } if name == "fs.read" => self.compile_fs_read(args),
+            Expression::Call { name, args, .. } if name == "fs.copy" => self.compile_fs_copy(args),
+            Expression::Call { name, args, .. } if name == "fs.move" => self.compile_fs_move(args),
+            Expression::Call { name, args, .. } if name == "fs.drop" => self.compile_fs_drop(args),
+            Expression::Call { name, args, .. } if name == "fs.mkdir" => {
                 self.compile_fs_mkdir(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_rmdir" => {
+            Expression::Call { name, args, .. } if name == "fs.rmdir" => {
                 self.compile_fs_rmdir(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_exists" => {
+            Expression::Call { name, args, .. } if name == "fs.exists" => {
                 self.compile_fs_exists(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_is_dir" => {
+            Expression::Call { name, args, .. } if name == "fs.is_dir" => {
                 self.compile_fs_is_dir(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_is_file" => {
+            Expression::Call { name, args, .. } if name == "fs.is_file" => {
                 self.compile_fs_is_file(args)
             }
-            Expression::Call { name, args, .. } if name == "fs_size" => self.compile_fs_size(args),
-            Expression::Call { name, args, .. } if name == "fs_list" => self.compile_fs_list(args),
-            Expression::Call { name, args, .. } if name == "fs_walk" => self.compile_fs_walk(args),
-            Expression::Call { name, args, .. } if name == "fs_join" => self.compile_fs_join(args),
-            Expression::Call { name, args, .. } if name == "fs_dir" => self.compile_fs_dir(args),
-            Expression::Call { name, args, .. } if name == "fs_name" => self.compile_fs_name(args),
-            Expression::Call { name, args, .. } if name == "fs_ext" => self.compile_fs_ext(args),
+            Expression::Call { name, args, .. } if name == "fs.size" => self.compile_fs_size(args),
+            Expression::Call { name, args, .. } if name == "fs.list" => self.compile_fs_list(args),
+            Expression::Call { name, args, .. } if name == "fs.walk" => self.compile_fs_walk(args),
+            Expression::Call { name, args, .. } if name == "fs.join" => self.compile_fs_join(args),
+            Expression::Call { name, args, .. } if name == "fs.dir" => self.compile_fs_dir(args),
+            Expression::Call { name, args, .. } if name == "fs.name" => self.compile_fs_name(args),
+            Expression::Call { name, args, .. } if name == "fs.ext" => self.compile_fs_ext(args),
             // PROC functions
-            Expression::Call { name, args, .. } if name == "proc_run" => {
+            Expression::Call { name, args, .. } if name == "proc.run" => {
                 self.compile_proc_run(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_exec" => {
+            Expression::Call { name, args, .. } if name == "proc.exec" => {
                 self.compile_proc_exec(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_spawn" => {
+            Expression::Call { name, args, .. } if name == "proc.spawn" => {
                 self.compile_proc_spawn(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_wait" => {
+            Expression::Call { name, args, .. } if name == "proc.wait" => {
                 self.compile_proc_wait(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_kill" => {
+            Expression::Call { name, args, .. } if name == "proc.kill" => {
                 self.compile_proc_kill(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_exit" => {
+            Expression::Call { name, args, .. } if name == "proc.exit" => {
                 self.compile_proc_exit(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_shell" => {
+            Expression::Call { name, args, .. } if name == "proc.shell" => {
                 self.compile_proc_shell(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_exists" => {
+            Expression::Call { name, args, .. } if name == "proc.exists" => {
                 self.compile_proc_exists(args)
             }
-            Expression::Call { name, args, .. } if name == "proc_on" || name == "proc.on" => {
+            Expression::Call { name, args, .. } if name == "proc.on" => {
                 self.compile_proc_on(args)
             }
             // ENV functions
-            Expression::Call { name, args, .. } if name == "env_get" => self.compile_env_get(args),
-            Expression::Call { name, args, .. } if name == "env_set" => self.compile_env_set(args),
-            Expression::Call { name, args, .. } if name == "env_cwd" => self.compile_env_cwd(),
-            Expression::Call { name, args, .. } if name == "env_all" => self.compile_env_all(),
+            Expression::Call { name, args, .. } if name == "env.get" => self.compile_env_get(args),
+            Expression::Call { name, args, .. } if name == "env.set" => self.compile_env_set(args),
+            Expression::Call { name, args, .. } if name == "env.cwd" => self.compile_env_cwd(),
+            Expression::Call { name, args, .. } if name == "env.all" => self.compile_env_all(),
+            Expression::Call { name, args, .. } if name == "time.now.ms" => {
+                self.compile_time_unix_ms(args)
+            }
+            Expression::Call { name, args, .. } if name == "time.now.ns" => {
+                self.compile_time_unix_ns(args)
+            }
+            Expression::Call { name, args, .. } if name == "mem.used" => {
+                self.compile_mem_used(args)
+            }
+            Expression::Call { name, args, .. } if name == "cpu.count" => {
+                self.compile_cpu_count(args)
+            }
             Expression::Call { name, args, .. } if name == "time.mark" => {
                 self.compile_time_mark(args)
             }

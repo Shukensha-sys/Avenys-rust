@@ -823,6 +823,50 @@ impl LlvmIrGen {
         })
     }
 
+    pub(super) fn compile_time_unix_ms(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_time_unix_ms()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_time_unix_ns(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_time_unix_ns()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_mem_used(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_mem_used()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_cpu_count(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_cpu_count()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
     pub(super) fn compile_time_elapsed_ms(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {

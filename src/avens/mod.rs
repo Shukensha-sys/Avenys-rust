@@ -6,7 +6,7 @@ use crate::error::format::format_diagnostic;
 use crate::error::{ErrorKind, MireError, Result};
 use crate::incremental::{
     BuildCacheEntry, CacheSettings, CachedAnalysis, IncrementalCache, build_fingerprint,
-    source_hash,
+    dependency_fingerprint, source_hash,
 };
 
 use crate::parser::ast::{

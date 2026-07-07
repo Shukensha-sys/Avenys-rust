@@ -32,8 +32,8 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
 
     for name in [
         "len",
-        "time_now_ms",
-        "time_now_ns",
+        "time.now.ms",
+        "time.now.ns",
         "time_since_ms",
         "time_since_ns",
         "time_mark",
@@ -41,7 +41,7 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
         "time_elapsed_ns",
         "time.mark",
         "time.elapsed_ns",
-        "mem_used",
+        "mem.used",
         "mem_total",
         "mem_free",
         "mem_available",
@@ -51,7 +51,7 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
         "cpu_time_ms",
         "cpu_mark",
         "cpu_elapsed_ns",
-        "cpu_count",
+        "cpu.count",
         "cpu_cycles_est",
         "cpu.cycles_est",
         "cpu.mark",
@@ -116,14 +116,14 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
         "ireru",
         "__mire_fmt",
         "mem_format_bytes",
-        "fs_read",
+        "fs.read",
         "fs_join",
         "fs_dir",
         "fs_name",
         "fs_ext",
-        "env_get",
+        "env.get",
         "env_cwd",
-        "proc_run",
+        "proc.run",
         "proc_exec",
         "proc_shell",
         "proc_exec_pipe",
@@ -242,8 +242,8 @@ pub fn default_builtin_returns() -> HashMap<String, DataType> {
     builtins.insert("__do_while".to_string(), DataType::None);
     builtins.insert("__type_matches".to_string(), DataType::Bool);
     builtins.insert("__is".to_string(), DataType::Bool);
-    builtins.insert("thread_spawn".to_string(), DataType::I64);
-    builtins.insert("thread_join".to_string(), DataType::I64);
+    builtins.insert("thread.spawn".to_string(), DataType::I64);
+    builtins.insert("thread.join".to_string(), DataType::I64);
     builtins.insert("new::".to_string(), DataType::Unknown);
     builtins.insert("own::".to_string(), DataType::Box);
     builtins.insert("move::".to_string(), DataType::Unknown);

@@ -1,4 +1,4 @@
-// Test: multi-statement closure body, with captures, via thread_spawn/thread_join.
+// Test: multi-statement closure body, with captures, via thread::spawn/thread::join.
 load kioto
 
 pub fn main: () {
@@ -8,7 +8,7 @@ pub fn main: () {
         set x = data + 1
         x * 2
     }
-    set tid = thread_spawn(task)
-    set ret = thread_join(tid)
+    set tid = thread::spawn(task)
+    set ret = thread::join(tid)
     use dasu("thread result: " + str(ret))
 }
