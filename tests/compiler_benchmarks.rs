@@ -82,6 +82,7 @@ fn bench_compile(name: &str, source: &str, opt_level: OptLevel) {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
         },
     )
     .expect("compile");
@@ -237,6 +238,7 @@ fn benchmark_smoke() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
         };
         // Cold compile
         let start = Instant::now();
@@ -302,6 +304,7 @@ fn benchmark_smoke() {
                     warning_filter: mire::error::diagnostic::WarningFilter::Default,
                     deny_warnings: std::collections::HashSet::new(),
                     module_paths: vec![],
+                    test_mode: false,
                 },
             )
             .expect("owl compile");
