@@ -46,7 +46,7 @@ All notable changes to Mire are documented in this file.
 ## [3.11.44] - 2026-07-06
 
 ### Added
-- **Phase 1 builtin modularization**: Namespace syntax for builtins replacing
+- **Builtin modularization**: Namespace syntax for builtins replacing
   legacy flat names:
   - `thread::spawn` / `thread::join` (was `thread_spawn` / `thread_join`)
   - `time::now::ms` (was `time_unix_ms`)
