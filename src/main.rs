@@ -3,10 +3,10 @@ use mire::error::format::format_diagnostic;
 use mire::lexer::tokenize;
 use mire::parser::parse;
 use mire::{
-    BuildMode, BuildOptions, CacheOverrides, ImportMode, MireDependency, MireError, OptLevel,
+    BuildMode, BuildOptions, CacheOverrides, ImportMode, MireError, OptLevel,
     WarningConfig, analyze_program, analyze_program_with_warnings_and_origins,
     compile_file_with_avenys, default_output_dir, find_project_root, load_program_with_metadata,
-    load_project_manifest, project_manifest_path, write_manifest,
+    load_project_manifest,
 };
 use std::collections::HashSet;
 use std::env;
