@@ -322,11 +322,19 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 
         let source = std::fs::read_to_string(file).unwrap_or_default();
         let has_main = source.contains("pub fn main");
+        let has_load = source.contains("load ");
+        let has_test_fn = source.contains("@[test]");
         let target_file = if !has_main {
-            let patched = format!("pub fn main: () {{\n{}\n}}\n", source);
-            let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
-            let _ = std::fs::write(&tmp, &patched);
-            tmp
+            if has_load || has_test_fn {
+                let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
+                let _ = std::fs::write(&tmp, &source);
+                tmp
+            } else {
+                let patched = format!("pub fn main: () {{\n{}\n}}\n", source);
+                let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
+                let _ = std::fs::write(&tmp, &patched);
+                tmp
+            }
         } else {
             file.clone()
         };
