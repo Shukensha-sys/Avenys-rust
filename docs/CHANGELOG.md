@@ -2,6 +2,17 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.12.2] - 2026-07-08
+
+### Fixed
+
+- **Test discovery no longer follows symlinks**: `walkdir()` in `src/main.rs`
+  now skips symlinks during test file discovery. Previously, `tests/lib` (a
+  symlink to `testlib/`) was recursed into, discovering `tests/lib/mod.mire`
+  as a test file. Since that file contains `module` and `load` statements
+  (only valid at top level), wrapping it in `pub fn main: () { ... }` caused
+  a syntax error when run as a test.
+
 ## [3.11.45] - 2026-07-07
 
 ### Fixed

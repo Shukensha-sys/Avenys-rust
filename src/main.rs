@@ -413,6 +413,10 @@ fn walkdir(dir: &Path, _pattern: &str) -> Result<Vec<PathBuf>, MireError> {
         };
         for entry in entries {
             let Ok(entry) = entry else { continue };
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_symlink() {
+                continue;
+            }
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
