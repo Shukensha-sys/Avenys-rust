@@ -118,6 +118,11 @@ fn hash_op(op: &MirOp, buf: &mut Vec<u8>) {
             hash_value(l, buf);
             hash_value(r, buf);
         }
+        MirOp::Shr(l, r) => {
+            buf.push(25);
+            hash_value(l, buf);
+            hash_value(r, buf);
+        }
         MirOp::And(l, r) => {
             buf.push(9);
             hash_value(l, buf);
@@ -125,6 +130,21 @@ fn hash_op(op: &MirOp, buf: &mut Vec<u8>) {
         }
         MirOp::Or(l, r) => {
             buf.push(10);
+            hash_value(l, buf);
+            hash_value(r, buf);
+        }
+        MirOp::Xor(l, r) => {
+            buf.push(26);
+            hash_value(l, buf);
+            hash_value(r, buf);
+        }
+        MirOp::BitAnd(l, r) => {
+            buf.push(27);
+            hash_value(l, buf);
+            hash_value(r, buf);
+        }
+        MirOp::BitOr(l, r) => {
+            buf.push(28);
             hash_value(l, buf);
             hash_value(r, buf);
         }
@@ -305,8 +325,12 @@ pub enum MirOp {
     SDiv(MirValue, MirValue),
     SRem(MirValue, MirValue),
     Shl(MirValue, MirValue),
+    Shr(MirValue, MirValue),
     And(MirValue, MirValue),
     Or(MirValue, MirValue),
+    Xor(MirValue, MirValue),
+    BitAnd(MirValue, MirValue),
+    BitOr(MirValue, MirValue),
     ICmp(MirCmp, MirValue, MirValue),
     FCmp(MirCmp, MirValue, MirValue),
     Call(MirValue, Vec<MirValue>, MirType),

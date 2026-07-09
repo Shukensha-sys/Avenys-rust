@@ -74,6 +74,7 @@ void *rt_list_slice(void *list_ptr, int64_t start, int64_t end);
 void *rt_list_remove(void *list_ptr, int64_t index);
 void *rt_list_clear(void *list_ptr);
 int64_t rt_list_get_i64(void *list_ptr, int64_t index);
+void   rt_list_set_i64(void *list_ptr, int64_t index, int64_t value);
 void *rt_list_get_ptr(void *list_ptr, int64_t index);
 
 // ── Dict operations (hash table, open addressing) ────────────────────
@@ -149,6 +150,9 @@ void   *rt_get_args(int argc, char **argv);
 // ── Time / CPU string formatters ──────────────────────────────────────
 char   *rt_time_elapsed_ms_str(int64_t start_ns);
 char   *rt_cpu_elapsed_ms_str(int64_t start_ns);
+
+// ── Crypto helpers ───────────────────────────────────────────────────
+int64_t rt_crypto_byte_at(const char *s, int64_t i);
 
 // ── Runtime utilities ────────────────────────────────────────────────
 void rt_panic(const char *message);
