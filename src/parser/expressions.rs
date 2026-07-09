@@ -115,8 +115,10 @@ impl Parser {
 
     fn parse_or(&mut self) -> Result<Expression> {
         let mut expr = self.parse_xor()?;
+        self.skip_newlines();
         while self.check(TokenType::PipePipe) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_xor()?;
             expr = Expression::BinaryOp {
                 operator: "||".to_string(),
@@ -124,14 +126,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_xor(&mut self) -> Result<Expression> {
         let mut expr = self.parse_and()?;
+        self.skip_newlines();
         while self.check(TokenType::Xor) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_and()?;
             expr = Expression::BinaryOp {
                 operator: "^".to_string(),
@@ -139,14 +144,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_and(&mut self) -> Result<Expression> {
         let mut expr = self.parse_equality()?;
+        self.skip_newlines();
         while self.check(TokenType::AmpAmp) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_equality()?;
             expr = Expression::BinaryOp {
                 operator: "&&".to_string(),
@@ -154,6 +162,7 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
@@ -161,8 +170,10 @@ impl Parser {
     fn parse_equality(&mut self) -> Result<Expression> {
         let mut expr = self.parse_bitwise_or()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Eq) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "==".to_string(),
@@ -172,6 +183,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Neq) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "!=".to_string(),
@@ -201,8 +213,10 @@ impl Parser {
 
     fn parse_bitwise_or(&mut self) -> Result<Expression> {
         let mut expr = self.parse_bitwise_and()?;
+        self.skip_newlines();
         while self.check(TokenType::Pipe) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_bitwise_and()?;
             expr = Expression::BinaryOp {
                 operator: "|".to_string(),
@@ -210,14 +224,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Unknown,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_bitwise_and(&mut self) -> Result<Expression> {
         let mut expr = self.parse_comparison()?;
+        self.skip_newlines();
         while self.check(TokenType::Amp) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_comparison()?;
             expr = Expression::BinaryOp {
                 operator: "&".to_string(),
@@ -225,6 +242,7 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Unknown,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
@@ -233,9 +251,11 @@ impl Parser {
         let mut expr = self.parse_additive()?;
 
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Pipeline) || self.check(TokenType::PipelineSafe) {
                 let is_safe = self.check(TokenType::PipelineSafe);
                 self.advance();
+                self.skip_newlines();
                 let stage = self.parse_additive()?;
                 expr = self.apply_pipeline(expr, stage, is_safe)?;
                 continue;
@@ -243,6 +263,7 @@ impl Parser {
 
             if self.check(TokenType::Gt) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: ">".to_string(),
@@ -252,6 +273,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Lt) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "<".to_string(),
@@ -261,6 +283,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Gte) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: ">=".to_string(),
@@ -270,6 +293,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Lte) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "<=".to_string(),
@@ -279,6 +303,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::In) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "in".to_string(),
@@ -299,6 +324,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::At) {
                 self.advance();
+                self.skip_newlines();
                 let index = self.parse_additive()?;
                 expr = Expression::Index {
                     target: Box::new(expr),
@@ -307,6 +333,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::To) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::Call {
                     name: "range".to_string(),
@@ -326,8 +353,10 @@ impl Parser {
     fn parse_additive(&mut self) -> Result<Expression> {
         let mut expr = self.parse_shift()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Plus) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "+".to_string(),
@@ -337,6 +366,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Minus) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "-".to_string(),
@@ -354,8 +384,10 @@ impl Parser {
     fn parse_shift(&mut self) -> Result<Expression> {
         let mut expr = self.parse_multiplicative()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::LShift) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_multiplicative()?;
                 expr = Expression::BinaryOp {
                     operator: "<<".to_string(),
@@ -365,6 +397,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::RShift) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_multiplicative()?;
                 expr = Expression::BinaryOp {
                     operator: ">>".to_string(),
@@ -382,8 +415,10 @@ impl Parser {
     fn parse_multiplicative(&mut self) -> Result<Expression> {
         let mut expr = self.parse_unary()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Star) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "*".to_string(),
@@ -393,6 +428,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Slash) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "/".to_string(),
@@ -402,6 +438,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Percent) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "%".to_string(),
