@@ -652,7 +652,7 @@ impl WarningAnalyzer {
                     .or_else(|| self.deprecated_functions.get(dot_name))
                 {
                     self.push_warn(
-                        DiagnosticCode::W0034,
+                        DiagnosticCode::W0010,
                         "Deprecated Function",
                         format!("'{}' is deprecated: {}", name, msg),
                         self.current_line,
