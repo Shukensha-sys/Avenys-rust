@@ -12,6 +12,8 @@
 int     pal_fs_write(const char *path, const char *content);
 int     pal_fs_append(const char *path, const char *content);
 char   *pal_fs_read(const char *path);
+char   *pal_fs_read_bytes(const char *path);
+int     pal_fs_write_bytes(const char *path, const char *data, int64_t len);
 int     pal_fs_copy(const char *src, const char *dst);
 int     pal_fs_move(const char *src, const char *dst);
 int     pal_fs_delete(const char *path);
