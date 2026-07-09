@@ -119,7 +119,7 @@ detect_pkg_manager() {
 install_deps() {
     local pm="$1"
     echo ""
-    echo "  installing: curl tar clang llvm libssl libsdl2"
+    echo "  installing: curl tar clang llvm libssl libsdl2 openssl vim-common"
     echo "  manager: ${pm}"
 
     if [ "$YES" != "1" ]; then
@@ -132,21 +132,21 @@ install_deps() {
     case "$pm" in
         apt)
             sudo apt-get update -qq
-            sudo apt-get install -y -qq curl tar clang llvm-dev libssl-dev libsdl2-dev 2>/dev/null || \
-            sudo apt-get install -y -qq curl tar clang llvm-18-dev libssl-dev libsdl2-dev 2>/dev/null || \
-            sudo apt-get install -y -qq curl tar clang libssl-dev libsdl2-dev
+            sudo apt-get install -y -qq curl tar clang llvm-dev libssl-dev libsdl2-dev vim-common 2>/dev/null || \
+            sudo apt-get install -y -qq curl tar clang llvm-18-dev libssl-dev libsdl2-dev vim-common 2>/dev/null || \
+            sudo apt-get install -y -qq curl tar clang libssl-dev libsdl2-dev vim-common
             ;;
         pacman)
-            sudo pacman -Sy --noconfirm curl tar clang llvm openssl sdl2
+            sudo pacman -Sy --noconfirm curl tar clang llvm openssl sdl2 vim
             ;;
         dnf|yum)
-            sudo "$pm" install -y curl tar clang llvm-devel openssl-devel SDL2-devel
+            sudo "$pm" install -y curl tar clang llvm-devel openssl-devel SDL2-devel vim-common
             ;;
         apk)
-            sudo apk add curl tar clang llvm-dev openssl-dev sdl2-dev
+            sudo apk add curl tar clang llvm-dev openssl-dev sdl2-dev vim
             ;;
         zypper)
-            sudo zypper install -y curl tar clang llvm-devel libopenssl-devel libSDL2-devel
+            sudo zypper install -y curl tar clang llvm-devel libopenssl-devel libSDL2-devel vim
             ;;
     esac
 }
@@ -161,6 +161,12 @@ check_prerequisites() {
     fi
     if ! command -v clang >/dev/null 2>&1; then
         missing="$missing clang"
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        missing="$missing openssl"
+    fi
+    if ! command -v xxd >/dev/null 2>&1; then
+        missing="$missing xxd"
     fi
 
     if [ -z "$missing" ]; then
