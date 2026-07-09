@@ -154,6 +154,7 @@ char   *rt_cpu_elapsed_ms_str(int64_t start_ns);
 // ── Crypto helpers ───────────────────────────────────────────────────
 int64_t rt_crypto_byte_at(const char *s, int64_t i);
 char   *rt_read_bytes(const char *path);
+int      rt_hex_to_file(const char *path, const char *hex);
 
 // ── Runtime utilities ────────────────────────────────────────────────
 void rt_panic(const char *message);
