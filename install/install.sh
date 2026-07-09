@@ -119,7 +119,7 @@ detect_pkg_manager() {
 install_deps() {
     local pm="$1"
     echo ""
-    echo "  installing: curl tar clang llvm libssl libsdl2 openssl vim-common"
+    echo "  installing: curl tar clang llvm libssl libsdl2 openssl"
     echo "  manager: ${pm}"
 
     if [ "$YES" != "1" ]; then
@@ -132,21 +132,21 @@ install_deps() {
     case "$pm" in
         apt)
             sudo apt-get update -qq
-            sudo apt-get install -y -qq curl tar clang llvm-dev libssl-dev libsdl2-dev vim-common 2>/dev/null || \
-            sudo apt-get install -y -qq curl tar clang llvm-18-dev libssl-dev libsdl2-dev vim-common 2>/dev/null || \
-            sudo apt-get install -y -qq curl tar clang libssl-dev libsdl2-dev vim-common
+            sudo apt-get install -y -qq curl tar clang llvm-dev libssl-dev libsdl2-dev 2>/dev/null || \
+            sudo apt-get install -y -qq curl tar clang llvm-18-dev libssl-dev libsdl2-dev 2>/dev/null || \
+            sudo apt-get install -y -qq curl tar clang libssl-dev libsdl2-dev
             ;;
         pacman)
-            sudo pacman -Sy --noconfirm curl tar clang llvm openssl sdl2 vim
+            sudo pacman -Sy --noconfirm curl tar clang llvm openssl sdl2
             ;;
         dnf|yum)
-            sudo "$pm" install -y curl tar clang llvm-devel openssl-devel SDL2-devel vim-common
+            sudo "$pm" install -y curl tar clang llvm-devel openssl-devel SDL2-devel
             ;;
         apk)
-            sudo apk add curl tar clang llvm-dev openssl-dev sdl2-dev vim
+            sudo apk add curl tar clang llvm-dev openssl-dev sdl2-dev
             ;;
         zypper)
-            sudo zypper install -y curl tar clang llvm-devel libopenssl-devel libSDL2-devel vim
+            sudo zypper install -y curl tar clang llvm-devel libopenssl-devel libSDL2-devel
             ;;
     esac
 }
@@ -164,9 +164,6 @@ check_prerequisites() {
     fi
     if ! command -v openssl >/dev/null 2>&1; then
         missing="$missing openssl"
-    fi
-    if ! command -v xxd >/dev/null 2>&1; then
-        missing="$missing xxd"
     fi
 
     if [ -z "$missing" ]; then
