@@ -183,6 +183,30 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
             let result = tmp_result(ctx, "i64", inst.result);
             format!("%t{} = shl i64 {}, {}", result, l, r)
         }
+        MirOp::Shr(l, r) => {
+            let (l, _lt) = resolve_typed(l, ctx);
+            let (r, _) = resolve_typed(r, ctx);
+            let result = tmp_result(ctx, "i64", inst.result);
+            format!("%t{} = lshr i64 {}, {}", result, l, r)
+        }
+        MirOp::Xor(l, r) => {
+            let (l, _lt) = resolve_typed(l, ctx);
+            let (r, _) = resolve_typed(r, ctx);
+            let result = tmp_result(ctx, "i64", inst.result);
+            format!("%t{} = xor i64 {}, {}", result, l, r)
+        }
+        MirOp::BitAnd(l, r) => {
+            let (l, _lt) = resolve_typed(l, ctx);
+            let (r, _) = resolve_typed(r, ctx);
+            let result = tmp_result(ctx, "i64", inst.result);
+            format!("%t{} = and i64 {}, {}", result, l, r)
+        }
+        MirOp::BitOr(l, r) => {
+            let (l, _lt) = resolve_typed(l, ctx);
+            let (r, _) = resolve_typed(r, ctx);
+            let result = tmp_result(ctx, "i64", inst.result);
+            format!("%t{} = or i64 {}, {}", result, l, r)
+        }
         MirOp::And(l, r) => {
             let (l_str, lt) = resolve_typed(l, ctx);
             let (r_str, rt) = resolve_typed(r, ctx);

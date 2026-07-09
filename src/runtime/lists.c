@@ -158,6 +158,13 @@ void *rt_list_get_ptr(void *list_ptr, int64_t index) {
     return ((void **)list_ptr)[index + 1];
 }
 
+void rt_list_set_i64(void *list_ptr, int64_t index, int64_t value) {
+    int64_t len = rt_list_len(list_ptr);
+    if (!list_ptr || index < 0 || index >= len) return;
+    ((int64_t *)list_ptr)[index + 1] = value;
+}
+void rt_lists_set_i64(void *list, int64_t index, int64_t value) { rt_list_set_i64(list, index, value); }
+
 int64_t rt_lists_len(void *list) { return rt_list_len(list); }
 int64_t rt_lists_get_i64(void *list, int64_t index) { return rt_list_get_i64(list, index); }
 void *rt_lists_get_ptr(void *list, int64_t index) { return rt_list_get_ptr(list, index); }

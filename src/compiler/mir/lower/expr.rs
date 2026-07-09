@@ -95,6 +95,11 @@ impl MirLower {
                     ">=" => MirOp::ICmp(MirCmp::Ge, l, r),
                     "&&" => MirOp::And(l, r),
                     "||" => MirOp::Or(l, r),
+                    "&" => MirOp::BitAnd(l, r),
+                    "|" => MirOp::BitOr(l, r),
+                    "^" => MirOp::Xor(l, r),
+                    "<<" => MirOp::Shl(l, r),
+                    ">>" => MirOp::Shr(l, r),
                     _ => MirOp::Add(l, r),
                 };
                 let last = self.current_block;
