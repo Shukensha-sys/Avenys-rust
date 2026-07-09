@@ -544,7 +544,74 @@ set b = box(42)
 - Vector length: `rt_vec_len(vec)`
 - List operations: `lists::push`, `lists::get`, `lists::len`, `lists::pop`
 
-### 9.1 Higher-order functions
+### 9.2 Bitwise operators (v3.12.3+)
+
+Mire supports full bitwise operations on integers, with operator precedence
+matching C/C++ conventions:
+
+| Operator | Symbol | Example | Precedence |
+|----------|--------|---------|------------|
+| Shift left | `<<` | `1 << n` | High |
+| Shift right | `>>` | `x >> 4` | High |
+| Bitwise AND | `&` | `0xFF & 0x0F` | Medium |
+| Bitwise XOR | `^` | `0xF0 ^ 0x0F` | Medium |
+| Bitwise OR | `\|` | `0xF0 \| 0x0F` | Low |
+
+```mire
+// Masking
+set low_nibble = byte & 0x0F
+
+// Flags
+set flags = READ | WRITE
+
+// Toggle bits
+set toggled = value ^ mask
+
+// Shift + mask (shift before AND due to precedence)
+set byte = (word >> 16) & 0xFF
+```
+
+**Caveats:**
+- All operations produce `i64` results; mask with `& 0xFFFFFFFF` for 32-bit wrapping
+- Right shift (`>>`) is always logical (unsigned), filling with zeros
+- `&` at the start of an expression is parsed as **address-of** (reference), not bitwise AND. Use parentheses: `(0xFF & x)`
+- `^` between bools is logical XOR; between integers is bitwise XOR
+
+### 9.3 Multi-line expression continuation (v3.12.4+)
+
+Binary operators at the end of a line trigger implicit continuation
+to the next line. The parser treats the following line as part of
+the same expression:
+
+```mire
+// Boolean chains
+return lists::get(bytes, 0) == 0xDE &&
+       lists::get(bytes, 1) == 0xAD &&
+       lists::get(bytes, 2) == 0xBE
+
+// Arithmetic
+set total = 100 +
+            200 +
+            300
+
+// Bitwise chains
+set word = ((lists::get(bytes, off) & 0xFF) << 24) |
+           ((lists::get(bytes, off + 1) & 0xFF) << 16) |
+           ((lists::get(bytes, off + 2) & 0xFF) << 8)
+
+// String concatenation
+set path = folder +
+           "/" +
+           filename
+```
+
+**Rules:**
+- The operator must be the LAST token on the line (no trailing code)
+- All binary operators are supported: `&& || + - * / % << >> & | ^ == != < > <= >=`
+- Single-line expressions are unchanged — backward compatible
+- Indentation is cosmetic (not semantic like Python)
+
+### 9.4 List and dict literal syntax
 
 Mire supports closures with list higher-order functions:
 
@@ -564,7 +631,7 @@ set evens = lists::filter(nums (x :i64) => x % 2 == 0)
 set sum = lists::fold(0 (acc elem :i64) => acc + elem, nums)
 ```
 
-### 9.2 Box — heap allocation
+### 9.5 Box — heap allocation
 
 `Box[T]` provides explicit heap allocation. Useful for recursive types
 (tree nodes, linked lists) and dynamic dispatch.
