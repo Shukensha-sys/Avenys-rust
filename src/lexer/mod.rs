@@ -677,6 +677,18 @@ impl<'a> Lexer<'a> {
                     if self.peek(0) == Some('=') {
                         self.advance();
                         Token::new(TokenType::MinusAssign, start_line, start_col)
+                    } else if self.peek(0).map_or(false, |ch| ch.is_ascii_digit()) {
+                        let num = if self.peek(0) == Some('0')
+                            && matches!(
+                                self.peek(1),
+                                Some('b' | 'B' | 'o' | 'O' | 'x' | 'X')
+                            ) {
+                            self.read_based_integer()?
+                        } else {
+                            self.read_number()
+                        };
+                        Token::new(TokenType::IntLit, start_line, start_col)
+                            .with_value(format!("-{num}"))
                     } else {
                         Token::new(TokenType::Minus, start_line, start_col)
                     }

@@ -2,6 +2,88 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.12.5] - 2026-07-10
+
+### Fixed
+
+- **`str()` builtin shadowed by `get.str`**: When `load kioto` was used, the
+  `str()` conversion function was incorrectly resolved to `get.str` (from
+  `kioto/lists/get.mire`). `extract_bare_name_map` in `mir/lower/mod.rs` now
+  excludes `"str"` from bare-to-qualified mappings, ensuring `str()` always
+  calls `rt_i64_to_string`.
+- **List literal corruption with negative integers**: `-5349999486874862801`
+  inside `[...] :vec[i64]` was lexed as `Minus` + `IntLit`, causing the parser's
+  `parse_additive` to treat `a -b` as binary subtraction `a - b`. This collapsed
+  3 list elements into 2 and corrupted the second value. The lexer now emits a
+  single `IntLit` token with the negative value when `-` is immediately followed
+  by a digit (no whitespace).
+- **`strings::substr` off-by-one**: Clamping used `(size_t)(start + length) > len`
+  which could overflow `int64`. Changed to `length > avail` where
+  `avail = (int64_t)(len - (size_t)start)` for safe comparison.
+
+### Docs
+
+- **CHANGELOG.md**: Added missing entries for v3.12.3 and v3.12.4.
+- **Benchmark tests**: Updated all `.` → `::` notation in compiler benchmark
+  fixtures (`lists.fold` → `lists::fold`, `fs.write` → `fs::write`, etc.)
+
+## [3.12.4] - 2026-07-09
+
+### Added
+
+- **Multi-line expression continuation**: Binary operators at end of line
+  trigger implicit continuation. `skip_newlines()` added in all 10 binary
+  operator parse functions: `parse_or`, `parse_xor`, `parse_and`,
+  `parse_equality`, `parse_bitwise_or`, `parse_bitwise_and`,
+  `parse_comparison`, `parse_additive`, `parse_shift`,
+  `parse_multiplicative`. Works for: `&&` `||` `+` `-` `*` `/` `%` `<<`
+  `>>` `&` `|` `^` `==` `!=` `<` `>` `<=` `>=`.
+- **Binary-safe file I/O**: `rt_read_bytes(path)` reads a file in binary
+  mode and returns a managed string with correct byte length set in the
+  header (no `strlen` truncation on embedded nulls). `pal_fs_read_bytes`
+  and `pal_fs_write_bytes` provide PAL-level binary-safe read/write.
+- **`rt_hex_to_file(path, hex)`**: C function decodes hex string to raw
+  bytes and writes to file. Replaces the `xxd -r -p` subprocess in
+  Ed25519 verify — crypto module now has **zero external binary conversion
+  dependencies**.
+
+### Changed
+
+- **Install script**: `openssl` added as a prerequisite for crypto module.
+  `xxd`/`vim-common` added then removed after `rt_hex_to_file` replacement.
+- **CI workflows**: `openssl` installed in `apt` deps for test runners.
+
+### Docs
+
+- **SYNTAX.md**: Updated with bitwise operators (`^ & | << >>`), multi-line
+  expression continuation, and list/dict literal quirks.
+
+## [3.12.3] - 2026-07-09
+
+### Added
+
+- **Bitwise operators**: `^` (XOR), `&` (bitwise AND), `|` (bitwise OR),
+  `<<` (shift left), `>>` (shift right). New MIR ops: `MirOp::Shr`,
+  `MirOp::Xor`, `MirOp::BitAnd`, `MirOp::BitOr`. LLVM codegen emits
+  `lshr`, `xor`, `and`, `or` respectively.
+- **`rt_lists_set_i64(list, index, value)`**: C runtime function for
+  in-place list element mutation (`lists::set`).
+- **`rt_crypto_byte_at(str, index)`**: C runtime function for raw byte
+  access from managed strings, used by hex/base64 decode.
+
+### Fixed
+
+- **MIR lowering for unknown binary ops**: Previously all unrecognized
+  operators silently routed to `MirOp::Add`. Now correctly dispatches
+  each bitwise operator.
+
+### Changed
+
+- **Constant folding, DCE, simplify, inline, wrapper passes**: All updated
+  to handle the five new `MirOp` variants.
+- **Hash discriminants**: byte 27 = `BitAnd`, byte 28 = `BitOr` in
+  `mir/mod.rs`.
+
 ## [3.12.2] - 2026-07-08
 
 ### Fixed
