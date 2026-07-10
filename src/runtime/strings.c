@@ -197,7 +197,8 @@ char *rt_strings_substr(const char *input, int64_t start, int64_t length) {
     size_t len = str_byte_len(input);
     if (start < 0) start = 0;
     if ((size_t)start >= len || length <= 0) return rt_managed_from_slice("", 0);
-    if ((size_t)(start + length) > len) length = (int64_t)(len - (size_t)start);
+    int64_t avail = (int64_t)(len - (size_t)start);
+    if (length > avail) length = avail;
     return rt_managed_from_slice(input + start, (size_t)length);
 }
 

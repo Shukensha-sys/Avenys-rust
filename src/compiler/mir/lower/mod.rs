@@ -83,10 +83,19 @@ fn extract_bare_name_map(
     _program: &Program,
     seen_functions: &std::collections::HashSet<String>,
 ) -> HashMap<String, String> {
+    // Builtin names that should NOT be shadowed by qualified module functions.
+    // The str() builtin converts values to string; get.str(list, index) from
+    // kioto/lists/get.mire has a different arity and would produce wrong code.
+    let builtin_names: &[&str] = &[
+        "str",
+    ];
     let mut map = HashMap::new();
     for name in seen_functions.iter() {
         if let Some((_, bare)) = name.rsplit_once('.') {
             if seen_functions.contains(bare) {
+                continue;
+            }
+            if builtin_names.contains(&bare) {
                 continue;
             }
             if !map.contains_key(bare) {
