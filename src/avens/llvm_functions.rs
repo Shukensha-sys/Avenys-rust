@@ -384,6 +384,7 @@ impl LlvmIrGen {
             "declare i64 @pal_net_connect_timeout(ptr, i64, i64)".to_string(),
             "declare ptr @pal_net_recv(i64, i64)".to_string(),
             "declare i32 @pal_net_send(i64, ptr)".to_string(),
+            "declare i32 @pal_net_send_bytes(i64, ptr, i64)".to_string(),
             "declare i32 @pal_net_close(i64)".to_string(),
             "declare i64 @pal_net_poll(i64, i64)".to_string(),
             "declare i32 @pal_net_set_nonblock(i64, i32)".to_string(),
