@@ -88,6 +88,12 @@ int pal_net_send(int64_t fd, const char *data) {
     return (written == (ssize_t)len) ? 1 : 0;
 }
 
+int pal_net_send_bytes(int64_t fd, const char *data, int64_t len) {
+    if (!data || len <= 0) return 0;
+    ssize_t written = write((int)fd, data, (size_t)len);
+    return (written == (ssize_t)len) ? 1 : 0;
+}
+
 int pal_net_close(int64_t fd) {
     return close((int)fd) == 0 ? 1 : 0;
 }

@@ -105,6 +105,7 @@ int64_t pal_net_connect(const char *host, int64_t port);
 int64_t pal_net_connect_timeout(const char *host, int64_t port, int64_t timeout_ms);
 char   *pal_net_recv(int64_t fd, int64_t max_bytes);
 int     pal_net_send(int64_t fd, const char *data);
+int     pal_net_send_bytes(int64_t fd, const char *data, int64_t len);
 int     pal_net_close(int64_t fd);
 int64_t pal_net_poll(int64_t fd, int64_t timeout_ms);
 int     pal_net_set_nonblock(int64_t fd, int nonblock);
