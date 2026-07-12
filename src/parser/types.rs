@@ -112,6 +112,8 @@ impl Parser {
                 "u16" => Ok(DataType::U16),
                 "u32" => Ok(DataType::U32),
                 "u64" => Ok(DataType::U64),
+                "i128" => Ok(DataType::I128),
+                "u128" => Ok(DataType::U128),
                 "f32" => Ok(DataType::F32),
                 "f64" => Ok(DataType::F64),
                 "str" => Ok(DataType::Str),

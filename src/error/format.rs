@@ -87,12 +87,13 @@ pub fn format_diagnostic(diag: &Diagnostic, use_color: bool) -> String {
             }
         }
     } else if has_default_anchor {
-        out.push_str("│     │ <source location unavailable>\n");
+        out.push_str("│     │ <no source location; emitted from non-positioned backend/runtime path>\n");
     }
 
     out.push_str(&format!("╰─ {}\n", diag.message));
     if has_default_anchor {
-        out.push_str("   ─┬─ note: error location is approximate; emitted from non-positioned backend/runtime path\n");
+        out.push_str("   ─┬─ note: This error did not capture a source position; file-level context is shown.\n");
+        out.push_str("   ─┬─ help: Report this as a compiler bug if the location matters.\n");
     }
     if is_unknown {
         out.push_str("   ─┬─ note: position unknown at emission time; compiler bug or truly unresolvable location\n");

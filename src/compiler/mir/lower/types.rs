@@ -108,6 +108,7 @@ pub(crate) fn data_type_to_kind(dt: &DataType) -> i64 {
 pub(crate) fn llvm_elem_type_str(dt: &DataType) -> String {
     match dt {
         DataType::I64 | DataType::Char | DataType::U64 => "i64".to_string(),
+        DataType::I128 | DataType::U128 => "i128".to_string(),
         DataType::I32 | DataType::U32 => "i32".to_string(),
         DataType::I16 | DataType::U16 => "i16".to_string(),
         DataType::I8 | DataType::U8 => "i8".to_string(),

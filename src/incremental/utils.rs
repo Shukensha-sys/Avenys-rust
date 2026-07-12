@@ -198,6 +198,8 @@ pub(crate) fn manifest_cache_settings(source_path: &Path) -> Result<CacheSetting
 
     let manifest = toml::from_str::<ManifestFile>(&raw).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Invalid owl.toml cache configuration: {}", err),
         })
     })?;

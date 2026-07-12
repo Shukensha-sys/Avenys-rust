@@ -4,6 +4,7 @@ use super::*;
 pub(super) enum LlType {
     I8,
     I64,
+    I128,
     I1,
     F64,
     Ptr,

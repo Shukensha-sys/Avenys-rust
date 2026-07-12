@@ -213,7 +213,7 @@ impl MirLower {
                     DataType::Vector { element_type, .. }
                         if matches!(
                             &**element_type,
-                            DataType::I64 | DataType::Unknown | DataType::Anything
+                            DataType::I64 | DataType::I128 | DataType::U128 | DataType::Unknown | DataType::Anything
                         ) =>
                     {
                         "rt_lists_contains_i64"
@@ -905,7 +905,9 @@ impl MirLower {
                         loc,
                     );
                     let is_scalar = vt == &DataType::I64
+                        || vt == &DataType::I128
                         || vt == &DataType::U64
+                        || vt == &DataType::U128
                         || vt == &DataType::Char
                         || vt == &DataType::Bool
                         || vt == &DataType::I32
@@ -1605,7 +1607,7 @@ impl MirLower {
         }
         let op = match (src_type, target_type) {
             (
-                DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8,
+                DataType::I64 | DataType::I128 | DataType::I32 | DataType::I16 | DataType::I8,
                 DataType::F64 | DataType::F32,
             ) => MirOp::Sitofp(
                 src_val,
@@ -1615,7 +1617,7 @@ impl MirLower {
             ),
             (
                 DataType::F64 | DataType::F32,
-                DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8,
+                DataType::I64 | DataType::I128 | DataType::I32 | DataType::I16 | DataType::I8,
             ) => MirOp::Fptosi(
                 src_val,
                 MirType {
