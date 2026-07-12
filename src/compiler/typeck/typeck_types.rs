@@ -121,10 +121,12 @@ impl TypeChecker {
                 | DataType::I32
                 | DataType::I16
                 | DataType::I8
+                | DataType::I128
                 | DataType::U64
                 | DataType::U32
                 | DataType::U16
                 | DataType::U8
+                | DataType::U128
         )
     }
 
@@ -208,6 +210,9 @@ impl TypeChecker {
                         value
                     ),
                 ));
+            }
+            DataType::I128 | DataType::U128 => {
+                // i128/u128 range: any i64 value fits in i128/u128
             }
             _ => {}
         }
@@ -370,6 +375,10 @@ impl TypeChecker {
             || matches!(right, DataType::F64 | DataType::F32)
         {
             DataType::F64
+        } else if left == &DataType::I128 || right == &DataType::I128 {
+            DataType::I128
+        } else if left == &DataType::U128 || right == &DataType::U128 {
+            DataType::U128
         } else if left == &DataType::I64 || right == &DataType::I64 {
             DataType::I64
         } else {
@@ -384,10 +393,12 @@ impl TypeChecker {
                 | DataType::I16
                 | DataType::I32
                 | DataType::I64
+                | DataType::I128
                 | DataType::U8
                 | DataType::U16
                 | DataType::U32
                 | DataType::U64
+                | DataType::U128
                 | DataType::F32
                 | DataType::F64
         )

@@ -407,10 +407,12 @@ impl TypeChecker {
                 | DataType::I16
                 | DataType::I32
                 | DataType::I64
+                | DataType::I128
                 | DataType::U8
                 | DataType::U16
                 | DataType::U32
                 | DataType::U64
+                | DataType::U128
                 | DataType::F32
                 | DataType::F64
                 | DataType::Bool

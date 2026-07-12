@@ -3,9 +3,11 @@ use crate::compiler::mir::DataType;
 pub(crate) fn llvm_type_str(dt: &DataType) -> String {
     match dt {
         DataType::I64 | DataType::Char | DataType::U64 => "i64".to_string(),
+        DataType::I128 | DataType::U128 => "i128".to_string(),
         DataType::I32 | DataType::U32 => "i32".to_string(),
         DataType::I16 | DataType::U16 => "i16".to_string(),
-        DataType::I8 | DataType::U8 => "i8".to_string(),
+        DataType::U8 => "i64".to_string(),
+        DataType::I8 => "i8".to_string(),
         DataType::F32 => "float".to_string(),
         DataType::F64 => "double".to_string(),
         DataType::Bool => "i1".to_string(),

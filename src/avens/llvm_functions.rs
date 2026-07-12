@@ -519,6 +519,8 @@ impl LlvmIrGen {
                 AssignmentTarget::Variable(name) => {
                     let var = self.vars.get(name).cloned().ok_or_else(|| {
                         MireError::new(ErrorKind::Runtime {
+                            line: 0,
+                            column: 0,
                             message: format!("Avenys does not know variable '{}'", name),
                         })
                     })?;
@@ -635,6 +637,8 @@ impl LlvmIrGen {
             Statement::Break => {
                 let labels = self.loop_stack.last().cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: "Avenys found `break` outside of a loop".to_string(),
                     })
                 })?;
@@ -645,6 +649,8 @@ impl LlvmIrGen {
             Statement::Continue => {
                 let labels = self.loop_stack.last().cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: "Avenys found `continue` outside of a loop".to_string(),
                     })
                 })?;
@@ -720,6 +726,8 @@ impl LlvmIrGen {
             Statement::Move { target, value } => {
                 let var = self.vars.get(target).cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Avenys does not know variable '{}'", target),
                     })
                 })?;
@@ -825,6 +833,8 @@ impl LlvmIrGen {
                     });
                 }
                 Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Avenys unknown identifier '{}'", name),
                 }))
             }
@@ -934,6 +944,18 @@ impl LlvmIrGen {
                     }
                     _ => match value.ty {
                         LlType::Ptr => Ok(value),
+                        LlType::I128 => {
+                            let tmp = self.tmp();
+                            self.body.push(format!(
+                                "  {tmp} = call ptr @rt_i64_to_string(i64 {})",
+                                value.repr
+                            ));
+                            Ok(LlValue {
+                                ty: LlType::Ptr,
+                                repr: tmp,
+                                owned: true,
+                            })
+                        }
                         LlType::I64 => {
                             let tmp = self.tmp();
                             self.body.push(format!(
@@ -1019,6 +1041,8 @@ impl LlvmIrGen {
             } if name == "call" => {
                 if args.is_empty() {
                     return Err(MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: "Avenys call(...) expects at least callback argument".to_string(),
                     }));
                 }
@@ -1043,6 +1067,8 @@ impl LlvmIrGen {
                             if let Some(sig) = dynamic_sig {
                                 if sig.params.len() != args.len() - 1 {
                                     return Err(MireError::new(ErrorKind::Runtime {
+                                        line: 0,
+                                        column: 0,
                                         message: format!(
                                             "Avenys callback '{}' expects {} args, got {}",
                                             ident.name,
@@ -1088,6 +1114,7 @@ impl LlvmIrGen {
                                 let value = self.compile_expr(arg_expr)?;
                                 let (ty_name, rendered) = match value.ty {
                                     LlType::I64 => ("i64".to_string(), value.repr),
+                                    LlType::I128 => ("i128".to_string(), value.repr),
                                     LlType::I8 => {
                                         let widened = self.cast_to_i64(value)?;
                                         ("i64".to_string(), widened.repr)
@@ -1131,6 +1158,8 @@ impl LlvmIrGen {
                         let fn_info = fn_info.expect("checked is_some");
                         if fn_info.params.len() != args.len() - 1 {
                             return Err(MireError::new(ErrorKind::Runtime {
+                                line: 0,
+                                column: 0,
                                 message: format!(
                                     "Avenys callback '{}' expects {} args, got {}",
                                     callback_name,
@@ -1144,12 +1173,15 @@ impl LlvmIrGen {
                             let value = self.compile_expr(arg_expr)?;
                             let casted = match expected_ty {
                                 LlType::I64 => self.cast_to_i64(value)?,
+                                LlType::I128 => self.cast_to_i128(value)?,
                                 LlType::I1 => self.cast_to_i1(value)?,
                                 LlType::I8 => value,
                                 LlType::F64 => self.cast_to_f64(value)?,
                                 LlType::Ptr if value.ty == LlType::Ptr => value,
                                 LlType::Ptr => {
                                     return Err(MireError::new(ErrorKind::Runtime {
+                                        line: 0,
+                                        column: 0,
                                         message: format!(
                                             "Avenys cannot cast callback argument for '{}'",
                                             callback_name
@@ -1185,6 +1217,8 @@ impl LlvmIrGen {
                     } => {
                         if params.len() != args.len() - 1 {
                             return Err(MireError::new(ErrorKind::Runtime {
+                                line: 0,
+                                column: 0,
                                 message: format!(
                                     "Avenys call(...) closure expects {} args, got {}",
                                     params.len(),
@@ -1224,6 +1258,7 @@ impl LlvmIrGen {
                             let value = self.compile_expr(arg_expr)?;
                             let (ty_name, rendered) = match value.ty {
                                 LlType::I64 => ("i64".to_string(), value.repr),
+                                LlType::I128 => ("i128".to_string(), value.repr),
                                 LlType::I8 => {
                                     let widened = self.cast_to_i64(value)?;
                                     ("i64".to_string(), widened.repr)
@@ -1777,6 +1812,8 @@ impl LlvmIrGen {
 
                 if fn_info.params.len() != resolved_args.len() {
                     return Err(MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!(
                             "Avenys function '{}' expects {} args, got {}",
                             resolved_name,
@@ -1790,12 +1827,15 @@ impl LlvmIrGen {
                     let value = self.compile_expr(arg_expr)?;
                     let casted = match expected_ty {
                         LlType::I64 => self.cast_to_i64(value)?,
+                        LlType::I128 => self.cast_to_i128(value)?,
                         LlType::I1 => self.cast_to_i1(value)?,
                         LlType::I8 => value,
                         LlType::F64 => value,
                         LlType::Ptr if value.ty == LlType::Ptr => value,
                         LlType::Ptr => {
                             return Err(MireError::new(ErrorKind::Runtime {
+                                line: 0,
+                                column: 0,
                                 message: format!(
                                     "Avenys cannot cast argument for function '{}'",
                                     resolved_name
@@ -1855,6 +1895,7 @@ impl LlvmIrGen {
                         for (arg_val, expected_ty) in all_args.iter().zip(fn_info.params.iter()) {
                             let casted = match expected_ty {
                                 LlType::I64 => self.cast_to_i64(arg_val.clone())?,
+                                LlType::I128 => self.cast_to_i128(arg_val.clone())?,
                                 LlType::I1 => self.cast_to_i1(arg_val.clone())?,
                                 _ => arg_val.clone(),
                             };
@@ -1898,6 +1939,7 @@ impl LlvmIrGen {
                         for (arg_val, expected_ty) in all_args.iter().zip(fn_info.params.iter()) {
                             let casted = match expected_ty {
                                 LlType::I64 => self.cast_to_i64(arg_val.clone())?,
+                                LlType::I128 => self.cast_to_i128(arg_val.clone())?,
                                 LlType::I1 => self.cast_to_i1(arg_val.clone())?,
                                 _ => arg_val.clone(),
                             };
@@ -1929,6 +1971,8 @@ impl LlvmIrGen {
                         capture: _,
                     } => self.compile_pipeline_closure(input_val, params, body, return_type),
                     _ => Err(MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: "Pipeline stage must be a function call, identifier, or closure"
                             .to_string(),
                     })),
@@ -1945,7 +1989,7 @@ impl LlvmIrGen {
     }
 
     pub(super) fn attach_context(&self, err: MireError) -> MireError {
-        if err.line == 1 && err.column == 1 {
+        if err.line == 0 && err.column == 0 {
             err.with_position(self.current_line, self.current_column)
         } else {
             err
@@ -2066,6 +2110,8 @@ impl LlvmIrGen {
         // Optional type annotation: ireru() :i64, ireru("> ") :f64, ireru() :bool
         if args.len() > 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys ireru expects 0 or 1 argument".to_string(),
             }));
         }
@@ -2081,7 +2127,7 @@ impl LlvmIrGen {
             .push(format!("  {input} = call ptr @ireru(ptr {})", prompt.repr));
 
         match data_type {
-            DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8 => {
+            DataType::I64 | DataType::I128 | DataType::U128 | DataType::I32 | DataType::I16 | DataType::I8 => {
                 let parsed = self.tmp();
                 self.body
                     .push(format!("  {parsed} = call i64 @atoll(ptr {input})"));

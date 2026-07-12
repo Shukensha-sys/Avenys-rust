@@ -29,6 +29,8 @@ pub enum ErrorKind {
         message: String,
     },
     Runtime {
+        line: usize,
+        column: usize,
         message: String,
     },
     Type {
@@ -44,8 +46,16 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub fn runtime(message: String) -> Self {
-        ErrorKind::Runtime { message }
+    pub fn runtime(line: usize, column: usize, message: String) -> Self {
+        ErrorKind::Runtime { line, column, message }
+    }
+
+    pub fn runtime_msg(message: String) -> Self {
+        ErrorKind::Runtime {
+            line: 0,
+            column: 0,
+            message,
+        }
     }
 
     pub fn type_error_at(line: usize, column: usize, message: String) -> Self {
@@ -220,6 +230,8 @@ impl MireError {
 impl From<std::io::Error> for MireError {
     fn from(e: std::io::Error) -> Self {
         Self::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: e.to_string(),
         })
     }
@@ -243,16 +255,19 @@ impl MireError {
     }
 
     pub fn runtime(message: String) -> Self {
-        Self::new(ErrorKind::Runtime { message })
+        Self::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
+            message,
+        })
     }
 
     pub fn runtime_at(line: usize, column: usize, message: String) -> Self {
-        let mut error = Self::new(ErrorKind::Runtime { message });
-        error.line = line;
-        error.column = column;
-        error.diagnostic.line = line;
-        error.diagnostic.column = column;
-        error
+        Self::new(ErrorKind::Runtime {
+            line,
+            column,
+            message,
+        })
     }
 
     pub fn type_error_at(line: usize, column: usize, message: String) -> Self {
@@ -322,9 +337,11 @@ fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, Diagnostic
             message.clone(),
             DiagnosticCode::E0014,
         ),
-        ErrorKind::Runtime { message } => (
-            1,
-            1,
+        ErrorKind::Runtime {
+            line, column, message,
+        } => (
+            *line,
+            *column,
             "Runtime Error",
             message.clone(),
             DiagnosticCode::E0015,
@@ -394,6 +411,8 @@ mod tests {
         );
 
         let err = MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: "boom".to_string(),
         })
         .with_filename("main.mire".to_string())

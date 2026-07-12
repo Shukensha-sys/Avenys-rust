@@ -2,6 +2,35 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.13.0] - 2026-07-12
+
+### Fixed
+
+- **`ErrorKind::Runtime` now carries source position**: Added `line: usize,
+  `column: usize` fields to `ErrorKind::Runtime`, matching every other error
+  variant. Previously the only variant without location data, causing all
+  runtime errors to display `<source location unavailable>`. All construction
+  sites updated with `line: 0, column: 0` defaults.
+- **`attach_context` detects `(0,0)` instead of `(1,1)`**: The condition that
+  skips attaching context for unpositioned errors was stuck at `(1,1)` —
+  leftover from an old line-numbering scheme. Changed to `(0,0)` to match
+  the actual sentinel for `NO_POSITION`.
+- **External tool errors chain source filename**: `optimize_ir()` and
+  `compile_binary_from_ir()` in `toolchain.rs` now accept a `source_filename`
+  parameter and call `.with_filename()` on their errors. `build_pipeline.rs`
+  passes `&source_filename` at both call sites, so linker/optimizer failures
+  include the output path instead of being orphaned.
+
+### Changed
+
+- **Runtime error display**: When no source position is available, the
+  compiler now shows `<no source location; emitted from non-positioned
+  backend/runtime path>` instead of the misleading `<source location
+  unavailable>`, making it clear the error originates outside the MIR/source
+  line tracking system.
+- **`incremental/mod.rs`**: `StoredErrorKind::Runtime` extended with `line`
+  and `column` fields for cache serialization compatibility.
+
 ## [3.12.5] - 2026-07-10
 
 ### Fixed

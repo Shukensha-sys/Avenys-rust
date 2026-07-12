@@ -38,6 +38,8 @@ pub fn load_program_with_metadata_with_settings(
 ) -> Result<LoadedProgram> {
     let canonical = path.canonicalize().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not resolve '{}': {}", path.display(), err),
         })
     })?;
@@ -110,6 +112,8 @@ pub fn load_program_with_cache(
 ) -> Result<LoadedProgram> {
     let canonical = path.canonicalize().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not resolve '{}': {}", path.display(), err),
         })
     })?;
@@ -201,6 +205,8 @@ impl<'a> ImportResolver<'a> {
     fn load_file(&mut self, path: &Path) -> Result<Vec<ExpandedStatement>> {
         let canonical = path.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Could not resolve '{}': {}", path.display(), err),
             })
         })?;
@@ -211,6 +217,8 @@ impl<'a> ImportResolver<'a> {
 
         if !self.active_stack.insert(canonical.clone()) {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cyclic local load detected at '{}'", canonical.display()),
             }));
         }
@@ -316,6 +324,8 @@ impl<'a> ImportResolver<'a> {
             }
         } else {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Package '{}' not found in [dependencies] of {}",
                     name,
@@ -326,6 +336,8 @@ impl<'a> ImportResolver<'a> {
 
         let canonical_root = package_root.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Could not resolve package '{}' at '{}': {}",
                     name,
@@ -385,6 +397,8 @@ impl<'a> ImportResolver<'a> {
             let target =
                 resolve_export_path(&current_exports, &current_root, segment).ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Package '{}' has no export '{}'", segments[0], segment),
                     })
                 })?;
@@ -404,6 +418,8 @@ impl<'a> ImportResolver<'a> {
                 current_root = parent;
             } else {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Cannot resolve '{}': '{}' has no sub-exports",
                         segments[i + 1..].join("::"),
@@ -1621,6 +1637,8 @@ fn select_imported_statements(
                 .map(|(idx, _)| idx)
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!(
                             "Local load '{}' does not export '{}'",
                             import_path.display(),
@@ -1741,6 +1759,8 @@ fn select_imported_statements(
 fn read_source_file(path: &Path) -> Result<String> {
     fs::read_to_string(path).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not read '{}': {}", path.display(), err),
         })
     })

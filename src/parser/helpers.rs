@@ -328,6 +328,8 @@ pub(super) fn data_type_name(data_type: &DataType) -> String {
         DataType::U16 => "u16".to_string(),
         DataType::U32 => "u32".to_string(),
         DataType::U64 => "u64".to_string(),
+        DataType::I128 => "i128".to_string(),
+        DataType::U128 => "u128".to_string(),
         DataType::F32 => "f32".to_string(),
         DataType::F64 => "f64".to_string(),
         DataType::Char => "char".to_string(),

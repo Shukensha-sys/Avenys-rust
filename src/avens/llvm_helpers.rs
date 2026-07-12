@@ -123,6 +123,7 @@ impl LlvmIrGen {
 
     pub(super) fn map_type(&self, data_type: &DataType) -> Result<LlType> {
         match data_type {
+            DataType::I128 | DataType::U128 => Ok(LlType::I128),
             DataType::I64 | DataType::Unknown | DataType::Anything | DataType::Generic(_) => {
                 Ok(LlType::I64)
             }
@@ -165,6 +166,7 @@ impl LlvmIrGen {
             DataType::Bool | DataType::I8 | DataType::U8 => 1,
             DataType::I16 | DataType::U16 => 2,
             DataType::I32 | DataType::U32 => 4,
+            DataType::I128 | DataType::U128 => 16,
             DataType::Str
             | DataType::List
             | DataType::Vector { .. }
@@ -186,6 +188,7 @@ impl LlvmIrGen {
             DataType::Bool | DataType::I8 | DataType::U8 => "i8",
             DataType::I16 | DataType::U16 => "i16",
             DataType::I32 | DataType::U32 => "i32",
+            DataType::I128 | DataType::U128 => "i128",
             _ => "i64",
         }
     }
@@ -198,6 +201,11 @@ impl LlvmIrGen {
                 owned: false,
             },
             LlType::I64 => LlValue {
+                ty,
+                repr: "0".to_string(),
+                owned: false,
+            },
+            LlType::I128 => LlValue {
                 ty,
                 repr: "0".to_string(),
                 owned: false,
@@ -243,6 +251,7 @@ impl LlvmIrGen {
         match ty {
             LlType::I8 => "i8".to_string(),
             LlType::I64 => "i64".to_string(),
+            LlType::I128 => "i128".to_string(),
             LlType::I1 => "i1".to_string(),
             LlType::F64 => "double".to_string(),
             LlType::Ptr => "ptr".to_string(),

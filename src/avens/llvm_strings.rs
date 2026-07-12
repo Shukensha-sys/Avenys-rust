@@ -4,6 +4,8 @@ impl LlvmIrGen {
     pub(super) fn compile_concat(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() < 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys concat(...) expects at least 2 arguments".to_string(),
             }));
         }
@@ -27,6 +29,8 @@ impl LlvmIrGen {
     pub(super) fn compile_replace(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys replace(...) expects 3 arguments".to_string(),
             }));
         }
@@ -65,6 +69,8 @@ impl LlvmIrGen {
     pub(super) fn compile_split(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.split(...) expects 2 arguments".to_string(),
             }));
         }
@@ -85,6 +91,8 @@ impl LlvmIrGen {
     pub(super) fn compile_join(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.join(...) expects 2 arguments".to_string(),
             }));
         }
@@ -111,6 +119,8 @@ impl LlvmIrGen {
     pub(super) fn compile_trim(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.trim(...) expects 1 argument".to_string(),
             }));
         }
@@ -133,6 +143,8 @@ impl LlvmIrGen {
     pub(super) fn compile_to_upper(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys to_upper(...) expects 1 argument".to_string(),
             }));
         }
@@ -155,6 +167,8 @@ impl LlvmIrGen {
     pub(super) fn compile_to_lower(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys to_lower(...) expects 1 argument".to_string(),
             }));
         }
@@ -177,6 +191,8 @@ impl LlvmIrGen {
     pub(super) fn compile_to_string(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.to_string(...) expects 1 argument".to_string(),
             }));
         }
@@ -197,6 +213,8 @@ impl LlvmIrGen {
     pub(super) fn compile_replace_first(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.replace_first(...) expects 3 arguments".to_string(),
             }));
         }
@@ -234,6 +252,8 @@ impl LlvmIrGen {
     pub(super) fn compile_starts_with(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.starts_with(...) expects 2 arguments".to_string(),
             }));
         }
@@ -272,6 +292,8 @@ impl LlvmIrGen {
     pub(super) fn compile_ends_with(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.ends_with(...) expects 2 arguments".to_string(),
             }));
         }
@@ -310,6 +332,8 @@ impl LlvmIrGen {
     pub(super) fn compile_substr(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.substr(...) expects 3 arguments".to_string(),
             }));
         }
@@ -333,6 +357,8 @@ impl LlvmIrGen {
     pub(super) fn compile_pad_left(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() < 2 || args.len() > 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.pad_left(...) expects 2 or 3 arguments".to_string(),
             }));
         }
@@ -359,6 +385,8 @@ impl LlvmIrGen {
     pub(super) fn compile_pad_right(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() < 2 || args.len() > 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "strings.pad_right(...) expects 2 or 3 arguments".to_string(),
             }));
         }
@@ -419,6 +447,12 @@ impl LlvmIrGen {
                 ));
                 self.body.push(format!(
                     "  call i32 (ptr, ...) @printf(ptr @.fmt_str, ptr {select})"
+                ));
+            }
+            LlType::I128 => {
+                self.body.push(format!(
+                    "  call i32 (ptr, ...) @printf(ptr @.fmt_i64, i128 {})",
+                    value.repr
                 ));
             }
             LlType::F64 => {
