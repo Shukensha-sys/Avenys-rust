@@ -1935,7 +1935,7 @@ fn kioto_lists_reference_api_reuses_the_same_binding() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn main: () {\n    set nums = [1 2 3 2] :vec[i64]\n    set len1 = lists.len(nums)\n    set has_two = lists.contains(nums 2)\n    set first = lists.first(nums)\n    set last = lists.last(nums)\n    set idx = lists.index_of(nums 2)\n    set len2 = lists.len(nums)\n    use dasu(\"{len1}-{has_two}-{first}-{last}-{idx}-{len2}\")\n}\n",
+        "load kioto\n\npub fn main: () {\n    set nums = [1 2 3 2] :vec[i64]\n    set len1 = lists.len(nums)\n    set has_two = lists.contains(nums 2)\n    set first = lists.first(nums)\n    set last = lists.last(nums)\n    set idx = lists.index(nums 2)\n    set len2 = lists.len(nums)\n    use dasu(\"{len1}-{has_two}-{first}-{last}-{idx}-{len2}\")\n}\n",
     )
     .expect("write source");
 
@@ -3856,7 +3856,7 @@ fn runtime_lists_abi_smoke_test() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn main: () {\n    set xs = [10 20 30]\n    use dasu(lists.len(xs))\n    use dasu(lists.get(xs, 1))\n    use dasu(lists.first(xs))\n    use dasu(lists.last(xs))\n    use dasu(lists.contains(xs, 20))\n    use dasu(lists.contains(xs, 99))\n    use dasu(lists.index_of(xs, 30))\n}\n",
+        "load kioto\n\npub fn main: () {\n    set xs = [10 20 30]\n    use dasu(lists.len(xs))\n    use dasu(lists.get(xs, 1))\n    use dasu(lists.first(xs))\n    use dasu(lists.last(xs))\n    use dasu(lists.contains(xs, 20))\n    use dasu(lists.contains(xs, 99))\n    use dasu(lists.index(xs, 30))\n}\n",
     )
     .expect("write source");
 
@@ -3982,7 +3982,7 @@ fn runtime_dicts_abi_smoke_test() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn test_len: (d) :i64 { return dicts.len(d) }\npub fn test_has: (d, k :str) :bool { return dicts.has(d, k) }\npub fn test_is_empty: (d) :bool { return dicts.is_empty(d) }\npub fn main: () {\n    use dasu(test_len({a: 1, b: 2, c: 3} :map[str i64]))\n    use dasu(test_has({a: 1} :map[str i64], \"a\"))\n    use dasu(test_has({a: 1} :map[str i64], \"z\"))\n    use dasu(test_is_empty({} :map[str i64]))\n}\n",
+        "load kioto\n\npub fn test_len: (d) :i64 { return dicts.len(d) }\npub fn test_has: (d, k :str) :bool { return dicts.has(d, k) }\npub fn test_is_empty: (d) :bool { return dicts.check::empty(d) }\npub fn main: () {\n    use dasu(test_len({a: 1, b: 2, c: 3} :map[str i64]))\n    use dasu(test_has({a: 1} :map[str i64], \"a\"))\n    use dasu(test_has({a: 1} :map[str i64], \"z\"))\n    use dasu(test_is_empty({} :map[str i64]))\n}\n",
     )
     .expect("write source");
 
