@@ -269,8 +269,9 @@ impl Diagnostic {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum WarningFilter {
+    #[default]
     Default,
     All,
     Codes(HashSet<DiagnosticCode>),

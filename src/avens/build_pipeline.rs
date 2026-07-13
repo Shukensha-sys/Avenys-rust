@@ -713,6 +713,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             ir_path,
             optimized_ir_path,
             used_optimizations: !matches!(options.opt_level, OptLevel::O0),
+            warnings: Vec::new(),
         });
     }
     cache.record_build_miss();
@@ -801,8 +802,9 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         &loaded.statement_origins,
         source_path,
     );
+    let mut warning_strs = Vec::new();
     for diagnostic in &warnings {
-        eprintln!("{}", format_diagnostic(diagnostic, true));
+        warning_strs.push(format_diagnostic(diagnostic, true));
     }
     if warnings
         .iter()
@@ -1056,6 +1058,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         ir_path,
         optimized_ir_path,
         used_optimizations: !matches!(options.opt_level, OptLevel::O0),
+        warnings: warning_strs,
     })
 }
 

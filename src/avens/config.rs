@@ -4,14 +4,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum BuildMode {
+    #[default]
     Debug,
     Release,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum OptLevel {
+    #[default]
     O0,
     O1,
     O2,
@@ -51,7 +53,7 @@ pub enum ImportMode {
     Reachable,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct BuildOptions {
     pub mode: BuildMode,
     pub opt_level: OptLevel,
@@ -73,6 +75,7 @@ pub struct BuildResult {
     pub ir_path: Option<PathBuf>,
     pub optimized_ir_path: Option<PathBuf>,
     pub used_optimizations: bool,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
