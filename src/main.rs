@@ -239,6 +239,19 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--help" | "-h" => {
+                println!("Usage: mire test [paths...] [options]");
+                println!();
+                println!("Run integration tests from tests/");
+                println!();
+                println!("Options:");
+                println!("  --no-run            Compile only, skip execution");
+                println!("  --verbose, -v       Show per-test results");
+                println!("  --jobs, -j <n>      Parallel compilation jobs (0 = logical CPUs)");
+                println!("  --owl-home <path>   Override the Owl module cache root");
+                println!("  --help, -h          Show this help message");
+                return Ok(0);
+            }
             "--no-run" => run = false,
             "--verbose" | "-v" => verbose = true,
             "--jobs" | "-j" => {
@@ -380,7 +393,6 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                     let options = BuildOptions {
                         mode: BuildMode::Debug,
                         opt_level: OptLevel::O0,
-                        debug_dump: false,
                         output: Some(work.binary_path.clone()),
                         emit_binary: run,
                         persist_ir: false,
@@ -390,6 +402,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                         deny_warnings: HashSet::new(),
                         test_mode: true,
                         module_paths: Vec::new(),
+                    ..Default::default()
                     };
                     handles.push(s.spawn(move || {
                         compile_file_with_avenys(&work.target_file, &options)
@@ -401,6 +414,9 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         for (work, result) in chunk.iter().zip(compile_results.iter()) {
             match result {
                 Some(Ok(build)) => {
+                    for w in &build.warnings {
+                        eprint!("{}", w);
+                    }
                     if run {
                         match Command::new(&build.binary_path).output() {
                             Ok(output) => {

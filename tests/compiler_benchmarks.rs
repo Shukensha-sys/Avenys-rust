@@ -73,7 +73,6 @@ fn bench_compile(name: &str, source: &str, opt_level: OptLevel) {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -83,6 +82,7 @@ fn bench_compile(name: &str, source: &str, opt_level: OptLevel) {
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
             test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -229,7 +229,6 @@ fn benchmark_smoke() {
         let opts = BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -239,6 +238,7 @@ fn benchmark_smoke() {
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
             test_mode: false,
+        ..Default::default()
         };
         // Cold compile
         let start = Instant::now();
@@ -295,7 +295,6 @@ fn benchmark_smoke() {
                 &BuildOptions {
                     mode: BuildMode::Debug,
                     opt_level: OptLevel::O0,
-                    debug_dump: false,
                     output: None,
                     emit_binary: true,
                     persist_ir: false,
@@ -305,6 +304,7 @@ fn benchmark_smoke() {
                     deny_warnings: std::collections::HashSet::new(),
                     module_paths: vec![],
                     test_mode: false,
+                ..Default::default()
                 },
             )
             .expect("owl compile");
