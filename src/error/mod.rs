@@ -24,9 +24,13 @@ pub enum ErrorKind {
         message: String,
     },
     Backend {
+        line: usize,
+        column: usize,
         message: String,
     },
     Runtime {
+        line: usize,
+        column: usize,
         message: String,
     },
     Type {
@@ -42,12 +46,12 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    pub fn runtime(message: String) -> Self {
-        ErrorKind::Runtime { message }
+    pub fn runtime(line: usize, column: usize, message: String) -> Self {
+        ErrorKind::Runtime { line, column, message }
     }
 
-    pub fn type_error(message: String) -> Self {
-        ErrorKind::Type {
+    pub fn runtime_msg(message: String) -> Self {
+        ErrorKind::Runtime {
             line: 0,
             column: 0,
             message,
@@ -142,8 +146,6 @@ impl MireError {
     }
 
     pub fn with_position(mut self, line: usize, column: usize) -> Self {
-        let line = line.max(1);
-        let column = column.max(1);
         self.line = line;
         self.column = column;
         self.diagnostic.line = line;
@@ -228,6 +230,8 @@ impl MireError {
 impl From<std::io::Error> for MireError {
     fn from(e: std::io::Error) -> Self {
         Self::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: e.to_string(),
         })
     }
@@ -242,27 +246,26 @@ impl MireError {
         })
     }
 
-    pub fn backend(message: String) -> Self {
-        Self::new(ErrorKind::Backend { message })
+    pub fn backend_at(line: usize, column: usize, message: String) -> Self {
+        Self::new(ErrorKind::Backend {
+            line,
+            column,
+            message,
+        })
     }
 
     pub fn runtime(message: String) -> Self {
-        Self::new(ErrorKind::Runtime { message })
+        Self::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
+            message,
+        })
     }
 
     pub fn runtime_at(line: usize, column: usize, message: String) -> Self {
-        let mut error = Self::new(ErrorKind::Runtime { message });
-        error.line = line;
-        error.column = column;
-        error.diagnostic.line = line;
-        error.diagnostic.column = column;
-        error
-    }
-
-    pub fn type_error(message: String) -> Self {
-        Self::new(ErrorKind::Type {
-            line: 0,
-            column: 0,
+        Self::new(ErrorKind::Runtime {
+            line,
+            column,
             message,
         })
     }
@@ -277,6 +280,14 @@ impl MireError {
 
     pub fn ownership_error(line: usize, column: usize, kind: MssError) -> Self {
         Self::new(ErrorKind::Ownership { line, column, kind })
+    }
+
+    pub fn unknown(message: String) -> Self {
+        Self::new(ErrorKind::Type {
+            line: usize::MAX,
+            column: usize::MAX,
+            message,
+        })
     }
 }
 
@@ -315,16 +326,22 @@ fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, Diagnostic
             message.clone(),
             DiagnosticCode::E0003,
         ),
-        ErrorKind::Backend { message } => (
-            1,
-            1,
+        ErrorKind::Backend {
+            line,
+            column,
+            message,
+        } => (
+            *line,
+            *column,
             "Backend Limitation",
             message.clone(),
             DiagnosticCode::E0014,
         ),
-        ErrorKind::Runtime { message } => (
-            1,
-            1,
+        ErrorKind::Runtime {
+            line, column, message,
+        } => (
+            *line,
+            *column,
             "Runtime Error",
             message.clone(),
             DiagnosticCode::E0015,
@@ -353,7 +370,6 @@ fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, Diagnostic
 fn default_help_for_code(code: DiagnosticCode) -> Option<String> {
     match code {
         DiagnosticCode::E0005 => Some("review the declared type and assigned expression".to_string()),
-        DiagnosticCode::E0006 => Some("define the identifier before use".to_string()),
         DiagnosticCode::E0014 => Some(
             "The frontend accepted this program, but the current Avenys backend cannot lower this construct yet."
                 .to_string(),
@@ -394,6 +410,8 @@ mod tests {
         );
 
         let err = MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: "boom".to_string(),
         })
         .with_filename("main.mire".to_string())

@@ -4,6 +4,8 @@ impl LlvmIrGen {
     pub(super) fn compile_dict_get(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 && args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys dict.get(...) expects 2 or 3 arguments".to_string(),
             }));
         }
@@ -94,6 +96,8 @@ impl LlvmIrGen {
     pub(super) fn compile_dict_set(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys dict.set(...) expects 3 arguments".to_string(),
             }));
         }
@@ -157,6 +161,8 @@ impl LlvmIrGen {
     pub(super) fn compile_dict_keys(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "dicts.keys(...) expects 1 argument".to_string(),
             }));
         }
@@ -177,6 +183,8 @@ impl LlvmIrGen {
     pub(super) fn compile_dict_values(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "dicts.values(...) expects 1 argument".to_string(),
             }));
         }

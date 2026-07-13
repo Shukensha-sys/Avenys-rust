@@ -114,23 +114,31 @@ fn write_wal(base_dir: &Path, records: &[WalRecord]) -> Result<()> {
     let wal_dir = base_dir.join(WAL_DIR);
     fs::create_dir_all(&wal_dir).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot create WAL dir: {e}"),
         })
     })?;
     let path = wal_dir.join(format!("{}.wal", timestamp_ms()));
     let mut file = fs::File::create(&path).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot create WAL file: {e}"),
         })
     })?;
     for rec in records {
         let line = serde_json::to_string(rec).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot serialize WAL record: {e}"),
             })
         })?;
         writeln!(file, "{line}").map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot write WAL record: {e}"),
             })
         })?;
@@ -147,6 +155,8 @@ fn replay_wal(base_dir: &Path) -> Result<Vec<WalRecord>> {
     let mut entries: Vec<_> = fs::read_dir(&wal_dir)
         .map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot read WAL dir: {e}"),
             })
         })?
@@ -191,6 +201,8 @@ fn store_blob(base_dir: &Path, blob: &[u8]) -> Result<String> {
     let blob_dir = base_dir.join(BLOBS_DIR);
     fs::create_dir_all(&blob_dir).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot create blobs dir: {e}"),
         })
     })?;
@@ -198,6 +210,8 @@ fn store_blob(base_dir: &Path, blob: &[u8]) -> Result<String> {
     if !path.exists() {
         fs::write(&path, blob).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot write blob: {e}"),
             })
         })?;
@@ -270,11 +284,15 @@ fn write_file_meta(base_dir: &Path, key: &str, meta: &FileMeta) -> Result<()> {
     }
     let json = serde_json::to_string(meta).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot serialize file meta: {e}"),
         })
     })?;
     fs::write(&path, &json).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot write file meta: {e}"),
         })
     })
@@ -293,11 +311,15 @@ fn write_analysis_meta(base_dir: &Path, key: &str, meta: &AnalysisMeta) -> Resul
     }
     let json = serde_json::to_string(meta).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot serialize analysis meta: {e}"),
         })
     })?;
     fs::write(&path, &json).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot write analysis meta: {e}"),
         })
     })
@@ -316,11 +338,15 @@ fn write_build_meta(base_dir: &Path, key: &str, meta: &BuildMeta) -> Result<()> 
     }
     let json = serde_json::to_string(meta).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot serialize build meta: {e}"),
         })
     })?;
     fs::write(&path, &json).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot write build meta: {e}"),
         })
     })
@@ -333,11 +359,15 @@ fn write_mir_meta(base_dir: &Path, key: &str, meta: &MirMeta) -> Result<()> {
     }
     let json = serde_json::to_string(meta).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot serialize mir meta: {e}"),
         })
     })?;
     fs::write(&path, &json).map_err(|e| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Cannot write mir meta: {e}"),
         })
     })
@@ -605,6 +635,8 @@ impl IncrementalCache {
         };
         let blob = bincode::serialize(&stored).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot serialize cached parsed file: {e}"),
             })
         })?;
@@ -638,12 +670,13 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
     ) -> Option<CachedAnalysis> {
         if !self.settings.analysis_cache {
             return None;
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
         let meta = match self.analyses.get(&key) {
             Some(m) => m.clone(),
             None => {
@@ -668,13 +701,15 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
         program: &Program,
     ) -> Result<()> {
         if !self.settings.analysis_cache {
             return Ok(());
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
+        let latest_key = latest_analysis_key(source_path);
         let units = analysis_units_for_program(program);
         let stored = StoredAnalysisPayload {
             outcome: StoredAnalysisOutcome::Success(StoredAnalyzedProgram {
@@ -684,6 +719,8 @@ impl IncrementalCache {
         };
         let blob = bincode::serialize(&stored).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot serialize analysis cache entry: {e}"),
             })
         })?;
@@ -692,7 +729,7 @@ impl IncrementalCache {
         let now = timestamp_ms();
         let wal_rec = WalRecord::StoreAnalysis {
             key: key.clone(),
-            fingerprint: 0,
+            fingerprint: dep_fingerprint,
             blob_hash: blob_hash.clone(),
             timestamp: now,
             created_ms: now,
@@ -703,7 +740,17 @@ impl IncrementalCache {
         self.analyses.insert(
             key.clone(),
             AnalysisMeta {
-                fingerprint: 0,
+                fingerprint: dep_fingerprint,
+                blob_hash: blob_hash.clone(),
+                last_access_ms: now,
+                created_ms: now,
+                unit_count: units.len() as u32,
+            },
+        );
+        self.analyses.insert(
+            latest_key.clone(),
+            AnalysisMeta {
+                fingerprint: dep_fingerprint,
                 blob_hash,
                 last_access_ms: now,
                 created_ms: now,
@@ -711,6 +758,7 @@ impl IncrementalCache {
             },
         );
         self.lru.insert(key, CacheEntryKind::Analysis);
+        self.lru.insert(latest_key, CacheEntryKind::Analysis);
         self.enforce_capacity();
         self.needs_checkpoint = true;
         Ok(())
@@ -720,6 +768,7 @@ impl IncrementalCache {
         &mut self,
         source_path: &Path,
         source_hash: u64,
+        dep_fingerprint: u64,
         program: &Program,
         error: &MireError,
     ) -> Result<()> {
@@ -727,7 +776,8 @@ impl IncrementalCache {
             return Ok(());
         }
 
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = analysis_cache_key(source_path, source_hash, dep_fingerprint);
+        let latest_key = latest_analysis_key(source_path);
         let units = analysis_units_for_program(program);
         let stored = StoredAnalysisPayload {
             outcome: StoredAnalysisOutcome::Error(error.into()),
@@ -735,6 +785,8 @@ impl IncrementalCache {
         };
         let blob = bincode::serialize(&stored).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot serialize analysis error cache entry: {e}"),
             })
         })?;
@@ -743,7 +795,7 @@ impl IncrementalCache {
         let now = timestamp_ms();
         let wal_rec = WalRecord::StoreAnalysis {
             key: key.clone(),
-            fingerprint: 0,
+            fingerprint: dep_fingerprint,
             blob_hash: blob_hash.clone(),
             timestamp: now,
             created_ms: now,
@@ -754,7 +806,17 @@ impl IncrementalCache {
         self.analyses.insert(
             key.clone(),
             AnalysisMeta {
-                fingerprint: 0,
+                fingerprint: dep_fingerprint,
+                blob_hash: blob_hash.clone(),
+                last_access_ms: now,
+                created_ms: now,
+                unit_count: units.len() as u32,
+            },
+        );
+        self.analyses.insert(
+            latest_key.clone(),
+            AnalysisMeta {
+                fingerprint: dep_fingerprint,
                 blob_hash,
                 last_access_ms: now,
                 created_ms: now,
@@ -762,6 +824,7 @@ impl IncrementalCache {
             },
         );
         self.lru.insert(key, CacheEntryKind::Analysis);
+        self.lru.insert(latest_key, CacheEntryKind::Analysis);
         self.enforce_capacity();
         self.needs_checkpoint = true;
         Ok(())
@@ -781,9 +844,9 @@ impl IncrementalCache {
     pub fn latest_successful_analysis(
         &mut self,
         source_path: &Path,
-        source_hash: u64,
+        _source_hash: u64,
     ) -> Option<CachedAnalysisSnapshot> {
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = latest_analysis_key(source_path);
         let meta = self.analyses.get(&key)?;
         let blob = read_blob(&self.cache_dir, &meta.blob_hash)?;
         let stored: StoredAnalysisPayload = bincode::deserialize(&blob).ok()?;
@@ -898,6 +961,8 @@ impl IncrementalCache {
 
         let blob = bincode::serialize(llvm_ir).map_err(|e| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cannot serialize MIR fn IR: {e}"),
             })
         })?;
@@ -970,9 +1035,9 @@ impl IncrementalCache {
     fn latest_analysis_units(
         &self,
         source_path: &Path,
-        source_hash: u64,
+        _source_hash: u64,
     ) -> Option<Vec<AnalysisUnitMetadata>> {
-        let key = analysis_cache_key(source_path, source_hash);
+        let key = latest_analysis_key(source_path);
         let meta = self.analyses.get(&key)?;
         let blob = read_blob(&self.cache_dir, &meta.blob_hash)?;
         let stored: StoredAnalysisPayload = bincode::deserialize(&blob).ok()?;

@@ -9,8 +9,10 @@ use crate::compiler::typeck::{TypeChecker, type_error, type_error_at};
 impl TypeChecker {
     pub(super) fn check_expression(&mut self, expression: &mut Expression) -> Result<DataType> {
         let (line, column) = super::location::expression_location(expression);
-        self.current_line = line;
-        self.current_column = column;
+        if line > 0 {
+            self.current_line = line;
+            self.current_column = column;
+        }
         match expression {
             Expression::Literal(lit) => Ok(Self::literal_type(lit)),
             Expression::Identifier(ident) => {
@@ -75,10 +77,11 @@ impl TypeChecker {
                     "-" if Self::is_numeric(&operand_type) => operand_type,
                     "!" if Self::is_bool_like(&operand_type) => DataType::Bool,
                     "-" => {
-                        return Err(type_error(format!(
-                            "Unary '-' requires numeric operand, got {:?}",
-                            operand_type
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!("Unary '-' requires numeric operand, got {:?}", operand_type),
+                        ));
                     }
                     _ => DataType::Unknown,
                 };
@@ -96,6 +99,8 @@ impl TypeChecker {
                 name,
                 args,
                 type_args,
+                name_line: _,
+                name_column: _,
                 data_type,
             } => {
                 if name == "ireru" && *data_type != DataType::Unknown {
@@ -109,6 +114,8 @@ impl TypeChecker {
                 if name == "call" {
                     if args.is_empty() {
                         return Err(type_error(
+                            self.current_line,
+                            self.current_column,
                             "call expects at least a callback argument".to_string(),
                         ));
                     }
@@ -146,34 +153,50 @@ impl TypeChecker {
                                     .lookup_var(&ident.name)
                                     .is_some_and(|(ty, _)| ty == DataType::Function)
                                 {
-                                    return Err(type_error(format!(
-                                        "call callback '{}' is typed as :function but its signature cannot be inferred",
-                                        ident.name
-                                    )));
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "call callback '{}' is typed as :function but its signature cannot be inferred",
+                                            ident.name
+                                        ),
+                                    ));
                                 }
-                                return Err(type_error(format!(
-                                    "call callback '{}' must be a known function, extern fn, or function value",
-                                    callback_name
-                                )));
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "call callback '{}' must be a known function, extern fn, or function value",
+                                        callback_name
+                                    ),
+                                ));
                             }
                             let callback_sig = callback_sig.expect("checked is_some");
                             if callback_sig.params.len() != callback_args.len() {
-                                return Err(type_error(format!(
-                                    "call callback '{}' expects {} argument(s), got {}",
-                                    callback_name,
-                                    callback_sig.params.len(),
-                                    callback_args.len()
-                                )));
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "call callback '{}' expects {} argument(s), got {}",
+                                        callback_name,
+                                        callback_sig.params.len(),
+                                        callback_args.len()
+                                    ),
+                                ));
                             }
                             for (actual_expr, expected_ty) in
                                 callback_args.iter_mut().zip(callback_sig.params.iter())
                             {
                                 let actual_ty = self.check_expression(actual_expr)?;
                                 if !self.is_assignable(expected_ty, &actual_ty) {
-                                    return Err(type_error(format!(
-                                        "call callback '{}' expects {:?}, got {:?}",
-                                        callback_name, expected_ty, actual_ty
-                                    )));
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "call callback '{}' expects {:?}, got {:?}",
+                                            callback_name, expected_ty, actual_ty
+                                        ),
+                                    ));
                                 }
                             }
                             ident.data_type = DataType::Function;
@@ -187,11 +210,15 @@ impl TypeChecker {
                             capture,
                         } => {
                             if params.len() != callback_args.len() {
-                                return Err(type_error(format!(
-                                    "call closure expects {} argument(s), got {}",
-                                    params.len(),
-                                    callback_args.len()
-                                )));
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "call closure expects {} argument(s), got {}",
+                                        params.len(),
+                                        callback_args.len()
+                                    ),
+                                ));
                             }
                             for ((_, param_ty), actual_expr) in
                                 params.iter_mut().zip(callback_args.iter_mut())
@@ -200,10 +227,14 @@ impl TypeChecker {
                                 let resolved_param = Self::unify_types(param_ty, &actual_ty)?;
                                 *param_ty = resolved_param.clone();
                                 if !self.is_assignable(&resolved_param, &actual_ty) {
-                                    return Err(type_error(format!(
-                                        "call closure expects {:?}, got {:?}",
-                                        resolved_param, actual_ty
-                                    )));
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "call closure expects {:?}, got {:?}",
+                                            resolved_param, actual_ty
+                                        ),
+                                    ));
                                 }
                             }
                             self.push_scope();
@@ -225,10 +256,14 @@ impl TypeChecker {
                                 && !self.is_assignable(return_type, &inferred_return)
                             {
                                 self.pop_scope();
-                                return Err(type_error(format!(
-                                    "call closure must return {:?}, got {:?}",
-                                    return_type, inferred_return
-                                )));
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "call closure must return {:?}, got {:?}",
+                                        return_type, inferred_return
+                                    ),
+                                ));
                             }
                             self.pop_scope();
                             *data_type = return_type.clone();
@@ -236,39 +271,51 @@ impl TypeChecker {
                         }
                         callback_expr => {
                             let callback_ty = self.check_expression(callback_expr)?;
-                            if callback_ty != DataType::Function && callback_ty != DataType::Unknown
+                            if !matches!(callback_ty, DataType::Function | DataType::Closure { .. } | DataType::Unknown)
                             {
-                                return Err(type_error(format!(
-                                    "call expects function callback, got {:?}",
-                                    callback_ty
-                                )));
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "call expects function callback, got {:?}",
+                                        callback_ty
+                                    ),
+                                ));
                             }
                             if let Some(callback_sig) =
                                 self.function_signature_for_expr(callback_expr)
                             {
                                 if callback_sig.params.len() != callback_args.len() {
-                                    return Err(type_error(format!(
-                                        "call callback expression expects {} argument(s), got {}",
-                                        callback_sig.params.len(),
-                                        callback_args.len()
-                                    )));
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "call callback expression expects {} argument(s), got {}",
+                                            callback_sig.params.len(),
+                                            callback_args.len()
+                                        ),
+                                    ));
                                 }
                                 for (actual_expr, expected_ty) in
                                     callback_args.iter_mut().zip(callback_sig.params.iter())
                                 {
                                     let actual_ty = self.check_expression(actual_expr)?;
                                     if !self.is_assignable(expected_ty, &actual_ty) {
-                                        return Err(type_error(format!(
-                                            "call callback expression expects {:?}, got {:?}",
-                                            expected_ty, actual_ty
-                                        )));
+                                        return Err(type_error(
+                                            self.current_line,
+                                            self.current_column,
+                                            format!(
+                                                "call callback expression expects {:?}, got {:?}",
+                                                expected_ty, actual_ty
+                                            ),
+                                        ));
                                     }
                                 }
                                 *data_type = callback_sig.return_type.clone();
                                 return Ok(callback_sig.return_type);
                             }
                             if callback_ty == DataType::Function {
-                                return Err(type_error(
+                                return Err(type_error(self.current_line, self.current_column,
                                     "call callback expression is :function but its signature cannot be inferred"
                                         .to_string(),
                                 ));
@@ -290,16 +337,19 @@ impl TypeChecker {
                 if name == "__if_expr" {
                     if args.len() != 3 {
                         return Err(type_error(
+                            self.current_line,
+                            self.current_column,
                             "__if_expr expects condition, then branch, and else branch".to_string(),
                         ));
                     }
 
                     let cond_type = arg_types.first().cloned().unwrap_or(DataType::Unknown);
                     if !Self::is_bool_like(&cond_type) {
-                        return Err(type_error(format!(
-                            "If expression condition must be bool, got {:?}",
-                            cond_type
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!("If expression condition must be bool, got {:?}", cond_type),
+                        ));
                     }
 
                     let then_type = Self::closure_return_type(&args[1], "__if_expr then")?;
@@ -399,7 +449,44 @@ impl TypeChecker {
                     return Ok(DataType::EnumNamed(enum_name));
                 }
 
-                Err(type_error(format!("Unknown function '{}'", name)))
+                if let Some((var_type, _)) = self.lookup_var(name) {
+                    if matches!(var_type, DataType::Closure { .. } | DataType::Function) {
+                        let closure_type = var_type.clone();
+                        if let DataType::Closure { params, return_type } = closure_type {
+                            if params.len() != arg_types.len() {
+                                return Err(type_error(
+                                    self.current_line,
+                                    self.current_column,
+                                    format!(
+                                        "Closure expects {} argument(s), got {}",
+                                        params.len(),
+                                        arg_types.len()
+                                    ),
+                                ));
+                            }
+                            for (actual_ty, expected_ty) in arg_types.iter().zip(params.iter()) {
+                                if !self.is_assignable(expected_ty, actual_ty) {
+                                    return Err(type_error(
+                                        self.current_line,
+                                        self.current_column,
+                                        format!(
+                                            "Closure expects {:?}, got {:?}",
+                                            expected_ty, actual_ty
+                                        ),
+                                    ));
+                                }
+                            }
+                            *data_type = return_type.as_ref().clone();
+                            return Ok(return_type.as_ref().clone());
+                        }
+                    }
+                }
+
+                Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!("Unknown function '{}'", name),
+                ))
             }
             Expression::List {
                 elements,
@@ -471,10 +558,14 @@ impl TypeChecker {
                     && !matches!(target_type, DataType::Dict)
                     && index_type != DataType::Unknown
                 {
-                    return Err(type_error(format!(
-                        "Index must be numeric for {:?}, got {:?}",
-                        target_type, index_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Index must be numeric for {:?}, got {:?}",
+                            target_type, index_type
+                        ),
+                    ));
                 }
 
                 let resolved = match target_type {
@@ -487,7 +578,11 @@ impl TypeChecker {
                     DataType::Map { value_type, .. } => *value_type,
                     DataType::Unknown => DataType::Unknown,
                     other => {
-                        return Err(type_error(format!("Type {:?} is not indexable", other)));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!("Type {:?} is not indexable", other),
+                        ));
                     }
                 };
 
@@ -528,30 +623,43 @@ impl TypeChecker {
                             *data_type = fn_sig.return_type.clone();
                             return Ok(fn_sig.return_type.clone());
                         }
-                        return Err(type_error(format!(
-                            "Struct '{}' has no field or method '{}'",
-                            struct_name, member
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Struct '{}' has no field or method '{}'",
+                                struct_name, member
+                            ),
+                        ));
                     }
-                    return Err(type_error(format!(
-                        "Cannot resolve concrete struct type for member access '.{}'",
-                        member
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Cannot resolve concrete struct type for member access '.{}'",
+                            member
+                        ),
+                    ));
                 }
                 if matches!(target_type, DataType::Anything) {
                     *data_type = DataType::Anything;
                     return Ok(DataType::Anything);
                 }
                 if matches!(target_type, DataType::Unknown) {
-                    return Err(type_error(format!(
-                        "Cannot access member '{}' on unknown type - type not determined",
-                        member
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Cannot access member '{}' on unknown type - type not determined",
+                            member
+                        ),
+                    ));
                 }
-                Err(type_error(format!(
-                    "Type {:?} has no member '{}'",
-                    target_type, member
-                )))
+                Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!("Type {:?} has no member '{}'", target_type, member),
+                ))
             }
             Expression::EnumVariantPath {
                 enum_name,
@@ -561,7 +669,11 @@ impl TypeChecker {
                 let full_name =
                     Self::canonical_enum_variant_name(&format!("{}.{}", enum_name, variant_name));
                 if !self.enum_variants.contains_key(&full_name) {
-                    return Err(type_error(format!("Unknown enum variant '{}'", full_name)));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Unknown enum variant '{}'", full_name),
+                    ));
                 }
                 *data_type = DataType::EnumNamed(enum_name.clone());
                 Ok(DataType::EnumNamed(enum_name.clone()))
@@ -574,10 +686,13 @@ impl TypeChecker {
             } => {
                 let typed_name = format!("{}.{}", enum_name, variant_name);
                 let full_name = Self::canonical_enum_variant_name(&typed_name);
-                let variant_sig =
-                    self.enum_variants.get(&full_name).cloned().ok_or_else(|| {
-                        type_error(format!("Unknown enum variant '{}'", typed_name))
-                    })?;
+                let variant_sig = self.enum_variants.get(&full_name).cloned().ok_or_else(|| {
+                    type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Unknown enum variant '{}'", typed_name),
+                    )
+                })?;
                 self.normalize_enum_variant_payloads(&typed_name, &variant_sig, payloads)?;
                 *data_type = DataType::EnumNamed(enum_name.clone());
                 Ok(DataType::EnumNamed(enum_name.clone()))
@@ -610,7 +725,10 @@ impl TypeChecker {
                 }
 
                 self.pop_scope();
-                Ok(DataType::Function)
+                Ok(DataType::Closure {
+                    params: params.iter().map(|(_, t)| t.clone()).collect(),
+                    return_type: Box::new(return_type.clone()),
+                })
             }
             Expression::Reference {
                 expr,
@@ -622,6 +740,8 @@ impl TypeChecker {
                 let target_is_mutable = self.reference_target_is_mutable(expr);
                 if *is_mutable && !target_is_mutable {
                     return Err(type_error(
+                        self.current_line,
+                        self.current_column,
                         "Cannot take mutable reference from immutable target".to_string(),
                     ));
                 }
@@ -646,10 +766,11 @@ impl TypeChecker {
                         .unwrap_or(DataType::Unknown),
                     DataType::Unknown => DataType::Unknown,
                     other => {
-                        return Err(type_error(format!(
-                            "Cannot dereference non-reference type {:?}",
-                            other
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!("Cannot dereference non-reference type {:?}", other),
+                        ));
                     }
                 };
                 *data_type = resolved.clone();
@@ -702,7 +823,7 @@ impl TypeChecker {
                     let inferred_return = self.return_type_stack.pop().unwrap_or(DataType::Unknown);
                     if *return_type == DataType::Unknown {
                         if inferred_return == DataType::Unknown {
-                            return Err(type_error(
+                            return Err(type_error(self.current_line, self.current_column,
                                 "Pipeline stage return type cannot be inferred - closure must return a value".to_string(),
                             ));
                         }
@@ -711,7 +832,7 @@ impl TypeChecker {
                     self.pop_scope();
                     DataType::Vector {
                         element_type: Box::new(if *return_type == DataType::Unknown {
-                            return Err(type_error(
+                            return Err(type_error(self.current_line, self.current_column,
                                     "Cannot determine pipeline output element type - specify return type in closure".to_string(),
                                 ));
                         } else {
@@ -727,6 +848,8 @@ impl TypeChecker {
                     let stage_check = self.check_expression(stage)?;
                     if stage_check == DataType::Unknown {
                         return Err(type_error(
+                            self.current_line,
+                            self.current_column,
                             "Pipeline stage has unknown type - cannot infer output type"
                                 .to_string(),
                         ));
@@ -738,10 +861,14 @@ impl TypeChecker {
                     *data_type = resolved.clone();
                 } else if resolved != DataType::Unknown && !self.is_assignable(data_type, &resolved)
                 {
-                    return Err(type_error(format!(
-                        "Pipeline type mismatch: expected {:?}, got {:?}",
-                        data_type, resolved
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Pipeline type mismatch: expected {:?}, got {:?}",
+                            data_type, resolved
+                        ),
+                    ));
                 }
                 Ok(data_type.clone())
             }
@@ -751,6 +878,8 @@ impl TypeChecker {
                     DataType::Result { ok, .. } => *ok,
                     _ => {
                         return Err(type_error(
+                            self.current_line,
+                            self.current_column,
                             "'?' operator requires a result[T, E] type".to_string(),
                         ));
                     }
@@ -759,6 +888,8 @@ impl TypeChecker {
                     && !matches!(current_return, DataType::Result { .. })
                 {
                     return Err(type_error(
+                        self.current_line,
+                        self.current_column,
                         "'?' operator can only be used in a function that returns result[T, E]"
                             .to_string(),
                     ));
@@ -803,10 +934,14 @@ impl TypeChecker {
                 } else if resolved_type != DataType::Unknown
                     && !self.is_assignable(data_type, &resolved_type)
                 {
-                    return Err(type_error(format!(
-                        "Match expression type mismatch: expected {:?}, got {:?}",
-                        data_type, resolved_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Match expression type mismatch: expected {:?}, got {:?}",
+                            data_type, resolved_type
+                        ),
+                    ));
                 }
                 Ok(data_type.clone())
             }

@@ -35,6 +35,10 @@ impl LlvmIrGen {
                     .push(format!("  {narrowed} = trunc i64 {} to i32", scalar.repr));
                 Ok(("i32".to_string(), narrowed))
             }
+            DataType::I128 | DataType::U128 => {
+                let scalar = self.cast_to_i128(value)?;
+                Ok(("i128".to_string(), scalar.repr))
+            }
             _ => {
                 let scalar = self.cast_to_i64(value)?;
                 Ok(("i64".to_string(), scalar.repr))
@@ -42,8 +46,38 @@ impl LlvmIrGen {
         }
     }
 
+    pub(super) fn cast_to_i128(&mut self, value: LlValue) -> Result<LlValue> {
+        match value.ty {
+            LlType::I128 => Ok(value),
+            LlType::I64 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = sext i64 {} to i128", value.repr));
+                Ok(LlValue {
+                    ty: LlType::I128,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
+            _ => {
+                let widened = self.cast_to_i64(value)?;
+                self.cast_to_i128(widened)
+            }
+        }
+    }
+
     pub(super) fn cast_to_i64(&mut self, value: LlValue) -> Result<LlValue> {
         match value.ty {
+            LlType::I128 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = trunc i128 {} to i64", value.repr));
+                Ok(LlValue {
+                    ty: LlType::I64,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
             LlType::I64 => Ok(value),
             LlType::I8 => {
                 let tmp = self.tmp();
@@ -86,6 +120,8 @@ impl LlvmIrGen {
                 })
             }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Cannot cast struct to i64".to_string(),
             })),
         }
@@ -114,6 +150,16 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
+            LlType::I128 => {
+                let tmp = self.tmp();
+                self.body
+                    .push(format!("  {tmp} = icmp ne i128 {}, 0", value.repr));
+                Ok(LlValue {
+                    ty: LlType::I1,
+                    repr: tmp,
+                    owned: false,
+                })
+            }
             LlType::F64 => {
                 let tmp = self.tmp();
                 self.body
@@ -125,9 +171,13 @@ impl LlvmIrGen {
                 })
             }
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Cannot convert pointer to boolean".to_string(),
             })),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Cannot cast struct to i1".to_string(),
             })),
         }
@@ -449,6 +499,8 @@ impl LlvmIrGen {
                 })
             }
             _ => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Unknown operator: {}", op),
             })),
         }
@@ -550,6 +602,8 @@ impl LlvmIrGen {
                 })
             }
             _ => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Unknown unary operator: {}", op),
             })),
         }
@@ -558,11 +612,14 @@ impl LlvmIrGen {
     pub(super) fn cast_to_type(&mut self, value: LlValue, ty: LlType) -> Result<LlValue> {
         match ty {
             LlType::I64 => self.cast_to_i64(value),
+            LlType::I128 => self.cast_to_i128(value),
             LlType::I1 => self.cast_to_i1(value),
             LlType::F64 => self.cast_to_f64(value),
             LlType::I8 => self.cast_to_i64(value),
             LlType::Struct(_) if value.ty == ty => Ok(value),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr if value.ty == LlType::Ptr => Ok(value),
@@ -577,6 +634,8 @@ impl LlvmIrGen {
                 })
             }
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Avenys cannot cast non-pointer value (ty={:?}) to string (function '{}', ret={:?})",
                     value.ty, self.current_function, self.current_return
@@ -588,12 +647,15 @@ impl LlvmIrGen {
     pub(super) fn store_casted(&mut self, ptr: &str, ty: LlType, value: LlValue) -> Result<()> {
         let value = match ty {
             LlType::I64 => self.cast_to_i64(value)?,
+            LlType::I128 => self.cast_to_i128(value)?,
             LlType::I1 => self.cast_to_i1(value)?,
             LlType::F64 => self.cast_to_f64(value)?,
             LlType::I8 => self.cast_to_i64(value)?,
             LlType::Struct(_) if value.ty == ty => value,
             LlType::Struct(_) => {
                 return Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Struct type not supported here".to_string(),
                 }));
             }
@@ -610,6 +672,8 @@ impl LlvmIrGen {
             }
             LlType::Ptr => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys cannot cast non-pointer value to string (function '{}')",
                         self.current_function
@@ -647,10 +711,18 @@ impl LlvmIrGen {
                 let as_i64 = self.cast_to_i64(value)?;
                 self.cast_to_f64(as_i64)
             }
+            LlType::I128 => {
+                let as_i64 = self.cast_to_i64(value)?;
+                self.cast_to_f64(as_i64)
+            }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cannot cast pointer/struct to float".to_string(),
             })),
         }
@@ -665,32 +737,28 @@ impl LlvmIrGen {
         value: LlValue,
     ) -> Result<()> {
         if data_type == DataType::Str && ty == LlType::Ptr {
-            let old_owned = self
+            let needs_free = self
                 .vars
                 .get(name)
-                .map(|var| var.owns_heap_string)
+                .map(|var| var.owns_heap_string && !var.needs_init)
                 .unwrap_or(false);
 
-            if old_owned {
+            if needs_free {
                 let old_ptr = self.tmp();
                 self.body.push(format!("  {old_ptr} = load ptr, ptr {ptr}"));
                 self.body
                     .push(format!("  call void @rt_managed_free(ptr {old_ptr})"));
             }
 
-            let owned_value = if value.owned {
-                value
-            } else {
-                let copied = self.tmp();
-                self.body.push(format!(
-                    "  {copied} = call ptr @rt_string_copy(ptr {})",
-                    value.repr
-                ));
-                LlValue {
-                    ty: LlType::Ptr,
-                    repr: copied,
-                    owned: true,
-                }
+            let copied = self.tmp();
+            self.body.push(format!(
+                "  {copied} = call ptr @rt_string_copy(ptr {})",
+                value.repr
+            ));
+            let owned_value = LlValue {
+                ty: LlType::Ptr,
+                repr: copied,
+                owned: true,
             };
 
             self.owned_temps.remove(&owned_value.repr);
@@ -698,6 +766,7 @@ impl LlvmIrGen {
             if let Some(var) = self.vars.get_mut(name) {
                 var.data_type = data_type;
                 var.owns_heap_string = true;
+                var.needs_init = false;
             }
             return Ok(());
         }

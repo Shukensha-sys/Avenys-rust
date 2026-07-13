@@ -73,7 +73,6 @@ fn bench_compile(name: &str, source: &str, opt_level: OptLevel) {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -82,6 +81,8 @@ fn bench_compile(name: &str, source: &str, opt_level: OptLevel) {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -181,12 +182,12 @@ fn benchmark_smoke() {
     // 5) HOFs (map/filter/fold with closures)
     bench_compile(
         "list_hofs",
-        "load kioto\npub fn main: () {\n  set s = lists.fold(0, (a b) => a + b, [1 2 3 4 5 6 7 8 9 10])\n  set _d = lists.map((x) => x * 2, [1 2 3 4 5])\n  set _f = lists.filter((x) => x > 3, [1 2 3 4 5 6 7 8 9 10])\n  use dasu(str(s))\n}\n",
+        "load kioto\npub fn main: () {\n  set s = lists::fold(0, (a b) => a + b, [1 2 3 4 5 6 7 8 9 10])\n  set _d = lists::map((x) => x * 2, [1 2 3 4 5])\n  set _f = lists::filter((x) => x > 3, [1 2 3 4 5 6 7 8 9 10])\n  use dasu(str(s))\n}\n",
         OptLevel::O0,
     );
     bench_compile(
         "list_hofs_O3",
-        "load kioto\npub fn main: () {\n  set s = lists.fold(0, (a b) => a + b, [1 2 3 4 5 6 7 8 9 10])\n  set _d = lists.map((x) => x * 2, [1 2 3 4 5])\n  set _f = lists.filter((x) => x > 3, [1 2 3 4 5 6 7 8 9 10])\n  use dasu(str(s))\n}\n",
+        "load kioto\npub fn main: () {\n  set s = lists::fold(0, (a b) => a + b, [1 2 3 4 5 6 7 8 9 10])\n  set _d = lists::map((x) => x * 2, [1 2 3 4 5])\n  set _f = lists::filter((x) => x > 3, [1 2 3 4 5 6 7 8 9 10])\n  use dasu(str(s))\n}\n",
         OptLevel::O3,
     );
 
@@ -207,7 +208,7 @@ fn benchmark_smoke() {
     // 8) String-heavy workload
     bench_compile(
         "string_ops",
-        "load kioto\npub fn main: () {\n  set s = \"\" :str mut\n  set i = 0 :i64 mut\n  while i < 100 {\n    set s = s + str(i)\n    set i = i + 1\n  }\n  set l = strings.len(s)\n  use dasu(str(l))\n}\n",
+        "load kioto\npub fn main: () {\n  set s = \"\" :str mut\n  set i = 0 :i64 mut\n  while i < 100 {\n    set s = s + str(i)\n    set i = i + 1\n  }\n  set l = strings::len(s)\n  use dasu(str(l))\n}\n",
         OptLevel::O3,
     );
 
@@ -228,7 +229,6 @@ fn benchmark_smoke() {
         let opts = BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -237,6 +237,8 @@ fn benchmark_smoke() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         };
         // Cold compile
         let start = Instant::now();
@@ -264,21 +266,21 @@ fn benchmark_smoke() {
     // 11) Kioto.fs benchmark (file read/write)
     bench_compile(
         "kioto_fs_ops",
-        "load kioto\npub fn main: () {\n  fs.write(\"/tmp/b.txt\" \"x\")\n  use dasu(fs.read(\"/tmp/b.txt\"))\n}\n",
+        "load kioto\npub fn main: () {\n  fs::write(\"/tmp/b.txt\" \"x\")\n  use dasu(fs::read(\"/tmp/b.txt\"))\n}\n",
         OptLevel::O0,
     );
 
     // 12) Kioto.term progress bar benchmark
     bench_compile(
         "kioto_term_bar",
-        "load kioto\npub fn main: () {\n  set bar = term.bar(\"load\" 12 12 100)\n  use dasu(bar)\n}\n",
+        "load kioto\npub fn main: () {\n  set bar = term::bar(\"load\" 12 12 100)\n  use dasu(bar)\n}\n",
         OptLevel::O0,
     );
 
     // 13) Kioto.time benchmark
     bench_compile(
         "kioto_time",
-        "load kioto\npub fn main: () {\n  set t = time.unix_ms()\n  use dasu(str(t))\n}\n",
+        "load kioto\npub fn main: () {\n  set t = time::unix::ms()\n  use dasu(str(t))\n}\n",
         OptLevel::O0,
     );
 
@@ -293,7 +295,6 @@ fn benchmark_smoke() {
                 &BuildOptions {
                     mode: BuildMode::Debug,
                     opt_level: OptLevel::O0,
-                    debug_dump: false,
                     output: None,
                     emit_binary: true,
                     persist_ir: false,
@@ -302,6 +303,8 @@ fn benchmark_smoke() {
                     warning_filter: mire::error::diagnostic::WarningFilter::Default,
                     deny_warnings: std::collections::HashSet::new(),
                     module_paths: vec![],
+                    test_mode: false,
+                ..Default::default()
                 },
             )
             .expect("owl compile");

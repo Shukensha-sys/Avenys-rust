@@ -45,10 +45,11 @@ impl TypeChecker {
                 DataType::Vector { element_type, .. } => *element_type,
                 DataType::List | DataType::Unknown | DataType::Anything => DataType::Anything,
                 other => {
-                    return Err(type_error(format!(
-                        "lists.get expects vec/vec! input, got {:?}",
-                        other
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("lists.get expects vec/vec! input, got {:?}", other),
+                    ));
                 }
             };
             *data_type = resolved.clone();
@@ -68,6 +69,8 @@ impl TypeChecker {
                     | DataType::Anything
             ) {
                 return Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line,
+                    column: self.current_column,
                     message: format!(
                         "contains(...) is not implemented for type {:?}",
                         haystack_type
@@ -101,10 +104,11 @@ impl TypeChecker {
                     dynamic: true,
                 },
                 other => {
-                    return Err(type_error(format!(
-                        "lists.push expects vec[T], got {:?}",
-                        other
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("lists.push expects vec[T], got {:?}", other),
+                    ));
                 }
             };
             *data_type = resolved.clone();
@@ -123,10 +127,11 @@ impl TypeChecker {
                     dynamic: true,
                 },
                 other => {
-                    return Err(type_error(format!(
-                        "lists.slice expects vector input, got {:?}",
-                        other
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("lists.slice expects vector input, got {:?}", other),
+                    ));
                 }
             };
             *data_type = resolved.clone();
@@ -139,10 +144,11 @@ impl TypeChecker {
                 DataType::Vector { element_type, .. } => *element_type,
                 DataType::List | DataType::Unknown | DataType::Anything => DataType::Anything,
                 other => {
-                    return Err(type_error(format!(
-                        "{} expects vec[T] input, got {:?}",
-                        name, other
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("{} expects vec[T] input, got {:?}", name, other),
+                    ));
                 }
             };
             *data_type = resolved.clone();
@@ -164,16 +170,18 @@ impl TypeChecker {
                 parts_type,
                 DataType::Vector { .. } | DataType::List | DataType::Unknown | DataType::Anything
             ) {
-                return Err(type_error(format!(
-                    "strings.join expects vec input, got {:?}",
-                    parts_type
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!("strings.join expects vec input, got {:?}", parts_type),
+                ));
             }
             if sep_type != DataType::Str && sep_type != DataType::Unknown {
-                return Err(type_error(format!(
-                    "strings.join separator expects Str, got {:?}",
-                    sep_type
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!("strings.join separator expects Str, got {:?}", sep_type),
+                ));
             }
             *data_type = DataType::Str;
             return Ok(Some(DataType::Str));
@@ -255,20 +263,28 @@ impl TypeChecker {
         type_args: &mut Vec<DataType>,
     ) -> Result<DataType> {
         if sig.params.len() != arg_types.len() {
-            return Err(type_error(format!(
-                "Function '{}' expects {} arguments, got {}",
-                display_name,
-                sig.params.len(),
-                arg_types.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Function '{}' expects {} arguments, got {}",
+                    display_name,
+                    sig.params.len(),
+                    arg_types.len()
+                ),
+            ));
         }
 
         let resolved_type_args = if sig.type_params.is_empty() {
             if !type_args.is_empty() {
-                return Err(type_error(format!(
-                    "Function '{}' is not generic; remove explicit type arguments",
-                    display_name
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "Function '{}' is not generic; remove explicit type arguments",
+                        display_name
+                    ),
+                ));
             }
             Vec::new()
         } else {
@@ -285,13 +301,17 @@ impl TypeChecker {
             .enumerate()
         {
             if !self.is_assignable(&expected, actual) {
-                return Err(type_error(format!(
-                    "Function '{}' argument {} expects {:?}, got {:?}",
-                    display_name,
-                    idx + 1,
-                    expected,
-                    actual
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "Function '{}' argument {} expects {:?}, got {:?}",
+                        display_name,
+                        idx + 1,
+                        expected,
+                        actual
+                    ),
+                ));
             }
         }
 
@@ -314,6 +334,8 @@ impl TypeChecker {
             if args.is_empty() {
                 if *data_type == DataType::Unknown {
                     return Err(type_error(
+                        self.current_line,
+                        self.current_column,
                         "new::() requires a type annotation (:T)".to_string(),
                     ));
                 }
@@ -330,6 +352,8 @@ impl TypeChecker {
             if args.is_empty() {
                 if *data_type == DataType::Unknown {
                     return Err(type_error(
+                        self.current_line,
+                        self.current_column,
                         "own::() requires a type annotation (:T)".to_string(),
                     ));
                 }
@@ -366,10 +390,14 @@ impl TypeChecker {
             return Ok(());
         }
 
-        Err(type_error(format!(
-            "new:: only supports arr/vec/map targets, got {:?}",
-            declared_type
-        )))
+        Err(type_error(
+            self.current_line,
+            self.current_column,
+            format!(
+                "new:: only supports arr/vec/map targets, got {:?}",
+                declared_type
+            ),
+        ))
     }
 
     pub(super) fn validate_own_target_type(&self, inner_type: &DataType) -> Result<()> {
@@ -379,10 +407,12 @@ impl TypeChecker {
                 | DataType::I16
                 | DataType::I32
                 | DataType::I64
+                | DataType::I128
                 | DataType::U8
                 | DataType::U16
                 | DataType::U32
                 | DataType::U64
+                | DataType::U128
                 | DataType::F32
                 | DataType::F64
                 | DataType::Bool
@@ -399,10 +429,11 @@ impl TypeChecker {
             return Ok(());
         }
 
-        Err(type_error(format!(
-            "own:: target type {:?} is not heap-allocatable",
-            inner_type
-        )))
+        Err(type_error(
+            self.current_line,
+            self.current_column,
+            format!("own:: target type {:?} is not heap-allocatable", inner_type),
+        ))
     }
 }
 
@@ -424,10 +455,14 @@ impl TypeChecker {
                 ..
             } => {
                 if enum_name != expected_enum {
-                    return Err(type_error(format!(
-                        "Match pattern enum mismatch: expected '{}', got '{}'",
-                        expected_enum, enum_name
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Match pattern enum mismatch: expected '{}', got '{}'",
+                            expected_enum, enum_name
+                        ),
+                    ));
                 }
                 Ok((vec![variant_name.clone()], true))
             }
@@ -482,10 +517,14 @@ impl TypeChecker {
             }
             for variant_name in variant_names {
                 if !covered.insert(variant_name.clone()) {
-                    return Err(type_error(format!(
-                        "Duplicate match arm for enum variant '{}.{}'",
-                        enum_name, variant_name
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Duplicate match arm for enum variant '{}.{}'",
+                            enum_name, variant_name
+                        ),
+                    ));
                 }
             }
         }
@@ -503,11 +542,15 @@ impl TypeChecker {
             return Ok(());
         }
 
-        Err(type_error(format!(
-            "Non-exhaustive match for enum '{}'; missing variants: {}",
-            enum_name,
-            missing.join(", ")
-        )))
+        Err(type_error(
+            self.current_line,
+            self.current_column,
+            format!(
+                "Non-exhaustive match for enum '{}'; missing variants: {}",
+                enum_name,
+                missing.join(", ")
+            ),
+        ))
     }
 
     pub(super) fn validate_match_expr_coverage(
@@ -529,10 +572,14 @@ impl TypeChecker {
             }
             for variant_name in variant_names {
                 if !covered.insert(variant_name.clone()) {
-                    return Err(type_error(format!(
-                        "Duplicate match arm for enum variant '{}.{}'",
-                        enum_name, variant_name
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Duplicate match arm for enum variant '{}.{}'",
+                            enum_name, variant_name
+                        ),
+                    ));
                 }
             }
         }
@@ -551,10 +598,14 @@ impl TypeChecker {
             return Ok(());
         }
 
-        Err(type_error(format!(
-            "Non-exhaustive match expression for enum '{}'; missing variants: {}",
-            enum_name,
-            missing.join(", ")
-        )))
+        Err(type_error(
+            self.current_line,
+            self.current_column,
+            format!(
+                "Non-exhaustive match expression for enum '{}'; missing variants: {}",
+                enum_name,
+                missing.join(", ")
+            ),
+        ))
     }
 }

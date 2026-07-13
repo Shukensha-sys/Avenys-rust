@@ -1,12 +1,13 @@
 use super::MirLower;
 use super::collections::lower_index_write;
 use super::types::{extract_data_type, llvm_elem_type_str};
+use crate::compiler::location::statement_location;
 use crate::compiler::mir::*;
 use crate::parser::ast::{AssignmentTarget, DataType, Expression, Statement};
 
 impl MirLower {
     pub(crate) fn lower_statement(&mut self, stmt: &Statement) {
-        let loc = (0, 0);
+        let loc = statement_location(stmt);
         match stmt {
             Statement::Let {
                 name,
@@ -456,7 +457,7 @@ impl MirLower {
                 self.func.blocks[pre_for_block].terminator = MirTerminator::Br(cond_block);
                 self.current_block = end_block;
             }
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 for stmt in body {
                     self.lower_statement(stmt);
                 }

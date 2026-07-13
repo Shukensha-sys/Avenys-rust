@@ -36,12 +36,25 @@ fn try_fold(inst: &MirInst) -> Option<MirConst> {
         SRem(MirValue::Const(a), MirValue::Const(b)) => match (a, b) {
             (MirConst::Int(0), _) => None,
             (_, MirConst::Int(0)) => None,
-            _ => binop_const(a, b, |x, y| x % y, |_, _| 0.0),
+            _ => binop_const(a, b, |x, y| x % y, |x, y| x % y),
         },
         Shl(MirValue::Const(a), MirValue::Const(b)) => match (a, b) {
             (MirConst::Int(x), MirConst::Int(y)) => Some(MirConst::Int(x << y)),
             _ => None,
         },
+        Shr(MirValue::Const(a), MirValue::Const(b)) => match (a, b) {
+            (MirConst::Int(x), MirConst::Int(y)) => Some(MirConst::Int((*x as u64 >> *y as u32) as i64)),
+            _ => None,
+        },
+        Xor(MirValue::Const(a), MirValue::Const(b)) => {
+            binop_const(a, b, |x, y| x ^ y, |_, _| 0.0)
+        }
+        BitAnd(MirValue::Const(a), MirValue::Const(b)) => {
+            binop_const(a, b, |x, y| x & y, |_, _| 0.0)
+        }
+        BitOr(MirValue::Const(a), MirValue::Const(b)) => {
+            binop_const(a, b, |x, y| x | y, |_, _| 0.0)
+        }
         ICmp(cmp, MirValue::Const(a), MirValue::Const(b)) => cmp_const(cmp, a, b),
         FCmp(cmp, MirValue::Const(a), MirValue::Const(b)) => fcmp_const(cmp, a, b),
         ZExt(MirValue::Const(MirConst::Bool(v)), _) => Some(MirConst::Int(if *v { 1 } else { 0 })),

@@ -45,18 +45,27 @@ impl Parser {
 
     pub(super) fn parse_nominal_name_with_type_args(&mut self) -> Result<String> {
         let base = self.expect_ident()?;
+        // Support qualified names: module::Type
+        let name = if self.check_double_colon() {
+            self.advance();
+            self.advance();
+            let tail = self.expect_ident()?;
+            format!("{}.{}", base, tail)
+        } else {
+            base
+        };
         if self.check(TokenType::Lbracket) {
             let args = self.parse_type_args()?;
             return Ok(format!(
                 "{}[{}]",
-                base,
+                name,
                 args.iter()
                     .map(data_type_name)
                     .collect::<Vec<_>>()
                     .join(" ")
             ));
         }
-        Ok(base)
+        Ok(name)
     }
 
     pub(super) fn parse_type(&mut self) -> Result<DataType> {
@@ -103,6 +112,8 @@ impl Parser {
                 "u16" => Ok(DataType::U16),
                 "u32" => Ok(DataType::U32),
                 "u64" => Ok(DataType::U64),
+                "i128" => Ok(DataType::I128),
+                "u128" => Ok(DataType::U128),
                 "f32" => Ok(DataType::F32),
                 "f64" => Ok(DataType::F64),
                 "str" => Ok(DataType::Str),

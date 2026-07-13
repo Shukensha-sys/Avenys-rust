@@ -1,60 +1,68 @@
 #!/bin/sh
 set -e
 
-# ── Avenys Toolchain Install ──────────────────────────────────────────
-# Installs mire + owl + kioto from the latest GitHub release artifact.
+# ── Mire Toolchain Install ────────────────────────────────────────────
+# Installs owl (Mire package manager) from the Avenys toolchain release.
+#
+# The release tarball includes: owl + kioto + Mire compiler + runtime.
+# This script installs owl by default. The compiler is a secondary
+# component available as a side-install option.
 #
 # Usage:
-#   curl -fsSL <url> | sh                           # interactive (default)
-#   curl -fsSL <url> | sh -s -- --yes                # non-interactive (CI)
-#   curl -fsSL <url> | sh -s -- --prefix ~/.local    # user install
-#   curl -fsSL <url> | sh -s -- --no-owl             # mire only
-#   curl -fsSL <url> | sh -s -- --no-profile         # skip PATH setup
-#   curl -fsSL <url> | sh -s -- --tag B1.1           # specific release
+#   curl -fsSL <url> | sh                        # install owl (default)
+#   curl -fsSL <url> | sh -s -- --yes            # non-interactive
+#   curl -fsSL <url> | sh -s -- --prefix ~/.local # user install
+#   curl -fsSL <url> | sh -s -- --no-profile     # skip PATH setup
+#   curl -fsSL <url> | sh -s -- --compiler       # also install compiler
+#   curl -fsSL <url> | sh -s -- --compiler-only   # compiler only (de-emphasized)
 
-REPO="${MIRE_REPO:-mire-lang/Avenys-rust}"
+REPO_OWL="${OWL_REPO:-mire-lang/owl}"
+REPO_COMPILER="${COMPILER_REPO:-mire-lang/Avenys-rust}"
 TARBALL="mire-linux-x86_64.tar.gz"
 PREFIX=""
-TAG=""
+TAG_OWL=""
+TAG_COMPILER=""
 YES=0
-NO_OWL=0
 NO_PROFILE=0
+INSTALL_COMPILER=0
+COMPILER_ONLY=0
 
 usage() {
     cat <<'USAGE'
-Avenys Toolchain Install
+Mire Toolchain Install
 
 Usage:
   install.sh [options]
 
 Options:
-  --yes, -y        Non-interactive (skip confirmations)
-  --prefix <path>  Install prefix (default: /usr/local)
-  --no-owl         Install only mire, skip owl
-  --no-profile     Skip shell profile PATH modification
-  --tag <tag>      Specific release tag (default: latest)
-  --help, -h       Show this help
+  --yes, -y           Non-interactive (skip confirmations)
+  --prefix <path>      Install prefix (default: /usr/local)
+  --compiler           Also install the Mire compiler
+  --compiler-only       Install compiler only (de-emphasized)
+  --no-profile         Skip shell profile PATH modification
+  --tag-owl <tag>      Specific owl release tag (default: latest)
+  --tag-compiler <tag> Specific compiler release tag (default: latest)
+  --help, -h           Show this help
 
 Examples:
-  curl https://.../install.sh | sh                    # interactive
-  curl https://.../install.sh | sh -s -- --yes        # non-interactive
-  install.sh --prefix ~/.local                        # user-local
-  install.sh --no-owl                                 # compiler only
+  curl https://.../install.sh | sh                 # install owl
+  curl https://.../install.sh | sh -s -- --compiler # install owl + compiler
 USAGE
 }
 
-# ── Flag parsing ──────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
     case "$1" in
-        --yes|-y)      YES=1; shift ;;
-        --prefix)      PREFIX="$2"; shift 2 ;;
-        --no-owl)      NO_OWL=1; shift ;;
-        --no-profile)  NO_PROFILE=1; shift ;;
-        --tag)         TAG="$2"; shift 2 ;;
-        --help|-h)     usage; exit 0 ;;
-        --)            shift; break ;;
-        -*)            echo "error: unknown option: $1" >&2; usage; exit 1 ;;
-        *)             echo "error: unexpected argument: $1" >&2; usage; exit 1 ;;
+        --yes|-y)           YES=1; shift ;;
+        --prefix)            PREFIX="$2"; shift 2 ;;
+        --compiler)          INSTALL_COMPILER=1; shift ;;
+        --compiler-only)      COMPILER_ONLY=1; shift ;;
+        --no-profile)        NO_PROFILE=1; shift ;;
+        --tag-owl)            TAG_OWL="$2"; shift 2 ;;
+        --tag-compiler)       TAG_COMPILER="$2"; shift 2 ;;
+        --help|-h)            usage; exit 0 ;;
+        --)                   shift; break ;;
+        -*)                   echo "error: unknown option: $1" >&2; usage; exit 1 ;;
+        *)                    echo "error: unexpected argument: $1" >&2; usage; exit 1 ;;
     esac
 done
 
@@ -62,7 +70,6 @@ if [ -z "$PREFIX" ]; then
     PREFIX="${MIRE_PREFIX:-/usr/local}"
 fi
 
-# Expand ~ in prefix
 case "$PREFIX" in
     ~/*) PREFIX="${HOME}${PREFIX#~}" ;;
     ~)   PREFIX="${HOME}" ;;
@@ -70,34 +77,35 @@ esac
 
 BIN_DIR="${PREFIX}/bin"
 LIB_DIR="${PREFIX}/lib/mire"
+OWL_HOME="$HOME/.owl"
 
 banner() {
     echo ""
-    echo "┌─ Avenys Toolchain Install ───────────────────────────────────┐"
-    echo "│ repo:   ${REPO}"
+    echo "┌─ Mire Toolchain Install ─────────────────────────────────────────┐"
     echo "│ prefix: ${PREFIX}"
-    [ "$NO_OWL" = "1" ] && echo "│ mire only" || echo "│ mire + owl + kioto"
-    echo "└──────────────────────────────────────────────────────────────┘"
+    if [ "$COMPILER_ONLY" = "1" ]; then
+        echo "│ mode:   compiler only"
+    elif [ "$INSTALL_COMPILER" = "1" ]; then
+        echo "│ mode:   owl + compiler"
+    else
+        echo "│ mode:   owl (default)"
+    fi
+    echo "└──────────────────────────────────────────────────────────────────┘"
 }
 
 banner
 
-# When piped via curl URL | sh, stdin is the pipe and read gets EOF.
-# Reopen the terminal so interactive prompts work.
 if [ ! -t 0 ]; then
     { exec </dev/tty; } 2>/dev/null || true
 fi
 
-# ── Flags for sudo ────────────────────────────────────────────────────
 needs_sudo() {
-    # System prefixes (need sudo) vs user prefixes (don't)
     case "$PREFIX" in
         /usr|/usr/local|/opt*|/etc*) return 0 ;;
         *) return 1 ;;
     esac
 }
 
-# ── Prerequisite detection & install ──────────────────────────────────
 detect_pkg_manager() {
     if command -v apt-get >/dev/null 2>&1; then
         echo "apt"
@@ -119,7 +127,7 @@ detect_pkg_manager() {
 install_deps() {
     local pm="$1"
     echo ""
-    echo "  installing: curl tar clang llvm libssl libsdl2"
+    echo "  installing: curl tar clang llvm libssl libsdl2 openssl"
     echo "  manager: ${pm}"
 
     if [ "$YES" != "1" ]; then
@@ -159,9 +167,6 @@ check_prerequisites() {
     if ! command -v tar >/dev/null 2>&1; then
         missing="$missing tar"
     fi
-    if ! command -v clang >/dev/null 2>&1; then
-        missing="$missing clang"
-    fi
 
     if [ -z "$missing" ]; then
         return 0
@@ -173,111 +178,38 @@ check_prerequisites() {
     if [ "$pm" = "none" ]; then
         echo ""
         echo "  warning: missing:${missing}"
-        echo "  install these and re-run. continuing..."
+        echo "  install these and re-run."
         return 0
     fi
 
     install_deps "$pm"
 }
 
-check_prerequisites
-
-# ── Shell detection for PATH ──────────────────────────────────────────
-detect_shell_profile() {
-    local sh
-    sh="$(basename "${SHELL:-/bin/sh}")"
-    case "$sh" in
-        zsh)  echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
-        fish) echo "$HOME/.config/fish/config.fish" ;;
-        bash)
-            if [ -f "$HOME/.bash_profile" ]; then
-                echo "$HOME/.bash_profile"
-            else
-                echo "$HOME/.bashrc"
-            fi
-            ;;
-        *)    echo "$HOME/.profile" ;;
-    esac
-}
-
-# ── Get release tag ───────────────────────────────────────────────────
 get_latest_tag() {
-    local tag
+    local repo="$1"
+    local tag=""
     if command -v curl >/dev/null 2>&1; then
-        tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+        tag="$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null \
             | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
     elif command -v wget >/dev/null 2>&1; then
-        tag="$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+        tag="$(wget -qO- "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null \
             | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
     fi
     echo "$tag"
 }
 
-if [ -z "$TAG" ]; then
-    TAG="$(get_latest_tag)"
-    if [ -z "$TAG" ]; then
-        echo "error: could not determine latest tag. Use --tag <tag>."
-        exit 1
+if [ "$COMPILER_ONLY" = "1" ]; then
+    if [ -z "$TAG_COMPILER" ]; then
+        TAG_COMPILER="$(get_latest_tag "$REPO_COMPILER")"
     fi
-fi
-
-# ── Confirmation ──────────────────────────────────────────────────────
-echo ""
-echo "  tag:     ${TAG}"
-echo "  bin dir: ${BIN_DIR}"
-echo "  lib dir: ${LIB_DIR}"
-
-if [ "$YES" != "1" ]; then
-    echo ""
-    echo "  Will install:"
-    echo "    • mire compiler  → ${BIN_DIR}/mire"
-    echo "    • mire runtime   → ${LIB_DIR}/"
-    if [ "$NO_OWL" != "1" ]; then
-        echo "    • owl (pm)       → ${BIN_DIR}/owl"
-    fi
-    echo "    • kioto stdlib   → ~/.owl/modules/kioto/"
-    if [ "$NO_PROFILE" != "1" ]; then
-        profile="$(detect_shell_profile)"
-        echo "    • PATH update    → ${profile}"
-    fi
-    if needs_sudo; then
-        echo ""
-        echo "  sudo needed for system install."
-    fi
-    echo ""
-    read -r -p "  continue? [Y/n] " ans
-    case "$ans" in
-        [nN]*) echo "  aborted."; exit 0 ;;
-    esac
-fi
-
-# ── Download & extract ────────────────────────────────────────────────
-URL="https://github.com/${REPO}/releases/download/${TAG}/${TARBALL}"
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
-
-echo ""
-echo "  downloading ${URL}..."
-if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$URL" -o "$TMPDIR/$TARBALL"
-elif command -v wget >/dev/null 2>&1; then
-    wget -q "$URL" -O "$TMPDIR/$TARBALL"
 else
-    echo "error: need curl or wget"
-    exit 1
+    if [ -z "$TAG_COMPILER" ] && [ "$INSTALL_COMPILER" = "1" ]; then
+        TAG_COMPILER="$(get_latest_tag "$REPO_COMPILER")"
+    fi
 fi
 
-echo "  extracting..."
-tar xzf "$TMPDIR/$TARBALL" -C "$TMPDIR"
+check_prerequisites
 
-if [ ! -f "$TMPDIR/mire/mire" ]; then
-    echo "error: release tarball missing mire binary"
-    echo "  tarball contents:"
-    find "$TMPDIR/mire" -type f | sort
-    exit 1
-fi
-
-# ── Install mire ──────────────────────────────────────────────────────
 install_file() {
     local src="$1" dst="$2"
     if needs_sudo; then
@@ -306,41 +238,86 @@ install_dir() {
     fi
 }
 
+detect_shell_profile() {
+    local sh
+    sh="$(basename "${SHELL:-/bin/sh}")"
+    case "$sh" in
+        zsh)  echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
+        fish) echo "$HOME/.config/fish/config.fish" ;;
+        bash)
+            if [ -f "$HOME/.bash_profile" ]; then
+                echo "$HOME/.bash_profile"
+            else
+                echo "$HOME/.bashrc"
+            fi
+            ;;
+        *)    echo "$HOME/.profile" ;;
+    esac
+}
+
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+OWL_BIN=""
+COMPILER_BIN=""
+
+# ── Install owl (primary) ─────────────────────────────────────────────
 echo ""
-echo "  installing mire..."
-install_file "$TMPDIR/mire/mire" "$BIN_DIR/mire"
-
-echo "  installing runtime + pal..."
-if [ -d "$TMPDIR/mire/runtime" ]; then
-    install_dir "$TMPDIR/mire/runtime"
-fi
-if [ -d "$TMPDIR/mire/pal" ]; then
-    install_dir "$TMPDIR/mire/pal"
-fi
-
+echo "  ── Installing owl ──────────────────────────────────────────────"
 echo ""
-echo "  verifying mire..."
-"$BIN_DIR/mire" --version 2>&1 || echo "  (version check failed)"
 
-# ── Install owl ───────────────────────────────────────────────────────
-if [ "$NO_OWL" != "1" ] && [ -f "$TMPDIR/mire/owl" ]; then
+if [ "$YES" != "1" ] && [ "$COMPILER_ONLY" != "1" ]; then
+    echo "  Will install:"
+    echo "    • owl (pm)       → ${BIN_DIR}/owl"
+    echo "    • kioto stdlib   → ${OWL_HOME}/modules/kioto/"
+    echo "    • owl home       → ${OWL_HOME}/"
+    if needs_sudo; then
+        echo ""
+        echo "  sudo needed for system install."
+    fi
     echo ""
-    echo "  installing owl..."
-    install_file "$TMPDIR/mire/owl" "$BIN_DIR/owl"
-    "$BIN_DIR/owl" -V 2>&1 || echo "  (owl version check failed)"
-elif [ "$NO_OWL" != "1" ]; then
-    echo ""
-    echo "  (owl not in release — skipping)"
+    read -r -p "  continue? [Y/n] " ans
+    case "$ans" in
+        [nN]*) echo "  aborted."; exit 0 ;;
+    esac
 fi
 
-# ── Setup kioto + owl home ────────────────────────────────────────────
-echo ""
-echo "  setting up kioto..."
-OWL_HOME="$HOME/.owl"
-mkdir -p "$OWL_HOME/modules" "$OWL_HOME/tmp"
+URL_COMPILER="https://github.com/${REPO_COMPILER}/releases/download/${TAG_COMPILER:-latest}/${TARBALL}"
 
-if [ ! -f "$OWL_HOME/config.toml" ]; then
-    cat > "$OWL_HOME/config.toml" << 'CONFIG'
+echo "  downloading compiler release..."
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$URL_COMPILER" -o "$TMPDIR/$TARBALL" 2>/dev/null || \
+        curl -fsSL "https://github.com/${REPO_COMPILER}/releases/download/${TAG_COMPILER:-v0.1.0}/${TARBALL}" -o "$TMPDIR/$TARBALL"
+elif command -v wget >/dev/null 2>&1; then
+    wget -q "$URL_COMPILER" -O "$TMPDIR/$TARBALL" 2>/dev/null || \
+        wget -q "https://github.com/${REPO_COMPILER}/releases/download/${TAG_COMPILER:-v0.1.0}/${TARBALL}" -O "$TMPDIR/$TARBALL"
+fi
+
+if [ ! -f "$TMPDIR/$TARBALL" ] || [ ! -s "$TMPDIR/$TARBALL" ]; then
+    echo "  error: could not download compiler release"
+    echo "  (pre-built compiler releases may not be available yet)"
+    echo "  Build from source: https://github.com/${REPO_COMPILER}"
+    COMPILER_AVAILABLE=0
+else
+    COMPILER_AVAILABLE=1
+    echo "  extracting..."
+    tar xzf "$TMPDIR/$TARBALL" -C "$TMPDIR"
+
+    if [ -f "$TMPDIR/mire/owl" ]; then
+        mkdir -p "${BIN_DIR}"
+        install_file "$TMPDIR/mire/owl" "${BIN_DIR}/owl"
+        OWL_BIN="${BIN_DIR}/owl"
+    fi
+
+    if [ -d "$TMPDIR/mire/kioto" ]; then
+        mkdir -p "${OWL_HOME}/modules" "${OWL_HOME}/tmp"
+        rm -rf "${OWL_HOME}/modules/kioto"
+        cp -r "$TMPDIR/mire/kioto" "${OWL_HOME}/modules/kioto"
+    fi
+
+    if [ ! -f "$OWL_HOME/config.toml" ]; then
+        mkdir -p "$OWL_HOME"
+        cat > "$OWL_HOME/config.toml" << 'CONFIG'
 [owl]
 version = "1.0.0"
 
@@ -351,19 +328,52 @@ path = "~/.owl/modules"
 timeout = 30
 retry = 3
 CONFIG
-    echo "  created ~/.owl/config.toml"
+    fi
 fi
 
-if [ -d "$TMPDIR/mire/kioto" ]; then
-    rm -rf "$OWL_HOME/modules/kioto"
-    cp -r "$TMPDIR/mire/kioto" "$OWL_HOME/modules/kioto"
-    echo "  kioto → ~/.owl/modules/kioto/"
-else
-    echo "  (kioto not in release — skipping)"
+# ── Install compiler (optional / secondary) ──────────────────────────
+if [ "$INSTALL_COMPILER" = "1" ] || [ "$COMPILER_ONLY" = "1" ]; then
+    echo ""
+    echo "  ── Installing Mire compiler ──────────────────────────────────"
+    echo ""
+
+    if [ "$YES" != "1" ]; then
+        echo "  Will install:"
+        echo "    • Mire compiler  → ${BIN_DIR}/mire"
+        echo "    • Mire runtime   → ${LIB_DIR}/"
+        if needs_sudo; then
+            echo ""
+            echo "  sudo needed for system install."
+        fi
+        echo ""
+        read -r -p "  continue? [Y/n] " ans
+        case "$ans" in
+            [nN]*) echo "  skipped compiler install." ;;
+        esac
+    fi
+
+    if [ "$COMPILER_AVAILABLE" = "1" ] && [ -f "$TMPDIR/mire/mire" ]; then
+        install_file "$TMPDIR/mire/mire" "${BIN_DIR}/mire"
+        COMPILER_BIN="${BIN_DIR}/mire"
+
+        if [ -d "$TMPDIR/mire/runtime" ]; then
+            install_dir "$TMPDIR/mire/runtime"
+        fi
+        if [ -d "$TMPDIR/mire/pal" ]; then
+            install_dir "$TMPDIR/mire/pal"
+        fi
+    else
+        echo "  compiler release not available."
+        echo "  Build from source:"
+        echo "    git clone https://github.com/${REPO_COMPILER}"
+        echo "    cd ${REPO_COMPILER}"
+        echo "    cargo build --release"
+        echo "    sudo cp target/release/mire /usr/local/bin/mire"
+    fi
 fi
 
 # ── PATH setup ────────────────────────────────────────────────────────
-if [ "$NO_PROFILE" != "1" ]; then
+if [ "$NO_PROFILE" != "1" ] && [ "$COMPILER_ONLY" != "1" ]; then
     PROFILE_FILE="$(detect_shell_profile)"
 
     case ":$PATH:" in
@@ -378,11 +388,11 @@ if [ "$NO_PROFILE" != "1" ]; then
             if [ "$YES" != "1" ]; then
                 read -r -p "  modify ${PROFILE_FILE}? [Y/n] " ans
                 case "$ans" in
-                    [nN]*) echo "  skipped." ; return 2 2>/dev/null || true ;;
+                    [nN]*) echo "  skipped." ;;
                 esac
             fi
 
-            BACKUP="${PROFILE_FILE}.mire-backup-$(date +%Y%m%d-%H%M%S)"
+            BACKUP="${PROFILE_FILE}.owl-backup-$(date +%Y%m%d-%H%M%S)"
             if [ -f "$PROFILE_FILE" ]; then
                 cp "$PROFILE_FILE" "$BACKUP"
             else
@@ -392,7 +402,7 @@ if [ "$NO_PROFILE" != "1" ]; then
 
             cat >> "$PROFILE_FILE" << PATHLINE
 
-# added by mire install script
+# added by Mire install script
 export PATH="${BIN_DIR}:\$PATH"
 PATHLINE
             echo "  updated ${PROFILE_FILE}"
@@ -402,22 +412,27 @@ PATHLINE
 fi
 
 # ── Done ──────────────────────────────────────────────────────────────
-M_BIN="$BIN_DIR/mire"
-O_BIN="$BIN_DIR/owl"
-
 echo ""
-echo "  ──────────────────────────────────────────────────────────────"
+echo "  ─────────────────────────────────────────────────────────────────"
 echo "  install complete"
 echo ""
-echo "  mire: ${M_BIN}"
-"$M_BIN" --version 2>/dev/null || true
-if [ "$NO_OWL" != "1" ] && [ -f "$O_BIN" ]; then
-    echo "  owl:  ${O_BIN}"
-    "$O_BIN" -V 2>/dev/null || true
+if [ -n "$OWL_BIN" ] && [ -f "$OWL_BIN" ]; then
+    echo "  owl:  ${OWL_BIN}"
+    "$OWL_BIN" -V 2>/dev/null || true
+fi
+if [ -n "$COMPILER_BIN" ] && [ -f "$COMPILER_BIN" ]; then
+    echo "  mire: ${COMPILER_BIN}"
+    "$COMPILER_BIN" --version 2>/dev/null || true
 fi
 echo ""
-echo "  try:"
-echo "    mire --help"
-if [ "$NO_OWL" != "1" ] && [ -f "$O_BIN" ]; then
-    echo "    owl -h"
+if [ "$COMPILER_ONLY" != "1" ]; then
+    echo "  try:"
+    if [ -n "$OWL_BIN" ] && [ -f "$OWL_BIN" ]; then
+        echo "    owl --help"
+        echo "    owl new my-project"
+    fi
+    echo ""
+    echo "  Need the compiler?"
+    echo "    curl ... | sh -s -- --compiler"
 fi
+echo ""

@@ -71,11 +71,15 @@ impl TypeChecker {
             return Ok(HashMap::new());
         }
         if type_params.len() != type_args.len() {
-            return Err(type_error(format!(
-                "Generic arity mismatch: expected {}, got {}",
-                type_params.len(),
-                type_args.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Generic arity mismatch: expected {}, got {}",
+                    type_params.len(),
+                    type_args.len()
+                ),
+            ));
         }
         Ok(type_params
             .iter()

@@ -61,7 +61,7 @@
 | W0023 | Missing `else` branch | `if` without `else` where both branches expected | Add `else` branch |
 | W0024 | Redundant block | Block `{}` around single statement without scoping needs | Remove unnecessary braces |
 | W0026 | Comparison to bool | `== true` or `== false` in condition | Use the value directly or negate with `!` |
-| W0034 | Inconsistent spacing | Spacing doesn't match project style | Format according to project conventions |
+| W0034 | Deprecated Function | Use of a function marked with `@[deprecated]` | Use the suggested replacement function |
 | W0035 | Unnecessary parentheses | Extra parentheses around expression | Remove parentheses |
 | W0037 | Long parameter list | Function has too many parameters | Group parameters into a struct |
 
@@ -72,6 +72,20 @@
 | W0011 | High cyclomatic complexity | Function has too many branching paths | Split into simpler functions |
 | W0018 | Deeply nested | Code has too many nesting levels | Extract inner blocks into functions |
 | W0039 | Too many function arguments | Exceeds argument count limit | Group into struct or slice |
+
+### Clippy (W0041–W0043) — Opt-in only
+
+These warnings are NOT in default_codes. Enable with `WarningFilter::All` or `WarningFilter::Codes`.
+
+| Code | Title | When it appears | How to fix |
+|------|-------|-----------------|------------|
+| W0041 | Uninitialized Variable | `set name :type` without a value | Initialize with a value: `set name = value :type` |
+| W0042 | Genuine Infinite Loop | `while true` body without any `break` statement | Add a terminating condition or break |
+| W0043 | Deeply Nested If | `if` statement at depth > 3 | Extract to a function or use `match` |
+| W0044 | Unnecessary Mutable | Variable declared `mut` but never reassigned | Remove the `mut` modifier |
+| W0045 | Redundant Bool Compare | Comparing a value to `true`/`false` with `==` | Use the value directly or negate with `!` |
+| W0046 | Simplifiable If-Return-Bool | `if cond { return true } else { return false }` | Use `return cond` directly |
+| W0047 | String Concat in Loop | `set x = x + ...` inside a loop (quadratic) | Collect in vec[str] and use join() after loop |
 
 ### Logic (W0015–W0017, W0019, W0028–W0032, W0036, W0038, W0040)
 

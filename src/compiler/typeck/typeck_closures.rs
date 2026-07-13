@@ -35,10 +35,11 @@ impl TypeChecker {
         if let Expression::Closure { return_type, .. } = expr {
             Ok(return_type.clone())
         } else {
-            Err(type_error(format!(
-                "{} must be represented as a closure in the AST",
-                context
-            )))
+            Err(type_error(
+                0,
+                0,
+                format!("{} must be represented as a closure in the AST", context),
+            ))
         }
     }
 
@@ -48,10 +49,14 @@ impl TypeChecker {
             DataType::Array { element_type, .. } => Ok(*element_type),
             DataType::Slice { element_type } => Ok(*element_type),
             DataType::List => Ok(DataType::Anything),
-            other => Err(type_error(format!(
-                "High-order list function expects vec/arr/slice input, got {:?}",
-                other
-            ))),
+            other => Err(type_error(
+                0,
+                0,
+                format!(
+                    "High-order list function expects vec/arr/slice input, got {:?}",
+                    other
+                ),
+            )),
         }
     }
 
@@ -68,19 +73,24 @@ impl TypeChecker {
             capture,
         } = expr
         else {
-            return Err(type_error(format!(
-                "{} expects a closure argument",
-                context
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!("{} expects a closure argument", context),
+            ));
         };
 
         if params.len() != expected_params.len() {
-            return Err(type_error(format!(
-                "{} expects a closure with {} parameter(s), got {}",
-                context,
-                expected_params.len(),
-                params.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "{} expects a closure with {} parameter(s), got {}",
+                    context,
+                    expected_params.len(),
+                    params.len()
+                ),
+            ));
         }
 
         self.push_scope();
@@ -116,10 +126,14 @@ impl TypeChecker {
         } else if inferred_return != DataType::Unknown
             && !self.is_assignable(return_type, &inferred_return)
         {
-            return Err(type_error(format!(
-                "{} return type mismatch: declared {:?}, inferred {:?}",
-                context, return_type, inferred_return
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "{} return type mismatch: declared {:?}, inferred {:?}",
+                    context, return_type, inferred_return
+                ),
+            ));
         }
 
         self.pop_scope();

@@ -186,7 +186,7 @@ mire test   [paths...] [--no-run] [--verbose]
 | Document | Description |
 |----------|-------------|
 | [SYNTAX.md](./SYNTAX.md) | Complete language reference with examples |
-| [PAL.md](./PAL.md) | Platform Abstraction Layer architecture |
+| [docs/PAL-ABI.md](./docs/PAL-ABI.md) | Platform Abstraction Layer architecture |
 | [docs/ERROR_CODES.md](./docs/ERROR_CODES.md) | All compiler error and warning codes |
 | [docs/CHANGELOG.md](./docs/CHANGELOG.md) | Version history |
 | [docs/mir-pipeline.md](./docs/mir-pipeline.md) | MIR design and optimization passes |

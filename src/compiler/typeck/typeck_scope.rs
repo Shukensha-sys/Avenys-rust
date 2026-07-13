@@ -160,6 +160,14 @@ impl TypeChecker {
                 self.lookup_function_value_signature(&ident.name)
             }
             Expression::Call { name, .. } => self.function_return_signatures.get(name).cloned(),
+            Expression::Closure { params, return_type, .. } => {
+                Some(FunctionSig {
+                    type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
+                    params: params.iter().map(|(_, t)| t.clone()).collect(),
+                    return_type: return_type.clone(),
+                })
+            }
             _ => None,
         }
     }
@@ -215,35 +223,48 @@ impl TypeChecker {
                 };
 
                 let (mut current_type, is_mutable) = self.lookup_var(owner).ok_or_else(|| {
-                    type_error(format!("Assignment to undefined variable '{}'", owner))
+                    type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Assignment to undefined variable '{}'", owner),
+                    )
                 })?;
 
                 for field_name in field_path.split('.') {
                     let struct_name = match &current_type {
                         DataType::StructNamed(name) => name.clone(),
                         other => {
-                            return Err(type_error(format!(
-                                "Cannot assign field '{}' on non-struct target '{}': {:?}",
-                                field_name, owner, other
-                            )));
+                            return Err(type_error(
+                                self.current_line,
+                                self.current_column,
+                                format!(
+                                    "Cannot assign field '{}' on non-struct target '{}': {:?}",
+                                    field_name, owner, other
+                                ),
+                            ));
                         }
                     };
 
                     let class_sig = self.classes.get(&struct_name).ok_or_else(|| {
-                        type_error(format!(
-                            "Struct '{}' has no field metadata for assignment '{}'",
-                            struct_name, path
-                        ))
+                        type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Struct '{}' has no field metadata for assignment '{}'",
+                                struct_name, path
+                            ),
+                        )
                     })?;
                     let field = class_sig
                         .fields
                         .iter()
                         .find(|field| field.name == field_name)
                         .ok_or_else(|| {
-                            type_error(format!(
-                                "Struct '{}' has no field '{}'",
-                                struct_name, field_name
-                            ))
+                            type_error(
+                                self.current_line,
+                                self.current_column,
+                                format!("Struct '{}' has no field '{}'", struct_name, field_name),
+                            )
                         })?;
                     current_type = field.data_type.clone();
                 }
@@ -256,11 +277,17 @@ impl TypeChecker {
             } => {
                 let owner_name = target.binding_name().ok_or_else(|| {
                     type_error(
+                        self.current_line,
+                        self.current_column,
                         "Indexed assignment requires an identifier-backed target".to_string(),
                     )
                 })?;
                 let (_, is_mutable) = self.lookup_var(owner_name).ok_or_else(|| {
-                    type_error(format!("Assignment to undefined variable '{}'", owner_name))
+                    type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Assignment to undefined variable '{}'", owner_name),
+                    )
                 })?;
                 let mut target_expr = index_target.clone();
                 let mut index_expr = index.clone();
@@ -272,10 +299,14 @@ impl TypeChecker {
                     | DataType::Slice { element_type }
                     | DataType::Vector { element_type, .. } => {
                         if !Self::is_numeric(&index_type) && index_type != DataType::Unknown {
-                            return Err(type_error(format!(
-                                "Index must be numeric for indexed assignment, got {:?}",
-                                index_type
-                            )));
+                            return Err(type_error(
+                                self.current_line,
+                                self.current_column,
+                                format!(
+                                    "Index must be numeric for indexed assignment, got {:?}",
+                                    index_type
+                                ),
+                            ));
                         }
                         *element_type
                     }
@@ -286,20 +317,25 @@ impl TypeChecker {
                         if index_type != DataType::Unknown
                             && !self.is_assignable(&key_type, &index_type)
                         {
-                            return Err(type_error(format!(
-                                "Index type {:?} is not assignable to map key type {:?}",
-                                index_type, key_type
-                            )));
+                            return Err(type_error(
+                                self.current_line,
+                                self.current_column,
+                                format!(
+                                    "Index type {:?} is not assignable to map key type {:?}",
+                                    index_type, key_type
+                                ),
+                            ));
                         }
                         *value_type
                     }
                     DataType::List | DataType::Tuple | DataType::Dict => DataType::Anything,
                     DataType::Unknown => DataType::Unknown,
                     other => {
-                        return Err(type_error(format!(
-                            "Type {:?} does not support indexed assignment",
-                            other
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!("Type {:?} does not support indexed assignment", other),
+                        ));
                     }
                 };
 
@@ -589,7 +625,7 @@ fn collect_used_identifiers_in_statement(
             let mut fn_declared: HashSet<String> = params.iter().map(|(n, _)| n.clone()).collect();
             collect_used_identifiers_in_statements(body, &mut fn_declared, used);
         }
-        Statement::Unsafe { body } => {
+        Statement::Unsafe { body, .. } => {
             let mut unsafe_declared = declared.clone();
             collect_used_identifiers_in_statements(body, &mut unsafe_declared, used);
         }

@@ -33,6 +33,7 @@ fn runtime_base() -> PathBuf {
 fn struct_field_llvm_type(dt: &DataType) -> &'static str {
     match dt {
         DataType::I64 | DataType::Char | DataType::U64 => "i64",
+        DataType::I128 | DataType::U128 => "i128",
         DataType::I32 | DataType::U32 => "i32",
         DataType::I16 | DataType::U16 => "i16",
         DataType::I8 | DataType::U8 => "i8",
@@ -57,6 +58,7 @@ fn struct_field_llvm_body_type(dt: &DataType) -> String {
 fn struct_field_size(dt: &DataType) -> usize {
     match dt {
         DataType::I64 | DataType::Char | DataType::U64 => 8,
+        DataType::I128 | DataType::U128 => 16,
         DataType::I32 | DataType::U32 => 4,
         DataType::I16 | DataType::U16 => 2,
         DataType::I8 | DataType::U8 => 1,
@@ -348,24 +350,21 @@ fn c_object_hash(content: &str) -> u64 {
 fn precompile_c_object(c_path: &str, cache_dir: &Path, runtime_base: &Path) -> Result<String> {
     let content = fs::read_to_string(c_path).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not read C source '{}': {}", c_path, err),
         })
     })?;
     let hash = c_object_hash(&content);
     fs::create_dir_all(cache_dir).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not create cobjects dir: {}", err),
         })
     })?;
     let obj_path = cache_dir.join(format!("{:x}.o", hash));
     if !obj_path.exists() {
-        if std::env::var("MIRE_DEBUG_CACHE").is_ok() {
-            eprintln!(
-                "[MIR] compiling C object: {} -> {}",
-                c_path,
-                obj_path.display()
-            );
-        }
         let status = std::process::Command::new("clang")
             .args(["-c", "-O0", "-o"])
             .arg(&obj_path)
@@ -377,11 +376,15 @@ fn precompile_c_object(c_path: &str, cache_dir: &Path, runtime_base: &Path) -> R
             .status()
             .map_err(|err| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Failed to run clang for '{}': {}", c_path, err),
                 })
             })?;
         if !status.success() {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("clang -c failed for '{}'", c_path),
             }));
         }
@@ -398,6 +401,160 @@ fn progress_phase(phase: &str, _file: &str, elapsed_ms: u64, total_ms: u64) {
     }
 }
 
+fn apply_cfg_filter(program: &mut crate::parser::ast::Program) {
+    let is_linux = cfg!(target_os = "linux");
+    program.statements.retain(|stmt| {
+        let attributes = match stmt {
+            crate::parser::ast::Statement::Function { attributes, .. } => attributes,
+            _ => return true,
+        };
+        let cfg_attr = attributes.iter().find(|a| a.name == "cfg");
+        let Some(cfg_attr) = cfg_attr else {
+            return true;
+        };
+        let target = cfg_attr.args.first().map(|a| a.value.as_str());
+        match target {
+            Some("linux") => is_linux,
+            _ => false,
+        }
+    });
+}
+
+fn inject_test_harness(program: &mut crate::parser::ast::Program) {
+    use crate::parser::ast::{DataType, Expression, Identifier, Literal, Statement, Visibility};
+
+    struct TestFn {
+        name: String,
+        section: String,
+        ignored: bool,
+    }
+
+    let mut tests: Vec<TestFn> = Vec::new();
+    for stmt in &program.statements {
+        if let Statement::Function {
+            name, attributes, ..
+        } = stmt
+            && attributes.iter().any(|a| a.name == "test")
+        {
+            let section = attributes
+                .iter()
+                .find(|a| a.name == "section")
+                .and_then(|a| a.args.first())
+                .map(|arg| arg.value.clone())
+                .unwrap_or_default();
+            let ignored = attributes.iter().any(|a| a.name == "ignore");
+            tests.push(TestFn {
+                name: name.clone(),
+                section,
+                ignored,
+            });
+        }
+    }
+    if tests.is_empty() {
+        return;
+    }
+
+    let mut body: Vec<Statement> = Vec::new();
+    let mut current_section = String::new();
+    for test in &tests {
+        if test.section != current_section {
+            current_section = test.section.clone();
+            if !current_section.is_empty() {
+                body.push(Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "\n  [{}]",
+                        current_section
+                    )))],
+                    type_args: Vec::new(),
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
+                }));
+            }
+        }
+        if test.ignored {
+            body.push(Statement::Expression(Expression::Call {
+                name: "dasu".to_string(),
+                args: vec![Expression::Literal(Literal::Str(format!(
+                    "  [SKIP] {}",
+                    test.name
+                )))],
+                type_args: Vec::new(),
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
+            }));
+        } else {
+            body.push(Statement::Let {
+                name: format!("_result_{}", test.name),
+                data_type: DataType::Bool,
+                value: Some(Expression::Call {
+                    name: test.name.clone(),
+                    args: Vec::new(),
+                    type_args: Vec::new(),
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
+                }),
+                is_constant: false,
+                is_mutable: false,
+                is_static: false,
+                visibility: Visibility::Private,
+                name_line: 0,
+                name_column: 0,
+            });
+            let result_name = format!("_result_{}", test.name);
+            body.push(Statement::If {
+                condition: Expression::Identifier(Identifier {
+                    name: result_name,
+                    data_type: DataType::Bool,
+                    line: 0,
+                    column: 0,
+                }),
+                then_branch: vec![Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "  [PASS] {}",
+                        test.name
+                    )))],
+                    type_args: Vec::new(),
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
+                })],
+                else_branch: Some(vec![Statement::Expression(Expression::Call {
+                    name: "dasu".to_string(),
+                    args: vec![Expression::Literal(Literal::Str(format!(
+                        "  [FAIL] {}",
+                        test.name
+                    )))],
+                    type_args: Vec::new(),
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::None,
+                })]),
+            });
+        }
+    }
+
+    let harness = Statement::Function {
+        name: "main".to_string(),
+        attributes: Vec::new(),
+        type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
+        params: Vec::new(),
+        body,
+        return_type: DataType::None,
+        visibility: Visibility::Public,
+        is_method: false,
+    };
+    program
+        .statements
+        .retain(|s| !matches!(s, Statement::Function { name, .. } if name == "main"));
+    program.statements.push(harness);
+}
+
 pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> Result<BuildResult> {
     let build_start = std::time::Instant::now();
     let source = fs::read_to_string(source_path)?;
@@ -405,6 +562,8 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let output_dir = default_output_dir(source_path, options.mode);
     fs::create_dir_all(&output_dir).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!(
                 "Could not create build directory '{}': {}",
                 output_dir.display(),
@@ -433,11 +592,15 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         let mut files = Vec::new();
         for entry in std::fs::read_dir(runtime_base.join("runtime")).map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Could not read runtime/: {}", err),
             })
         })? {
             let entry = entry.map_err(|err| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Could not read entry: {}", err),
                 })
             })?;
@@ -449,12 +612,16 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         for entry in
             std::fs::read_dir(runtime_base.join(format!("pal/{pal_backend}"))).map_err(|err| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Could not read pal/{pal_backend}: {}", err),
                 })
             })?
         {
             let entry = entry.map_err(|err| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Could not read entry: {}", err),
                 })
             })?;
@@ -487,6 +654,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     let phase_load = build_start.elapsed().as_millis() as u64;
     progress_phase("load", &source_filename, phase_load, phase_load);
     let source_file_hash = source_hash(&source);
+    let dep_fingerprint = dependency_fingerprint(&loaded.files);
     if options.debug_dump
         && let Some(report) =
             cache.analysis_invalidation_report(source_path, source_file_hash, &loaded.program)
@@ -545,19 +713,30 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             ir_path,
             optimized_ir_path,
             used_optimizations: !matches!(options.opt_level, OptLevel::O0),
+            warnings: Vec::new(),
         });
     }
     cache.record_build_miss();
 
     let mut phase_analyse_time = phase_load;
     let mut phase_mir_time = phase_load;
-    let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash) {
+    let program = if let Some(cached) = cache.cached_analysis(source_path, source_file_hash, dep_fingerprint) {
         match cached {
-            CachedAnalysis::Success(program) => program,
+            CachedAnalysis::Success(mut program) => {
+                apply_cfg_filter(&mut program);
+                if options.test_mode {
+                    inject_test_harness(&mut program);
+                }
+                program
+            }
             CachedAnalysis::Error(error) => return Err(error),
         }
     } else {
         let mut program = loaded.program;
+        apply_cfg_filter(&mut program);
+        if options.test_mode {
+            inject_test_harness(&mut program);
+        }
         let analysis_result = if let Some(cached) =
             cache.latest_successful_analysis(source_path, source_file_hash)
         {
@@ -599,11 +778,11 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             } else {
                 err
             };
-            cache.store_analysis_error(source_path, source_file_hash, &program, &err)?;
+            cache.store_analysis_error(source_path, source_file_hash, dep_fingerprint, &program, &err)?;
             cache.save()?;
             return Err(err);
         }
-        cache.store_analysis(source_path, source_file_hash, &program)?;
+        cache.store_analysis(source_path, source_file_hash, dep_fingerprint, &program)?;
         phase_analyse_time = build_start.elapsed().as_millis() as u64;
         progress_phase(
             "analyse",
@@ -623,8 +802,9 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         &loaded.statement_origins,
         source_path,
     );
+    let mut warning_strs = Vec::new();
     for diagnostic in &warnings {
-        eprintln!("{}", format_diagnostic(diagnostic, true));
+        warning_strs.push(format_diagnostic(diagnostic, true));
     }
     if warnings
         .iter()
@@ -746,18 +926,16 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     if let Some(path) = &ir_path {
         fs::write(path, &ir).map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Could not write '{}': {}", path.display(), err),
             })
         })?;
     }
-    if options.debug_dump {
-        eprintln!("[DEBUG IR]\n{}", ir);
-    }
-
     let final_ir = if matches!(options.opt_level, OptLevel::O0) {
         ir
     } else {
-        optimize_ir(&ir, options.opt_level)?
+        optimize_ir(&ir, options.opt_level, &source_filename)?
     };
     let phase_llvm = build_start.elapsed().as_millis() as u64;
     progress_phase(
@@ -770,6 +948,8 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
     if let Some(path) = &optimized_ir_path {
         fs::write(path, &final_ir).map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Could not write '{}': {}", path.display(), err),
             })
         })?;
@@ -831,6 +1011,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             &binary_path,
             &extern_libs,
             &pal_backend,
+            &source_filename,
         )?;
         let phase_link = build_start.elapsed().as_millis() as u64;
         progress_phase(
@@ -877,6 +1058,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         ir_path,
         optimized_ir_path,
         used_optimizations: !matches!(options.opt_level, OptLevel::O0),
+        warnings: warning_strs,
     })
 }
 

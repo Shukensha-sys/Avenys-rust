@@ -27,7 +27,6 @@ fn expect_compile_error_from_source(test_name: &str, filename: &str, source: &st
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -36,6 +35,8 @@ fn expect_compile_error_from_source(test_name: &str, filename: &str, source: &st
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect_err("compilation should fail")
@@ -70,6 +71,8 @@ fn unknown_identifier_error_for_removed_keyword_add() {
 #[test]
 fn backend_limitation_errors_render_with_backend_kind() {
     let rendered = MireError::new(ErrorKind::Backend {
+        line: 0,
+        column: 0,
         message: "Avenys does not yet lower expression Tuple(...)".to_string(),
     })
     .to_string();
@@ -354,7 +357,6 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -363,6 +365,8 @@ fn enum_variant_named_payloads_are_reordered_by_declared_field_names() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("named enum payloads should compile");
@@ -446,7 +450,6 @@ fn if_expression_infers_branch_type_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -455,6 +458,8 @@ fn if_expression_infers_branch_type_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("if expression should compile");
@@ -513,7 +518,6 @@ fn match_expression_with_default_infers_string_branch_type_and_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -522,6 +526,8 @@ fn match_expression_with_default_infers_string_branch_type_and_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("match expression returning string should compile");
@@ -555,7 +561,6 @@ fn match_expression_can_be_returned_directly_from_function() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -564,6 +569,8 @@ fn match_expression_can_be_returned_directly_from_function() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("return match should compile");
@@ -596,7 +603,6 @@ fn enum_match_without_default_returns_second_variant_string() {
         &BuildOptions {
             mode: BuildMode::Release,
             opt_level: OptLevel::O3,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -605,6 +611,8 @@ fn enum_match_without_default_returns_second_variant_string() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("enum match returning second variant string should compile");
@@ -635,7 +643,6 @@ fn incremental_recompile_keeps_enum_match_string_result_consistent() {
             &BuildOptions {
                 mode: BuildMode::Release,
                 opt_level: OptLevel::O3,
-                debug_dump: false,
                 output: None,
                 emit_binary: true,
                 persist_ir: false,
@@ -643,10 +650,12 @@ fn incremental_recompile_keeps_enum_match_string_result_consistent() {
                 cache: Default::default(),
                 warning_filter: mire::error::diagnostic::WarningFilter::Default,
                 deny_warnings: std::collections::HashSet::new(),
-                module_paths: vec![],
-            },
-        )
-        .expect("compile case");
+                    module_paths: vec![],
+                    test_mode: false,
+                ..Default::default()
+                },
+            )
+            .expect("compile case");
 
         let output = Command::new(&build.binary_path)
             .output()
@@ -705,7 +714,6 @@ fn instance_method_call_resolves_and_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -714,6 +722,8 @@ fn instance_method_call_resolves_and_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("instance method call should compile");
@@ -747,7 +757,6 @@ fn direct_template_member_access_prints_field_values() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -756,6 +765,8 @@ fn direct_template_member_access_prints_field_values() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("member access template should compile");
@@ -792,7 +803,6 @@ fn direct_struct_field_assignment_updates_mutable_binding() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -801,6 +811,8 @@ fn direct_struct_field_assignment_updates_mutable_binding() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("field assignment should compile");
@@ -846,7 +858,6 @@ fn struct_with_array_field_declaration_and_construction_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -855,6 +866,8 @@ fn struct_with_array_field_declaration_and_construction_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("struct array field should compile");
@@ -887,7 +900,6 @@ fn static_impl_method_call_resolves_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -896,6 +908,8 @@ fn static_impl_method_call_resolves_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("static impl method call should compile");
@@ -930,7 +944,6 @@ fn implicit_self_method_return_still_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -939,6 +952,8 @@ fn implicit_self_method_return_still_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("explicit self method return should compile");
@@ -1053,7 +1068,6 @@ fn runtime_division_by_zero_exits_with_error() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1062,6 +1076,8 @@ fn runtime_division_by_zero_exits_with_error() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -1095,7 +1111,6 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1104,6 +1119,8 @@ fn signed_integer_division_and_remainder_match_runtime_expectations() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -1137,7 +1154,6 @@ fn float_arithmetic_with_typed_float_variable_executes() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1146,6 +1162,8 @@ fn float_arithmetic_with_typed_float_variable_executes() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("float arithmetic should compile");
@@ -1193,7 +1211,6 @@ fn secondary_for_loop_binding_compiles_and_uses_index() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1202,6 +1219,8 @@ fn secondary_for_loop_binding_compiles_and_uses_index() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("two-binding for loop should compile");
@@ -1242,6 +1261,7 @@ fn advanced_literals_compile_and_run() {
         warning_filter: mire::error::diagnostic::WarningFilter::Default,
         deny_warnings: std::collections::HashSet::new(),
         module_paths: vec![],
+        test_mode: false,
     };
 
     let ir_path = root.join("bin").join("debug").join("advanced_literals.ll");
@@ -1286,7 +1306,6 @@ fn unsafe_block_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1295,6 +1314,8 @@ fn unsafe_block_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("unsafe block should compile");
@@ -1327,7 +1348,6 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1336,6 +1356,8 @@ fn extern_and_inline_asm_declarations_parse_and_compile() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("extern/asm declarations should compile");
@@ -1361,7 +1383,6 @@ fn runtime_out_of_bounds_exits_with_error() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1370,6 +1391,8 @@ fn runtime_out_of_bounds_exits_with_error() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -1403,7 +1426,6 @@ fn callback_call_named_function_runs_end_to_end() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1412,6 +1434,8 @@ fn callback_call_named_function_runs_end_to_end() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("callback call should compile");
@@ -1444,7 +1468,6 @@ fn callback_call_extern_fn_runs_end_to_end() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1453,6 +1476,8 @@ fn callback_call_extern_fn_runs_end_to_end() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("extern callback call should compile");
@@ -1485,7 +1510,6 @@ fn callback_call_closure_with_capture_runs_end_to_end() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1494,6 +1518,8 @@ fn callback_call_closure_with_capture_runs_end_to_end() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("capturing closure callback should compile");
@@ -1526,7 +1552,6 @@ fn callback_call_function_value_alias_runs_end_to_end() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1535,6 +1560,8 @@ fn callback_call_function_value_alias_runs_end_to_end() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("function value callback alias should compile");
@@ -1567,7 +1594,6 @@ fn callback_call_extern_function_value_alias_runs_end_to_end() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1576,6 +1602,8 @@ fn callback_call_extern_function_value_alias_runs_end_to_end() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("extern function value callback alias should compile");
@@ -1650,7 +1678,6 @@ fn string_literals_accept_braces_without_escape_hacks() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -1659,6 +1686,8 @@ fn string_literals_accept_braces_without_escape_hacks() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("brace-containing escaped template string should compile");
@@ -1691,7 +1720,6 @@ fn contains_on_list_returns_correct_result() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1700,6 +1728,8 @@ fn contains_on_list_returns_correct_result() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("contains should compile");
@@ -1740,7 +1770,6 @@ fn strings_split_returns_list_and_works_with_join() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1749,6 +1778,8 @@ fn strings_split_returns_list_and_works_with_join() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("strings.split should compile");
@@ -1782,7 +1813,6 @@ fn strings_split_supports_multi_char_delimiter() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1791,6 +1821,8 @@ fn strings_split_supports_multi_char_delimiter() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("strings.split multichar should compile");
@@ -1827,7 +1859,6 @@ fn strings_split_preserves_empty_segments() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1836,6 +1867,8 @@ fn strings_split_preserves_empty_segments() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("strings.split empty segments should compile");
@@ -1869,7 +1902,6 @@ fn kioto_strings_reference_api_reuses_the_same_binding() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1878,6 +1910,8 @@ fn kioto_strings_reference_api_reuses_the_same_binding() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("strings reference api should compile");
@@ -1901,7 +1935,7 @@ fn kioto_lists_reference_api_reuses_the_same_binding() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn main: () {\n    set nums = [1 2 3 2] :vec[i64]\n    set len1 = lists.len(nums)\n    set has_two = lists.contains(nums 2)\n    set first = lists.first(nums)\n    set last = lists.last(nums)\n    set idx = lists.index_of(nums 2)\n    set len2 = lists.len(nums)\n    use dasu(\"{len1}-{has_two}-{first}-{last}-{idx}-{len2}\")\n}\n",
+        "load kioto\n\npub fn main: () {\n    set nums = [1 2 3 2] :vec[i64]\n    set len1 = lists.len(nums)\n    set has_two = lists.contains(nums 2)\n    set first = lists.first(nums)\n    set last = lists.last(nums)\n    set idx = lists.index(nums 2)\n    set len2 = lists.len(nums)\n    use dasu(\"{len1}-{has_two}-{first}-{last}-{idx}-{len2}\")\n}\n",
     )
     .expect("write source");
 
@@ -1910,7 +1944,6 @@ fn kioto_lists_reference_api_reuses_the_same_binding() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1919,6 +1952,8 @@ fn kioto_lists_reference_api_reuses_the_same_binding() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("lists reference api should compile");
@@ -1949,7 +1984,6 @@ fn syntax_reference_prototype_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -1958,6 +1992,8 @@ fn syntax_reference_prototype_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("syntax prototype should compile");
@@ -1993,7 +2029,6 @@ fn array_index_assignment_mutates_elements_in_place() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2002,6 +2037,8 @@ fn array_index_assignment_mutates_elements_in_place() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -2035,7 +2072,6 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2044,6 +2080,8 @@ fn struct_array_field_index_assignment_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -2077,7 +2115,6 @@ fn shared_reference_lowering_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2086,6 +2123,8 @@ fn shared_reference_lowering_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -2119,7 +2158,6 @@ fn impl_method_can_mutate_self_field_and_run() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2128,6 +2166,8 @@ fn impl_method_can_mutate_self_field_and_run() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("compile");
@@ -2211,7 +2251,6 @@ fn enum_match_payload_statement_body_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2220,6 +2259,8 @@ fn enum_match_payload_statement_body_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("enum match payload statement body should compile");
@@ -2245,7 +2286,6 @@ fn enum_match_multiple_payloads_compile() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2254,6 +2294,8 @@ fn enum_match_multiple_payloads_compile() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("enum match with multiple payloads should compile");
@@ -2279,7 +2321,6 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2288,6 +2329,8 @@ fn enum_declaration_with_comma_separated_payloads_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("comma-separated enum payloads should compile");
@@ -2313,7 +2356,6 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2322,6 +2364,8 @@ fn enum_match_statement_payload_bindings_support_string_and_bool() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("match statement payload bindings should support string and bool");
@@ -2342,7 +2386,6 @@ fn pipeline_len_builtin_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2351,6 +2394,8 @@ fn pipeline_len_builtin_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("pipeline len should compile");
@@ -2371,7 +2416,6 @@ fn nested_output_pipeline_compiles() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2380,6 +2424,8 @@ fn nested_output_pipeline_compiles() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("nested output pipeline should compile");
@@ -2400,7 +2446,6 @@ fn find_statement_compiles_and_lowers() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2409,6 +2454,8 @@ fn find_statement_compiles_and_lowers() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("find statement should compile and lower");
@@ -2484,7 +2531,6 @@ fn generic_impl_method_codegen_builds_for_concrete_type() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2493,6 +2539,8 @@ fn generic_impl_method_codegen_builds_for_concrete_type() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("generic impl should compile");
@@ -2539,7 +2587,6 @@ fn debug_build_persists_ir_on_disk() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: true,
@@ -2548,6 +2595,8 @@ fn debug_build_persists_ir_on_disk() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("debug compile");
@@ -2661,7 +2710,6 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2670,6 +2718,8 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("first compile");
@@ -2686,7 +2736,6 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2695,6 +2744,8 @@ fn incremental_build_reuses_artifacts_when_inputs_are_unchanged() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("second compile");
@@ -2740,7 +2791,6 @@ fn incremental_build_invalidates_on_local_import_change() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2749,6 +2799,8 @@ fn incremental_build_invalidates_on_local_import_change() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("first compile");
@@ -2769,7 +2821,6 @@ fn incremental_build_invalidates_on_local_import_change() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2778,6 +2829,8 @@ fn incremental_build_invalidates_on_local_import_change() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("second compile");
@@ -2809,7 +2862,6 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2818,6 +2870,8 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect_err("first compile should fail");
@@ -2833,7 +2887,6 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2842,6 +2895,8 @@ fn incremental_analysis_error_is_cached_for_identical_inputs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect_err("second compile should fail");
@@ -2880,7 +2935,6 @@ fn list_hofs_infer_closure_params_and_execute() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2889,6 +2943,8 @@ fn list_hofs_infer_closure_params_and_execute() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("list hof sample should compile");
@@ -2923,7 +2979,6 @@ fn nested_map_string_render_executes_without_runtime_errors() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -2932,6 +2987,8 @@ fn nested_map_string_render_executes_without_runtime_errors() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("nested map sample should compile");
@@ -3029,7 +3086,6 @@ fn match_supports_or_patterns_and_numeric_ranges() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3038,6 +3094,8 @@ fn match_supports_or_patterns_and_numeric_ranges() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("match or/range should compile");
@@ -3070,7 +3128,6 @@ fn match_guard_when_is_supported() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3079,6 +3136,8 @@ fn match_guard_when_is_supported() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("match guard should compile");
@@ -3216,7 +3275,6 @@ pub fn main: () {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3225,6 +3283,8 @@ pub fn main: () {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("div_safe should compile");
@@ -3254,7 +3314,6 @@ fn borrowck_moves_in_if_else_are_tracked_per_branch() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3263,6 +3322,8 @@ fn borrowck_moves_in_if_else_are_tracked_per_branch() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     );
     assert!(
@@ -3302,7 +3363,6 @@ fn borrowck_moves_in_match_arms_are_tracked_per_arm() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3311,6 +3371,8 @@ fn borrowck_moves_in_match_arms_are_tracked_per_arm() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     );
     assert!(
@@ -3344,7 +3406,6 @@ fn borrowck_closure_captures_and_moves() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3353,6 +3414,8 @@ fn borrowck_closure_captures_and_moves() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     );
     // Currently compiles because closure capture is not tracked
@@ -3471,7 +3534,6 @@ fn local_import_restructured_module_dir() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3480,6 +3542,8 @@ fn local_import_restructured_module_dir() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     );
     assert!(
@@ -3509,7 +3573,6 @@ fn kioto_async_ready_value_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3518,6 +3581,8 @@ fn kioto_async_ready_value_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("async ready sample should compile");
@@ -3550,7 +3615,6 @@ fn kioto_math_module_compiles_and_runs_real_wrappers() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3559,6 +3623,8 @@ fn kioto_math_module_compiles_and_runs_real_wrappers() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("math sample should compile");
@@ -3591,7 +3657,6 @@ fn math_sum_lowers_to_runtime_math_abi() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: false,
             persist_ir: true,
@@ -3600,6 +3665,8 @@ fn math_sum_lowers_to_runtime_math_abi() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("math IR sample should compile");
@@ -3756,7 +3823,6 @@ fn kioto_async_spawn_wait_compiles_and_runs() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3765,6 +3831,8 @@ fn kioto_async_spawn_wait_compiles_and_runs() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("async spawn sample should compile");
@@ -3788,7 +3856,7 @@ fn runtime_lists_abi_smoke_test() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn main: () {\n    set xs = [10 20 30]\n    use dasu(lists.len(xs))\n    use dasu(lists.get(xs, 1))\n    use dasu(lists.first(xs))\n    use dasu(lists.last(xs))\n    use dasu(lists.contains(xs, 20))\n    use dasu(lists.contains(xs, 99))\n    use dasu(lists.index_of(xs, 30))\n}\n",
+        "load kioto\n\npub fn main: () {\n    set xs = [10 20 30]\n    use dasu(lists.len(xs))\n    use dasu(lists.get(xs, 1))\n    use dasu(lists.first(xs))\n    use dasu(lists.last(xs))\n    use dasu(lists.contains(xs, 20))\n    use dasu(lists.contains(xs, 99))\n    use dasu(lists.index(xs, 30))\n}\n",
     )
     .expect("write source");
 
@@ -3797,7 +3865,6 @@ fn runtime_lists_abi_smoke_test() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3806,6 +3873,8 @@ fn runtime_lists_abi_smoke_test() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("lists ABI test should compile");
@@ -3858,7 +3927,6 @@ fn runtime_strings_abi_smoke_test() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3867,6 +3935,8 @@ fn runtime_strings_abi_smoke_test() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("strings ABI test should compile");
@@ -3912,7 +3982,7 @@ fn runtime_dicts_abi_smoke_test() {
     .expect("write project");
     fs::write(
         &source_path,
-        "load kioto\n\npub fn test_len: (d) :i64 { return dicts.len(d) }\npub fn test_has: (d, k :str) :bool { return dicts.has(d, k) }\npub fn test_is_empty: (d) :bool { return dicts.is_empty(d) }\npub fn main: () {\n    use dasu(test_len({a: 1, b: 2, c: 3} :map[str i64]))\n    use dasu(test_has({a: 1} :map[str i64], \"a\"))\n    use dasu(test_has({a: 1} :map[str i64], \"z\"))\n    use dasu(test_is_empty({} :map[str i64]))\n}\n",
+        "load kioto\n\npub fn test_len: (d) :i64 { return dicts.len(d) }\npub fn test_has: (d, k :str) :bool { return dicts.has(d, k) }\npub fn test_is_empty: (d) :bool { return dicts.check::empty(d) }\npub fn main: () {\n    use dasu(test_len({a: 1, b: 2, c: 3} :map[str i64]))\n    use dasu(test_has({a: 1} :map[str i64], \"a\"))\n    use dasu(test_has({a: 1} :map[str i64], \"z\"))\n    use dasu(test_is_empty({} :map[str i64]))\n}\n",
     )
     .expect("write source");
 
@@ -3921,7 +3991,6 @@ fn runtime_dicts_abi_smoke_test() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3930,6 +3999,8 @@ fn runtime_dicts_abi_smoke_test() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("dicts ABI test should compile");
@@ -3970,7 +4041,6 @@ fn pal_env_get_returns_home() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -3979,6 +4049,8 @@ fn pal_env_get_returns_home() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("env.get should compile");
@@ -4011,7 +4083,6 @@ fn pal_env_cwd_returns_non_empty() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4020,6 +4091,8 @@ fn pal_env_cwd_returns_non_empty() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("env.cwd should compile");
@@ -4054,7 +4127,6 @@ fn pal_fs_write_read_roundtrip() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4063,6 +4135,8 @@ fn pal_fs_write_read_roundtrip() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("fs rw should compile");
@@ -4100,7 +4174,6 @@ fn pal_fs_path_ops_join_dir_name_ext() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4109,6 +4182,8 @@ fn pal_fs_path_ops_join_dir_name_ext() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("fs path ops should compile");
@@ -4146,7 +4221,6 @@ fn pal_fs_mkdir_rmdir() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4155,6 +4229,8 @@ fn pal_fs_mkdir_rmdir() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("fs mkdir should compile");
@@ -4184,7 +4260,6 @@ fn pal_proc_shell_echo() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4193,6 +4268,8 @@ fn pal_proc_shell_echo() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("proc.shell should compile");
@@ -4222,7 +4299,6 @@ fn pal_proc_spawn_wait_exit_code() {
         &BuildOptions {
             mode: BuildMode::Debug,
             opt_level: OptLevel::O0,
-            debug_dump: false,
             output: None,
             emit_binary: true,
             persist_ir: false,
@@ -4231,6 +4307,8 @@ fn pal_proc_spawn_wait_exit_code() {
             warning_filter: mire::error::diagnostic::WarningFilter::Default,
             deny_warnings: std::collections::HashSet::new(),
             module_paths: vec![],
+            test_mode: false,
+        ..Default::default()
         },
     )
     .expect("proc spawn/wait should compile");

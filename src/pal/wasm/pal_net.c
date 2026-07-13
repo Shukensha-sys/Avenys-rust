@@ -26,6 +26,11 @@ int pal_net_send(int64_t fd, const char *data) {
     return 0;
 }
 
+int pal_net_send_bytes(int64_t fd, const char *data, int64_t len) {
+    (void)fd; (void)data; (void)len;
+    return 0;
+}
+
 int pal_net_close(int64_t fd) {
     (void)fd;
     return 0;

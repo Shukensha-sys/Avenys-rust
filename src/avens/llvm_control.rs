@@ -8,6 +8,8 @@ impl LlvmIrGen {
     ) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys __if_expr expects 3 arguments".to_string(),
             }));
         }
@@ -219,6 +221,8 @@ impl LlvmIrGen {
             if name == "__match_guard" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line,
+                        column: self.current_column,
                         message: "Avenys __match_guard expects pattern and guard".to_string(),
                     }));
                 }
@@ -240,6 +244,8 @@ impl LlvmIrGen {
             if name == "__match_or" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line,
+                        column: self.current_column,
                         message: "Avenys __match_or expects two patterns".to_string(),
                     }));
                 }
@@ -257,6 +263,8 @@ impl LlvmIrGen {
             if name == "__match_range" {
                 if args.len() != 2 {
                     return Err(MireError::new(ErrorKind::Backend {
+                        line: self.current_line,
+                        column: self.current_column,
                         message: "Avenys __match_range expects start and end".to_string(),
                     }));
                 }
@@ -392,6 +400,8 @@ impl LlvmIrGen {
             }
             _ => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys does not yet compare match values of type {:?} against {:?}",
                         value.ty, pattern_value.ty
@@ -413,9 +423,12 @@ impl LlvmIrGen {
             LlType::I8 => (1, "i8", value.repr),
             LlType::I64 => (8, "i64", self.cast_to_i64(value)?.repr),
             LlType::F64 => (8, "double", value.repr),
+            LlType::I128 => (16, "i128", self.cast_to_i128(value)?.repr),
             LlType::Ptr => (8, "ptr", self.cast_to_type(value, LlType::Ptr)?.repr),
             LlType::Struct(_) => {
                 return Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Cannot heap-box a struct value".to_string(),
                 }));
             }
@@ -498,6 +511,7 @@ impl LlvmIrGen {
                         ty: payload_ty,
                         data_type: payload_data_type,
                         owns_heap_string: false,
+                        needs_init: true,
                         struct_name: None,
                     },
                 ),
@@ -527,11 +541,15 @@ impl LlvmIrGen {
     ) -> Result<(&'a EnumInfo, &'a VariantInfo)> {
         let enum_info = self.user_enums.get(enum_name).ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Unknown enum '{}'", enum_name),
             })
         })?;
         let variant = enum_info.variants.get(variant_name).ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Enum '{}' has no variant '{}'", enum_name, variant_name),
             })
         })?;
@@ -564,12 +582,19 @@ impl LlvmIrGen {
                 repr: raw_value,
                 owned: false,
             }),
+            LlType::I128 => Ok(LlValue {
+                ty: LlType::I128,
+                repr: raw_value,
+                owned: false,
+            }),
             LlType::I8 => Ok(LlValue {
                 ty: LlType::I8,
                 repr: raw_value,
                 owned: false,
             }),
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
             LlType::Ptr => {
@@ -631,6 +656,8 @@ impl LlvmIrGen {
     pub(super) fn compile_do_while(&mut self, args: &[Expression]) -> Result<()> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys __do_while expects 2 closures".to_string(),
             }));
         }
@@ -689,12 +716,16 @@ impl LlvmIrGen {
                 3 => (args[0].clone(), args[1].clone(), args[2].clone()),
                 _ => {
                     return Err(MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: "Avenys range(...) supports 1 to 3 arguments".to_string(),
                     }));
                 }
             },
             other => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys for-loop currently supports range(...) only, found {:?}",
                         other
@@ -722,6 +753,7 @@ impl LlvmIrGen {
                 ty: LlType::I64,
                 data_type: DataType::I64,
                 owns_heap_string: false,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -737,6 +769,7 @@ impl LlvmIrGen {
                     ty: LlType::I64,
                     data_type: DataType::I64,
                     owns_heap_string: false,
+                    needs_init: true,
                     struct_name: None,
                 },
             );
@@ -859,6 +892,8 @@ impl LlvmIrGen {
             }
             _ => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys for-loop supports range(...) and list/vector/slice, found {:?}",
                         iterable
@@ -886,6 +921,7 @@ impl LlvmIrGen {
                 ty: var_ll_ty.clone(),
                 data_type: element_type.clone(),
                 owns_heap_string: false,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -898,6 +934,7 @@ impl LlvmIrGen {
                     ty: LlType::I64,
                     data_type: DataType::I64,
                     owns_heap_string: false,
+                    needs_init: true,
                     struct_name: None,
                 },
             )

@@ -2,6 +2,250 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.14.0] - 2026-07-13
+
+### Added
+
+- **`mire test --jobs, -j <n>`**: Parallel compilation of test files. When `0`
+  (default), uses `std::thread::available_parallelism()`. Test harnesses are
+  compiled in chunks of size `n` inside a `std::thread::scope`.
+- **`mire test --jobs=N`** syntax: Alternative `--jobs=4` form supported in
+  argument parsing.
+
+### Changed
+
+- **`mire test` now compiles in parallel**: All test files are compiled
+  concurrently within a thread scope, then executed sequentially. This
+  dramatically reduces wall-clock time on multi-core machines.
+- **Test harnesses moved to `bin/.cache/test/`**: Instead of writing to
+  `/tmp/`, the auto-generated test wrappers live in `bin/.cache/test/<stem>.mire`.
+  This ensures `find_project_root()` can locate `owl.toml`, making the
+  incremental compilation cache reusable across all tests in a single run.
+
+### Removed
+
+- **Phase 0 dead code**: Debug-dump environment variables `MIRE_DEBUG_CACHE`
+  and `MIRE_DEBUG_LINK`, and the `[DEBUG IR]` eprintln from
+  `build_pipeline.rs` removed. Error codes `E0002`, `E0004`, `E0006` and 13
+  unreferenced warning codes (`W0015`, `W0016`, `W0020`, `W0022`, `W0023`,
+  `W0026`–`W0033`) eliminated from `diagnostic.rs`.
+- **Redundant `async::exists()`**: Removed from kioto's `core/async/mod.mire`
+  — identical to and superseded by `proc::exists()`.
+
+## [3.13.0] - 2026-07-12
+
+### Fixed
+
+- **`ErrorKind::Runtime` now carries source position**: Added `line: usize,
+  `column: usize` fields to `ErrorKind::Runtime`, matching every other error
+  variant. Previously the only variant without location data, causing all
+  runtime errors to display `<source location unavailable>`. All construction
+  sites updated with `line: 0, column: 0` defaults.
+- **`attach_context` detects `(0,0)` instead of `(1,1)`**: The condition that
+  skips attaching context for unpositioned errors was stuck at `(1,1)` —
+  leftover from an old line-numbering scheme. Changed to `(0,0)` to match
+  the actual sentinel for `NO_POSITION`.
+- **External tool errors chain source filename**: `optimize_ir()` and
+  `compile_binary_from_ir()` in `toolchain.rs` now accept a `source_filename`
+  parameter and call `.with_filename()` on their errors. `build_pipeline.rs`
+  passes `&source_filename` at both call sites, so linker/optimizer failures
+  include the output path instead of being orphaned.
+
+### Changed
+
+- **Runtime error display**: When no source position is available, the
+  compiler now shows `<no source location; emitted from non-positioned
+  backend/runtime path>` instead of the misleading `<source location
+  unavailable>`, making it clear the error originates outside the MIR/source
+  line tracking system.
+- **`incremental/mod.rs`**: `StoredErrorKind::Runtime` extended with `line`
+  and `column` fields for cache serialization compatibility.
+
+## [3.12.5] - 2026-07-10
+
+### Fixed
+
+- **`str()` builtin shadowed by `get.str`**: When `load kioto` was used, the
+  `str()` conversion function was incorrectly resolved to `get.str` (from
+  `kioto/lists/get.mire`). `extract_bare_name_map` in `mir/lower/mod.rs` now
+  excludes `"str"` from bare-to-qualified mappings, ensuring `str()` always
+  calls `rt_i64_to_string`.
+- **List literal corruption with negative integers**: `-5349999486874862801`
+  inside `[...] :vec[i64]` was lexed as `Minus` + `IntLit`, causing the parser's
+  `parse_additive` to treat `a -b` as binary subtraction `a - b`. This collapsed
+  3 list elements into 2 and corrupted the second value. The lexer now emits a
+  single `IntLit` token with the negative value when `-` is immediately followed
+  by a digit (no whitespace).
+- **`strings::substr` off-by-one**: Clamping used `(size_t)(start + length) > len`
+  which could overflow `int64`. Changed to `length > avail` where
+  `avail = (int64_t)(len - (size_t)start)` for safe comparison.
+
+### Docs
+
+- **CHANGELOG.md**: Added missing entries for v3.12.3 and v3.12.4.
+- **Benchmark tests**: Updated all `.` → `::` notation in compiler benchmark
+  fixtures (`lists.fold` → `lists::fold`, `fs.write` → `fs::write`, etc.)
+
+## [3.12.4] - 2026-07-09
+
+### Added
+
+- **Multi-line expression continuation**: Binary operators at end of line
+  trigger implicit continuation. `skip_newlines()` added in all 10 binary
+  operator parse functions: `parse_or`, `parse_xor`, `parse_and`,
+  `parse_equality`, `parse_bitwise_or`, `parse_bitwise_and`,
+  `parse_comparison`, `parse_additive`, `parse_shift`,
+  `parse_multiplicative`. Works for: `&&` `||` `+` `-` `*` `/` `%` `<<`
+  `>>` `&` `|` `^` `==` `!=` `<` `>` `<=` `>=`.
+- **Binary-safe file I/O**: `rt_read_bytes(path)` reads a file in binary
+  mode and returns a managed string with correct byte length set in the
+  header (no `strlen` truncation on embedded nulls). `pal_fs_read_bytes`
+  and `pal_fs_write_bytes` provide PAL-level binary-safe read/write.
+- **`rt_hex_to_file(path, hex)`**: C function decodes hex string to raw
+  bytes and writes to file. Replaces the `xxd -r -p` subprocess in
+  Ed25519 verify — crypto module now has **zero external binary conversion
+  dependencies**.
+
+### Changed
+
+- **Install script**: `openssl` added as a prerequisite for crypto module.
+  `xxd`/`vim-common` added then removed after `rt_hex_to_file` replacement.
+- **CI workflows**: `openssl` installed in `apt` deps for test runners.
+
+### Docs
+
+- **SYNTAX.md**: Updated with bitwise operators (`^ & | << >>`), multi-line
+  expression continuation, and list/dict literal quirks.
+
+## [3.12.3] - 2026-07-09
+
+### Added
+
+- **Bitwise operators**: `^` (XOR), `&` (bitwise AND), `|` (bitwise OR),
+  `<<` (shift left), `>>` (shift right). New MIR ops: `MirOp::Shr`,
+  `MirOp::Xor`, `MirOp::BitAnd`, `MirOp::BitOr`. LLVM codegen emits
+  `lshr`, `xor`, `and`, `or` respectively.
+- **`rt_lists_set_i64(list, index, value)`**: C runtime function for
+  in-place list element mutation (`lists::set`).
+- **`rt_crypto_byte_at(str, index)`**: C runtime function for raw byte
+  access from managed strings, used by hex/base64 decode.
+
+### Fixed
+
+- **MIR lowering for unknown binary ops**: Previously all unrecognized
+  operators silently routed to `MirOp::Add`. Now correctly dispatches
+  each bitwise operator.
+
+### Changed
+
+- **Constant folding, DCE, simplify, inline, wrapper passes**: All updated
+  to handle the five new `MirOp` variants.
+- **Hash discriminants**: byte 27 = `BitAnd`, byte 28 = `BitOr` in
+  `mir/mod.rs`.
+
+## [3.12.2] - 2026-07-08
+
+### Fixed
+
+- **Test discovery no longer follows symlinks**: `walkdir()` in `src/main.rs`
+  now skips symlinks during test file discovery. Previously, `tests/lib` (a
+  symlink to `testlib/`) was recursed into, discovering `tests/lib/mod.mire`
+  as a test file. Since that file contains `module` and `load` statements
+  (only valid at top level), wrapping it in `pub fn main: () { ... }` caused
+  a syntax error when run as a test.
+
+## [3.11.45] - 2026-07-07
+
+### Fixed
+- **Analysis cache invalidation**: `analysis_cache_key` now includes `dep_fingerprint`
+  (combined hash of all loaded files + dependency edges). Previously, changing a
+  loaded module's source would not invalidate the importing file's cached analysis.
+- **`store_analysis_error`**: Now writes a `::latest` entry (same as `store_analysis`),
+  so partial re-analysis always finds the most recent snapshot even after errors.
+- **LRU tracking for `::latest` keys**: Both fingerprint-keyed and `::latest` entries
+  are LRU-tracked; `store_analysis` and `store_analysis_error` both maintain the
+  latest key.
+- **`blob_hash` clone**: Fixed borrow-after-move when computing blob hash for
+  analysis entries.
+- **Flat builtin aliases**: Both MIR and LLVM codegen now accept flat names
+  (`fs_exists`, `fs_read`, `fs_drop`, `fs_list`, `proc_run`, `proc_exit`,
+  `env_get`, `env_cwd`, `env_all`, `time_unix_ms`, `mem_used`, `cpu_count`)
+  alongside the canonical `::` names. This provides backward compatibility for
+  code using the legacy flat style.
+
+### Added
+- **`dependency_fingerprint()`**: New utility in `src/incremental/utils.rs` that
+  hashes all loaded file paths, content hashes, and dependency edges into a single
+  `u64` for the analysis cache key.
+
+### Docs
+- **`docs/incremental-design.md`**: Added §"Analysis Cache Invalidation (v3.11.45+)"
+  documenting `dependency_fingerprint`, three-param `analysis_cache_key`,
+  `latest_analysis_key`, two-entry store, and cache migration.
+- **CHANGELOG.md**: Bumped to 3.11.45.
+
+## [3.11.44] - 2026-07-06
+
+### Added
+- **Builtin modularization**: Namespace syntax for builtins replacing
+  legacy flat names:
+  - `thread::spawn` / `thread::join` (was `thread_spawn` / `thread_join`)
+  - `time::now::ms` (was `time_unix_ms`)
+  - `cpu::count` (was `cpu_count`)
+  - `mem::used` (was `mem_used`)
+  - `env::get` (was `env_get`)
+- **Parser `::` member access**: `check_double_colon()` in parser helpers
+  recognizes `::` as member access, building `MemberAccess { target, member }`
+  AST nodes. The chain `module::sub::fn(...)` lowers to `module.sub.fn(...)` for
+  call resolution.
+
+### Changed
+- **Builtin registry**: `default_builtin_returns` updated for all new namespace
+  builtins.
+- **Kioto adapters**: `core/async/mod.mire` uses `thread::spawn`/`thread::join`
+  instead of legacy `thread_spawn`/`thread_join`.
+
+## [3.11.43] - 2026-07-06
+
+### Added
+- **`thread_spawn` builtin**: Spawns an OS thread running a closure.
+  Internally calls `pal_thread_spawn` via `rt_thread_spawn_closure`
+  runtime helper. Supports both closure variables and inline closures.
+  Returns `i64` thread ID.
+- **PAL thread layer**: `pal_thread_spawn`, `pal_thread_join`,
+  `pal_thread_self`, `pal_thread_exit` with pthread implementation
+  on Linux. `-pthread` linker flag added automatically.
+- **Closure variable calls (`typeck_check_expression.rs:448`)**: When
+  a variable name has `Closure` or `Function` type, the call is accepted
+  and its return type used, instead of emitting "Unknown function".
+- **MIR indirect closure calls (`mir/lower/expr.rs:305`)**: Closure
+  variables lower to `MirValue::Temp(ptr)` instead of `FunctionRef`,
+  enabling codegen to emit indirect calls via the closure struct.
+
+### Changed
+- **Type checker**: `default_builtin_returns` in `src/builtins/mod.rs`
+  now includes `thread_spawn` → `I64`.
+
+### Docs
+- **CHANGELOG.md**: Bumped to 3.11.43.
+
+## [3.11.38] - 2026-07-03
+
+### Fixed
+- **Loader**: `select_imported_statements` in `src/loader.rs` now also matches
+  `ExternFunction` and `ExternLib` by their declaration name (not just via
+  `statement_export_name`), so private externs are no longer dropped when loading
+  modules via `ImportMode::Reachable` with selected items. (Fixes SDL3 function
+  resolution when importing `kioto::sdl3`.)
+
+### Changed
+- **Type checker**: Removed three `eprintln!` debug lines (`DEBUG_STMTS`,
+  `DEBUG_FUNCS`, `DEBUG_SEL`) from `src/compiler/typeck.rs:109-121` that were
+  left over from SDL3 FFI debugging.
+
+### Docs
+- **CHANGELOG.md**: Bumped to 3.11.38.
+
 ## [3.11.37] - 2026-07-01
 
 ### Added

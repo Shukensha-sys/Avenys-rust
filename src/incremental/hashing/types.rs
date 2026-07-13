@@ -6,6 +6,8 @@ pub(super) fn hash_data_type(data_type: &DataType, hasher: &mut FxHasher) {
         DataType::I16 => hasher.write_u8(1),
         DataType::I32 => hasher.write_u8(2),
         DataType::I64 => hasher.write_u8(3),
+        DataType::I128 => hasher.write_u8(39),
+        DataType::U128 => hasher.write_u8(40),
         DataType::U8 => hasher.write_u8(4),
         DataType::U16 => hasher.write_u8(5),
         DataType::U32 => hasher.write_u8(6),
@@ -85,6 +87,11 @@ pub(super) fn hash_data_type(data_type: &DataType, hasher: &mut FxHasher) {
         DataType::Generic(name) => {
             hasher.write_u8(37);
             name.hash(hasher);
+        }
+        DataType::Closure { params, return_type } => {
+            hasher.write_u8(38);
+            hash_data_types(params, hasher);
+            hash_data_type(return_type, hasher);
         }
     }
 }

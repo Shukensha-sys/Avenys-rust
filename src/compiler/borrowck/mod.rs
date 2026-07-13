@@ -130,6 +130,8 @@ impl<'a> BorrowChecker<'a> {
     ) -> Result<()> {
         if statement_mask.len() != statements.len() {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Borrow check mask length mismatch: expected {}, got {}",
                     statements.len(),
@@ -457,7 +459,7 @@ impl<'a> BorrowChecker<'a> {
                 self.check_statements(fields)?;
             }
             Statement::Skill { .. } => {}
-            Statement::Unsafe { body } => {
+            Statement::Unsafe { body, .. } => {
                 self.unsafe_depth += 1;
                 self.push_scope();
                 let result = self.check_statements(body);
@@ -887,11 +889,15 @@ impl<'a> BorrowChecker<'a> {
             DataType::RefMut { .. } => {
                 if let Some((target, is_mutable)) = Self::reference_target(Some(arg)) {
                     if !is_mutable {
-                        return Err(MireError::type_error(format!(
-                            "Function '{}' argument {} requires a mutable reference",
-                            callee,
-                            index + 1
-                        )));
+                        return Err(MireError::type_error_at(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Function '{}' argument {} requires a mutable reference",
+                                callee,
+                                index + 1
+                            ),
+                        ));
                     }
                     self.ensure_borrow_allowed(&target, true)?;
                 } else if let Some(name) = Self::identifier_name(arg)
@@ -937,10 +943,12 @@ impl<'a> BorrowChecker<'a> {
                 | DataType::I16
                 | DataType::I32
                 | DataType::I64
+                | DataType::I128
                 | DataType::U8
                 | DataType::U16
                 | DataType::U32
                 | DataType::U64
+                | DataType::U128
                 | DataType::F32
                 | DataType::F64
                 | DataType::Bool
@@ -952,7 +960,7 @@ impl<'a> BorrowChecker<'a> {
     }
 
     fn ownership_error(&self, kind: MssError) -> MireError {
-        MireError::ownership_error(self.current_line.max(1), self.current_column.max(1), kind)
+        MireError::ownership_error(self.current_line, self.current_column, kind)
     }
 
     fn statement_location(statement: &Statement) -> (usize, usize) {
@@ -1054,6 +1062,8 @@ mod tests {
     #[test]
     fn rejects_assignment_while_shared_borrow_exists() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1081,6 +1091,8 @@ mod tests {
     #[test]
     fn rejects_mutable_borrow_while_shared_borrow_exists() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1112,6 +1124,8 @@ mod tests {
     #[test]
     fn rejects_use_after_move() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Move {
@@ -1132,6 +1146,8 @@ mod tests {
     #[test]
     fn releases_borrow_on_scope_exit() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::If {
@@ -1163,6 +1179,8 @@ mod tests {
     #[test]
     fn unsafe_allows_write_while_borrowed() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1175,6 +1193,8 @@ mod tests {
                     }),
                 ),
                 Statement::Unsafe {
+                    line: 1,
+                    column: 1,
                     body: vec![Statement::Assignment {
                         target: AssignmentTarget::Variable("x".to_string()),
                         value: Expression::Literal(Literal::Int(2)),
@@ -1192,6 +1212,8 @@ mod tests {
     #[test]
     fn rejects_returning_reference_to_local_binding() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![Statement::Function {
                 name: "bad".to_string(),
                 type_params: Vec::new(),
@@ -1209,6 +1231,7 @@ mod tests {
                 return_type: DataType::shared_ref(DataType::Unknown),
                 visibility: Visibility::Public,
                 is_method: false,
+                attributes: Vec::new(),
             }],
         };
 
@@ -1220,6 +1243,8 @@ mod tests {
     #[test]
     fn rejects_returning_reference_to_local_from_impl_method() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,
@@ -1254,6 +1279,7 @@ mod tests {
                         return_type: DataType::shared_ref(DataType::Unknown),
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     }],
                 },
             ],
@@ -1267,6 +1293,8 @@ mod tests {
     #[test]
     fn rejects_call_that_requires_mut_ref_but_receives_shared_ref() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "mutate".to_string(),
@@ -1280,10 +1308,13 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Expression(Expression::Call {
                     name: "mutate".to_string(),
+                    name_line: 0,
+                    name_column: 0,
                     args: vec![Expression::Reference {
                         expr: Box::new(ident("x")),
                         is_mutable: false,
@@ -1304,6 +1335,8 @@ mod tests {
     #[test]
     fn explicit_move_call_consumes_binding() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "item".to_string(),
@@ -1320,6 +1353,8 @@ mod tests {
                     name: "move::".to_string(),
                     args: vec![ident("item")],
                     type_args: Vec::new(),
+                    name_line: 0,
+                    name_column: 0,
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(ident("item")),
@@ -1334,6 +1369,8 @@ mod tests {
     #[test]
     fn passing_copy_type_by_value_does_not_consume_binding() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "show".to_string(),
@@ -1344,12 +1381,15 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Expression(Expression::Call {
                     name: "show".to_string(),
                     args: vec![ident("x")],
                     type_args: Vec::new(),
+                    name_line: 0,
+                    name_column: 0,
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(ident("x")),
@@ -1363,6 +1403,8 @@ mod tests {
     #[test]
     fn partial_borrowck_skips_unselected_top_level_statements() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 let_stmt(
@@ -1403,6 +1445,8 @@ mod tests {
     #[test]
     fn partial_borrowck_can_skip_unchanged_impl_methods() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
                 Statement::Impl {
@@ -1420,6 +1464,7 @@ mod tests {
                             return_type: DataType::None,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                         Statement::Function {
                             name: "bad".to_string(),
@@ -1445,6 +1490,7 @@ mod tests {
                             return_type: DataType::None,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                     ],
                 },
@@ -1471,6 +1517,8 @@ mod tests {
     #[test]
     fn later_global_binding_does_not_hide_local_ref_escape() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "leak".to_string(),
@@ -1489,6 +1537,7 @@ mod tests {
                     return_type: DataType::shared_ref(DataType::Unknown),
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 let_stmt("x", Some(Expression::Literal(Literal::Int(2)))),
             ],
@@ -1502,31 +1551,34 @@ mod tests {
     #[test]
     fn impl_method_returning_local_ref_is_rejected() {
         let program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),
                 type_params: Vec::new(),
                 type_param_bounds: Vec::new(),
                 methods: vec![Statement::Function {
-                    name: "leak".to_string(),
-                    type_params: Vec::new(),
-                    type_param_bounds: Vec::new(),
-                    params: vec![(
-                        "self".to_string(),
-                        DataType::StructNamed("Point".to_string()),
-                    )],
-                    body: vec![
-                        let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
-                        Statement::Return(Some(Expression::Reference {
-                            expr: Box::new(ident("x")),
-                            is_mutable: false,
-                            data_type: DataType::Unknown,
-                            referenced_type: DataType::Unknown,
-                        })),
-                    ],
-                    return_type: DataType::shared_ref(DataType::Unknown),
-                    visibility: Visibility::Public,
-                    is_method: true,
+                            name: "leak".to_string(),
+                            type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
+                            params: vec![(
+                                "self".to_string(),
+                                DataType::StructNamed("Point".to_string()),
+                            )],
+                            body: vec![
+                                let_stmt("x", Some(Expression::Literal(Literal::Int(1)))),
+                                Statement::Return(Some(Expression::Reference {
+                                    expr: Box::new(ident("x")),
+                                    is_mutable: false,
+                                    data_type: DataType::Unknown,
+                                    referenced_type: DataType::Unknown,
+                                })),
+                            ],
+                            return_type: DataType::shared_ref(DataType::Unknown),
+                            visibility: Visibility::Public,
+                            is_method: true,
+                            attributes: Vec::new(),
                 }],
             }],
         };

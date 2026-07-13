@@ -10,7 +10,7 @@ impl LlvmIrGen {
             DataType::Str => {
                 let tmp = self.tmp();
                 self.body
-                    .push(format!("  {tmp} = call i64 @strlen(ptr {})", value.repr));
+                    .push(format!("  {tmp} = call i64 @rt_strings_len(ptr {})", value.repr));
                 Ok(LlValue {
                     ty: LlType::I64,
                     repr: tmp,
@@ -20,12 +20,14 @@ impl LlvmIrGen {
             DataType::List | DataType::Vector { .. } => self.compile_list_len_value(value),
             _ => match value.ty {
                 LlType::Ptr => self.compile_list_len_value(value),
-                LlType::I64 | LlType::I1 | LlType::F64 | LlType::I8 => Ok(LlValue {
+                LlType::I64 | LlType::I128 | LlType::I1 | LlType::F64 | LlType::I8 => Ok(LlValue {
                     ty: LlType::I64,
                     repr: "0".to_string(),
                     owned: false,
                 }),
                 LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Struct type not supported here".to_string(),
                 })),
             },
@@ -41,6 +43,8 @@ impl LlvmIrGen {
     ) -> Result<LlValue> {
         if params.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Pipeline closure must have exactly 1 parameter".to_string(),
             }));
         }
@@ -146,6 +150,13 @@ impl LlvmIrGen {
                 self.body
                     .push(format!("  {elem_val} = zext i32 {raw} to i64"));
             }
+            DataType::I128 | DataType::U128 => {
+                let raw = self.tmp();
+                self.body
+                    .push(format!("  {raw} = load i128, ptr {elem_ptr}"));
+                self.body
+                    .push(format!("  {elem_val} = zext i128 {raw} to i128"));
+            }
             _ => {
                 self.body
                     .push(format!("  {elem_val} = load i64, ptr {elem_ptr}"));
@@ -161,6 +172,7 @@ impl LlvmIrGen {
                 ty: LlType::I64,
                 data_type: param_type.clone(),
                 owns_heap_string: false,
+                needs_init: true,
                 struct_name: None,
             },
         );
@@ -269,6 +281,7 @@ impl LlvmIrGen {
                     ty: ll_ty,
                     data_type: data_type.clone(),
                     owns_heap_string: false,
+                    needs_init: true,
                     struct_name: data_type.struct_name().map(ToOwned::to_owned),
                 },
             );
@@ -359,6 +372,17 @@ impl LlvmIrGen {
                 };
                 self.body
                     .push(format!("  {widened} = {ext} i32 {raw} to i64"));
+                widened
+            }
+            "i128" => {
+                let widened = self.tmp();
+                let ext = if matches!(element_type, DataType::U128) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i128 {raw} to i128"));
                 widened
             }
             _ => raw,
@@ -464,6 +488,8 @@ impl LlvmIrGen {
         let ptr = self.compile_expr(expr)?;
         if ptr.ty != LlType::Ptr {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cannot dereference non-pointer value".to_string(),
             }));
         }
@@ -493,6 +519,8 @@ impl LlvmIrGen {
             | DataType::Vector { element_type, .. } => *element_type.clone(),
             _ => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Indexed assignment is not supported for type {:?}",
                         target_data_type
@@ -516,6 +544,8 @@ impl LlvmIrGen {
         let target_val = self.compile_expr(target)?;
         if target_val.ty != LlType::Ptr {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cannot assign through non-pointer index target".to_string(),
             }));
         }
@@ -547,6 +577,8 @@ impl LlvmIrGen {
             }
             other => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Type {:?} does not support indexed assignment", other),
                 }));
             }
@@ -572,6 +604,8 @@ impl LlvmIrGen {
             Expression::Identifier(Identifier { name, .. }) => {
                 let var = self.vars.get(name).cloned().ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Avenys unknown identifier '{}'", name),
                     })
                 })?;
@@ -598,6 +632,8 @@ impl LlvmIrGen {
                 Ok((elem_ptr, element_data_type))
             }
             other => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Avenys cannot take a reference to expression {:?}", other),
             })),
         }
@@ -662,6 +698,17 @@ impl LlvmIrGen {
                     .push(format!("  {widened} = {ext} i32 {raw} to i64"));
                 widened
             }
+            "i128" => {
+                let widened = self.tmp();
+                let ext = if matches!(data_type, DataType::U128) {
+                    "zext"
+                } else {
+                    "sext"
+                };
+                self.body
+                    .push(format!("  {widened} = {ext} i128 {raw} to i128"));
+                widened
+            }
             _ => raw,
         };
 
@@ -679,12 +726,16 @@ impl LlvmIrGen {
         let mut segments = target.split('.');
         let owner = segments.next().ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Invalid field assignment target '{}'", target),
             })
         })?;
         let fields: Vec<_> = segments.collect();
         if fields.is_empty() {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Field assignment target '{}' has no field path", target),
             }));
         }
@@ -703,6 +754,8 @@ impl LlvmIrGen {
         } else {
             let var = self.vars.get(owner).ok_or_else(|| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Avenys does not know variable '{}'", owner),
                 })
             })?;
@@ -725,6 +778,8 @@ impl LlvmIrGen {
         let target_val = self.compile_expr(target)?;
         let mut struct_name = self.struct_name_from_expr(target).ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Avenys cannot resolve struct field path '{}'",
                     fields.join(".")
@@ -741,6 +796,8 @@ impl LlvmIrGen {
                 .cloned()
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Unknown struct '{}'", struct_name),
                     })
                 })?;
@@ -750,6 +807,8 @@ impl LlvmIrGen {
                 .copied()
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Struct '{}' has no field '{}'", struct_name, member),
                     })
                 })?;
@@ -780,6 +839,8 @@ impl LlvmIrGen {
                 .map(ToOwned::to_owned)
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!(
                             "Field '{}.{}' is not a nested struct",
                             struct_name, member
@@ -794,6 +855,8 @@ impl LlvmIrGen {
         }
 
         Err(MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Invalid field assignment target '{}'", fields.join(".")),
         }))
     }
@@ -806,6 +869,8 @@ impl LlvmIrGen {
         let target_val = self.compile_expr(target)?;
         let struct_name = self.struct_name_from_expr(target).ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Avenys cannot resolve struct member '{}' without concrete struct metadata",
                     member
@@ -819,6 +884,8 @@ impl LlvmIrGen {
             .cloned()
             .ok_or_else(|| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Unknown struct '{}'", struct_name),
                 })
             })?;
@@ -828,6 +895,8 @@ impl LlvmIrGen {
             .copied()
             .ok_or_else(|| {
                 MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!("Struct '{}' has no field '{}'", struct_name, member),
                 })
             })?;
@@ -894,7 +963,19 @@ impl LlvmIrGen {
                     owned: false,
                 })
             }
+            LlType::I128 => {
+                let value = self.tmp();
+                self.body
+                    .push(format!("  {value} = load i128, ptr {field_ptr}"));
+                Ok(LlValue {
+                    ty: LlType::I128,
+                    repr: value,
+                    owned: false,
+                })
+            }
             LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Struct type not supported here".to_string(),
             })),
         }
@@ -983,6 +1064,8 @@ impl LlvmIrGen {
             };
         } else if target.ty != LlType::Ptr {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Avenys cannot index non-pointer type (function '{}')",
                     self.current_function
@@ -1206,6 +1289,17 @@ impl LlvmIrGen {
                                 .push(format!("  {widened} = {ext} i32 {raw} to i64"));
                             widened
                         }
+                        "i128" => {
+                            let widened = self.tmp();
+                            let ext = if matches!(result_data_type, DataType::U128) {
+                                "zext"
+                            } else {
+                                "sext"
+                            };
+                            self.body
+                                .push(format!("  {widened} = {ext} i128 {raw} to i128"));
+                            widened
+                        }
                         _ => raw,
                     };
                     Ok(LlValue {
@@ -1295,7 +1389,7 @@ impl LlvmIrGen {
                 let index = self.cast_to_i64(index)?;
                 let len = self.tmp();
                 self.body
-                    .push(format!("  {len} = call i64 @strlen(ptr {})", target.repr));
+                    .push(format!("  {len} = call i64 @rt_strings_len(ptr {})", target.repr));
                 self.emit_bounds_check(
                     index.clone(),
                     LlValue {
@@ -1323,6 +1417,8 @@ impl LlvmIrGen {
                 })
             }
             _ => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Avenys cannot index type {:?}", target_data_type),
             })),
         }
@@ -1331,6 +1427,8 @@ impl LlvmIrGen {
     pub(super) fn compile_type_matches(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys __type_matches expects 2 arguments".to_string(),
             }));
         }
@@ -1348,6 +1446,8 @@ impl LlvmIrGen {
         };
         let expected_type = match type_name.as_str() {
             "i64" => DataType::I64,
+            "i128" => DataType::I128,
+            "u128" => DataType::U128,
             "str" => DataType::Str,
             "bool" => DataType::Bool,
             "f64" => DataType::F64,
@@ -1387,12 +1487,16 @@ impl LlvmIrGen {
     pub(super) fn compile_contains(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys contains(...) expects 2 arguments".to_string(),
             }));
         }
         let haystack_type = self.expression_data_type(&args[0]);
         if haystack_type != DataType::Str {
             return Err(MireError::new(ErrorKind::Backend {
+                line: self.current_line,
+                column: self.current_column,
                 message: "Avenys contains(...) is currently lowered for strings only".to_string(),
             }));
         }
@@ -1417,6 +1521,8 @@ impl LlvmIrGen {
     ) -> Result<LlValue> {
         let struct_info = self.user_structs.get(type_name).cloned().ok_or_else(|| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Unknown struct '{}'", type_name),
             })
         })?;
@@ -1471,8 +1577,15 @@ impl LlvmIrGen {
                         self.body
                             .push(format!("  store ptr {}, ptr {field_ptr}", field_value.repr));
                     }
+                    LlType::I128 => {
+                        let casted = self.cast_to_i128(field_value)?;
+                        self.body
+                            .push(format!("  store i128 {}, ptr {field_ptr}", casted.repr));
+                    }
                     LlType::Struct(_) => {
                         return Err(MireError::new(ErrorKind::Backend {
+                            line: self.current_line,
+                            column: self.current_column,
                             message: "Struct type not supported here".to_string(),
                         }));
                     }

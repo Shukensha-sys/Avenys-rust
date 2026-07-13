@@ -191,11 +191,15 @@ impl TypeChecker {
         statement_mask: &[bool],
     ) -> Result<()> {
         if statement_mask.len() != statements.len() {
-            return Err(type_error(format!(
-                "Typecheck mask length mismatch: expected {}, got {}",
-                statements.len(),
-                statement_mask.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Typecheck mask length mismatch: expected {}, got {}",
+                    statements.len(),
+                    statement_mask.len()
+                ),
+            ));
         }
 
         for (index, (statement, should_check)) in statements
@@ -230,11 +234,15 @@ impl TypeChecker {
         statement_mask: &[bool],
     ) -> Result<()> {
         if statement_mask.len() != statements.len() {
-            return Err(type_error(format!(
-                "Nested typecheck mask length mismatch: expected {}, got {}",
-                statements.len(),
-                statement_mask.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Nested typecheck mask length mismatch: expected {}, got {}",
+                    statements.len(),
+                    statement_mask.len()
+                ),
+            ));
         }
 
         for (statement, should_check) in statements.iter_mut().zip(statement_mask.iter().copied()) {
@@ -257,7 +265,7 @@ impl TypeChecker {
     }
 
     fn attach_current_context(&self, err: MireError) -> MireError {
-        let err = if err.line == 1 && err.column == 1 {
+        let err = if (err.line == 0 && err.column == 0) || (err.line == 1 && err.column == 1) {
             err.with_position(self.current_line, self.current_column)
         } else {
             err
@@ -297,16 +305,16 @@ impl TypeChecker {
         let (line, column) = location::statement_location(statement);
         self.current_line = line;
         self.current_column = column;
-        match statement {
+        let result = match statement {
             Statement::Let {
                 name,
                 data_type,
                 value,
                 is_mutable,
                 ..
-            } => self.check_let_statement(name, data_type, value, *is_mutable)?,
+            } => self.check_let_statement(name, data_type, value, *is_mutable),
             Statement::Assignment { target, value, .. } => {
-                self.check_assignment_statement(target, value)?
+                self.check_assignment_statement(target, value)
             }
             Statement::Function {
                 name,
@@ -323,77 +331,73 @@ impl TypeChecker {
                 params,
                 body,
                 return_type,
-            )?,
-            Statement::Return(expr) => self.check_return_statement(expr)?,
+            ),
+            Statement::Return(expr) => self.check_return_statement(expr),
             Statement::If {
                 condition,
                 then_branch,
                 else_branch,
-            } => self.check_if_statement(condition, then_branch, else_branch)?,
-            Statement::While { condition, body } => self.check_while_statement(condition, body)?,
+            } => self.check_if_statement(condition, then_branch, else_branch),
+            Statement::While { condition, body } => self.check_while_statement(condition, body),
             Statement::For {
                 variable,
                 index,
                 iterable,
                 body,
-            } => self.check_for_statement(variable, index, iterable, body)?,
+            } => self.check_for_statement(variable, index, iterable, body),
             Statement::Find {
                 variable,
                 iterable,
                 body,
-            } => self.check_find_statement(variable, iterable, body)?,
-            Statement::Expression(expr) => {
-                self.check_expression(expr)?;
-            }
+            } => self.check_find_statement(variable, iterable, body),
+            Statement::Expression(expr) => self.check_expression(expr).map(|_| ()),
             Statement::Match {
                 value,
                 cases,
                 default,
-            } => self.check_match_statement(value, cases, default)?,
-            Statement::Unsafe { body } => self.check_scoped_body(body)?,
-            Statement::Asm { instructions } => self.check_asm_statement(instructions)?,
-            Statement::Drop { value } => self.check_drop_statement(value)?,
+            } => self.check_match_statement(value, cases, default),
+            Statement::Unsafe { body, .. } => self.check_scoped_body(body),
+            Statement::Asm { instructions } => self.check_asm_statement(instructions),
+            Statement::Drop { value } => self.check_drop_statement(value),
             Statement::New {
                 value,
                 declared_type,
-            } => self.check_new_statement(value, declared_type)?,
-            Statement::Own { value, inner_type } => self.check_own_statement(value, inner_type)?,
-            Statement::Move { target, value } => self.check_move_statement(target, value)?,
+            } => self.check_new_statement(value, declared_type),
+            Statement::Own { value, inner_type } => self.check_own_statement(value, inner_type),
+            Statement::Move { target, value } => self.check_move_statement(target, value),
             Statement::Query {
                 ops,
                 bindings,
                 group_by: _,
                 joins: _,
                 table: _,
-            } => self.check_query_statement(ops, bindings)?,
+            } => self.check_query_statement(ops, bindings),
             Statement::Impl {
                 trait_name,
                 type_name,
                 methods,
                 ..
-            } => self.check_impl_statement(trait_name, type_name, methods)?,
-            Statement::Type { fields, .. } => self.check_type_statement(fields)?,
-            Statement::Skill { name, methods, .. } => self.check_skill_statement(name, methods)?,
+            } => self.check_impl_statement(trait_name, type_name, methods),
+            Statement::Type { fields, .. } => self.check_type_statement(fields),
+            Statement::Skill { name, methods, .. } => self.check_skill_statement(name, methods),
             Statement::Break
             | Statement::Continue
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
             | Statement::Enum { .. }
-            | Statement::Module { .. } => {}
-            Statement::Load { .. } => {}
-        }
-
-        Ok(())
+            | Statement::Module { .. } => Ok(()),
+            Statement::Load { .. } => Ok(()),
+        };
+        result.map_err(|err| self.attach_current_context(err))
     }
 }
 
-fn type_error(message: String) -> MireError {
-    type_error_at(0, 0, message)
+fn type_error(line: usize, column: usize, message: String) -> MireError {
+    type_error_at(line, column, message)
 }
 
 fn type_error_at(line: usize, column: usize, message: String) -> MireError {
-    let (err_line, err_col) = if line == 0 { (1, 1) } else { (line, column) };
-    MireError::type_error_at(err_line, err_col, message)
+    MireError::type_error_at(line, column, message)
 }
 
 #[cfg(test)]
@@ -413,6 +417,8 @@ mod tests {
     #[test]
     fn infers_unknown_let_from_literal() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![Statement::Let {
                 name: "x".to_string(),
                 data_type: DataType::Unknown,
@@ -437,6 +443,8 @@ mod tests {
     #[test]
     fn resolves_identifier_type() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -471,6 +479,8 @@ mod tests {
     #[test]
     fn infers_function_call_return_type() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "sum".to_string(),
@@ -499,9 +509,12 @@ mod tests {
                     return_type: DataType::Unknown,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 Statement::Expression(Expression::Call {
                     name: "sum".to_string(),
+                    name_line: 0,
+                    name_column: 0,
                     args: vec![
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
@@ -525,6 +538,8 @@ mod tests {
     #[test]
     fn fails_on_undefined_identifier() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![Statement::Expression(Expression::Identifier(Identifier {
                 name: "missing".to_string(),
                 data_type: DataType::Unknown,
@@ -540,6 +555,8 @@ mod tests {
     #[test]
     fn fails_on_assignment_type_mismatch() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -570,15 +587,21 @@ mod tests {
     #[test]
     fn accepts_builtin_calls() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Expression(Expression::Call {
                     name: "dasu".to_string(),
                     args: vec![Expression::Literal(Literal::Str("hello".to_string()))],
                     type_args: Vec::new(),
+                    name_line: 0,
+                    name_column: 0,
                     data_type: DataType::Unknown,
                 }),
                 Statement::Expression(Expression::Call {
                     name: "len".to_string(),
+                    name_line: 0,
+                    name_column: 0,
                     args: vec![Expression::Literal(Literal::List(vec![
                         Expression::Literal(Literal::Int(1)),
                         Expression::Literal(Literal::Int(2)),
@@ -608,6 +631,8 @@ mod tests {
     #[test]
     fn allows_unknown_in_logical_binary_ops() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -656,6 +681,8 @@ mod tests {
     #[test]
     fn partial_typecheck_rechecks_only_selected_top_level_statements() {
         let mut previous = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -689,6 +716,8 @@ mod tests {
         check_program_types(&mut previous, "").expect("baseline type check must pass");
 
         let mut current = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "x".to_string(),
@@ -739,6 +768,8 @@ mod tests {
     #[test]
     fn partial_typecheck_can_skip_unchanged_impl_methods() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![Statement::Impl {
                 trait_name: None,
                 type_name: "Point".to_string(),
@@ -756,6 +787,7 @@ mod tests {
                         return_type: DataType::I64,
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     },
                     Statement::Function {
                         name: "bad".to_string(),
@@ -773,6 +805,7 @@ mod tests {
                         return_type: DataType::I64,
                         visibility: Visibility::Public,
                         is_method: true,
+                        attributes: Vec::new(),
                     },
                 ],
             }],
@@ -797,6 +830,8 @@ mod tests {
     #[test]
     fn partial_typecheck_can_skip_nested_members_in_type_and_impl_members() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Type {
                     visibility: Visibility::Public,
@@ -851,6 +886,7 @@ mod tests {
                             return_type: DataType::I64,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                         Statement::Function {
                             name: "bad".to_string(),
@@ -868,6 +904,7 @@ mod tests {
                             return_type: DataType::I64,
                             visibility: Visibility::Public,
                             is_method: true,
+                            attributes: Vec::new(),
                         },
                     ],
                 },
@@ -958,6 +995,8 @@ mod tests {
     #[test]
     fn map_assignment_rejects_vector_values() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Let {
                     name: "values".to_string(),
@@ -1046,6 +1085,8 @@ mod tests {
     #[test]
     fn mutable_reference_expectation_rejects_shared_reference_argument() {
         let mut program = Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: vec![
                 Statement::Function {
                     name: "bump".to_string(),
@@ -1061,6 +1102,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
                 Statement::Function {
                     name: "main".to_string(),
@@ -1102,6 +1144,8 @@ mod tests {
                         },
                         Statement::Expression(Expression::Call {
                             name: "bump".to_string(),
+                            name_line: 0,
+                            name_column: 0,
                             args: vec![Expression::Identifier(Identifier {
                                 name: "shared".to_string(),
                                 data_type: DataType::Unknown,
@@ -1115,6 +1159,7 @@ mod tests {
                     return_type: DataType::None,
                     visibility: Visibility::Public,
                     is_method: false,
+                    attributes: Vec::new(),
                 },
             ],
         };

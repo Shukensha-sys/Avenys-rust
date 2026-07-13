@@ -30,10 +30,12 @@ mod cache;
 mod lru;
 mod utils;
 pub(crate) use utils::{
-    analysis_cache_key, build_cache_key, manifest_cache_settings, mir_cache_key, normalize_path_key,
+    analysis_cache_key, build_cache_key, latest_analysis_key, manifest_cache_settings, mir_cache_key,
+    normalize_path_key,
 };
 pub use utils::{
-    build_fingerprint, cache_file_path, source_hash, source_hash2, statement_export_name,
+    build_fingerprint, cache_file_path, dependency_fingerprint, source_hash, source_hash2,
+    statement_export_name,
 };
 
 #[cfg(test)]
@@ -207,9 +209,13 @@ pub(crate) enum StoredErrorKind {
         message: String,
     },
     Backend {
+        line: usize,
+        column: usize,
         message: String,
     },
     Runtime {
+        line: usize,
+        column: usize,
         message: String,
     },
     Type {
@@ -297,10 +303,18 @@ impl From<&ErrorKind> for StoredErrorKind {
                 column: *column,
                 message: message.clone(),
             },
-            ErrorKind::Backend { message } => Self::Backend {
+            ErrorKind::Backend {
+                line,
+                column,
+                message,
+            } => Self::Backend {
+                line: *line,
+                column: *column,
                 message: message.clone(),
             },
-            ErrorKind::Runtime { message } => Self::Runtime {
+            ErrorKind::Runtime { line, column, message } => Self::Runtime {
+                line: *line,
+                column: *column,
                 message: message.clone(),
             },
             ErrorKind::Type {
@@ -351,8 +365,16 @@ impl From<StoredErrorKind> for ErrorKind {
                 column,
                 message,
             },
-            StoredErrorKind::Backend { message } => Self::Backend { message },
-            StoredErrorKind::Runtime { message } => Self::Runtime { message },
+            StoredErrorKind::Backend {
+                line,
+                column,
+                message,
+            } => Self::Backend {
+                line,
+                column,
+                message,
+            },
+            StoredErrorKind::Runtime { line, column, message } => Self::Runtime { line, column, message },
             StoredErrorKind::Type {
                 line,
                 column,
