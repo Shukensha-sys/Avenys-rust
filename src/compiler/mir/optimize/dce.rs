@@ -70,9 +70,13 @@ fn collect_uses(op: &MirOp, used: &mut HashSet<usize>) {
         | MirOp::Mul(l, r)
         | MirOp::SDiv(l, r)
         | MirOp::SRem(l, r)
-        | MirOp::Shl(l, r)
+        |         MirOp::Shl(l, r)
+        | MirOp::Shr(l, r)
         | MirOp::And(l, r)
         | MirOp::Or(l, r)
+        | MirOp::Xor(l, r)
+        | MirOp::BitAnd(l, r)
+        | MirOp::BitOr(l, r)
         | MirOp::ICmp(_, l, r)
         | MirOp::FCmp(_, l, r) => {
             collect_val(l, used);

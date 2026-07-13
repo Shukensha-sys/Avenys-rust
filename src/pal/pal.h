@@ -12,6 +12,8 @@
 int     pal_fs_write(const char *path, const char *content);
 int     pal_fs_append(const char *path, const char *content);
 char   *pal_fs_read(const char *path);
+char   *pal_fs_read_bytes(const char *path);
+int     pal_fs_write_bytes(const char *path, const char *data, int64_t len);
 int     pal_fs_copy(const char *src, const char *dst);
 int     pal_fs_move(const char *src, const char *dst);
 int     pal_fs_delete(const char *path);
@@ -22,6 +24,7 @@ int64_t pal_fs_is_dir(const char *path);
 int64_t pal_fs_is_file(const char *path);
 int64_t pal_fs_size(const char *path);
 void   *pal_fs_list(const char *path);
+void   *pal_fs_walk(const char *path);
 char   *pal_fs_join(const char *a, const char *b);
 char   *pal_fs_dir(const char *path);
 char   *pal_fs_name(const char *path);
@@ -102,6 +105,7 @@ int64_t pal_net_connect(const char *host, int64_t port);
 int64_t pal_net_connect_timeout(const char *host, int64_t port, int64_t timeout_ms);
 char   *pal_net_recv(int64_t fd, int64_t max_bytes);
 int     pal_net_send(int64_t fd, const char *data);
+int     pal_net_send_bytes(int64_t fd, const char *data, int64_t len);
 int     pal_net_close(int64_t fd);
 int64_t pal_net_poll(int64_t fd, int64_t timeout_ms);
 int     pal_net_set_nonblock(int64_t fd, int nonblock);
@@ -112,6 +116,12 @@ int64_t pal_tls_connect(const char *host, int64_t port);
 int     pal_tls_send(int64_t fd, const char *data);
 char   *pal_tls_recv(int64_t fd, int64_t max_bytes);
 int     pal_tls_close(int64_t fd);
+
+// ── Threads ──────────────────────────────────────────────────────────
+int64_t pal_thread_spawn(void *(*fn)(void*), void *arg);
+int64_t pal_thread_join(int64_t tid, void **result);
+void    pal_thread_exit(void *result);
+int64_t pal_thread_self(void);
 
 // ── I/O helpers ──────────────────────────────────────────────────────
 void    pal_io_print(const char *msg);

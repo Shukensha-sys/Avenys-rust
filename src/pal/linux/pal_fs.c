@@ -61,6 +61,35 @@ char *pal_fs_read(const char *path) {
     return buf;
 }
 
+char *pal_fs_read_bytes(const char *path) {
+    extern char *rt_managed_alloc(size_t len);
+    extern char *rt_managed_from_slice(const char *src, size_t len);
+    EXPAND_TILDE(path);
+    FILE *fh = fopen(path_real, "rb");
+    if (!fh) { EXPAND_TILDE_END(path); return rt_managed_from_slice("", 0); }
+    fseek(fh, 0, SEEK_END);
+    long size = ftell(fh);
+    fseek(fh, 0, SEEK_SET);
+    char *result = rt_managed_alloc((size_t)size);
+    if (!result) { fclose(fh); EXPAND_TILDE_END(path); return rt_managed_from_slice("", 0); }
+    if (size > 0) fread(result, 1, (size_t)size, fh);
+    result[size] = '\0';
+    fclose(fh);
+    EXPAND_TILDE_END(path);
+    return result;
+}
+
+int pal_fs_write_bytes(const char *path, const char *data, int64_t len) {
+    EXPAND_TILDE(path);
+    if (len < 0) len = 0;
+    FILE *fh = fopen(path_real, "wb");
+    if (!fh) { EXPAND_TILDE_END(path); return 0; }
+    fwrite(data, 1, (size_t)len, fh);
+    fclose(fh);
+    EXPAND_TILDE_END(path);
+    return 1;
+}
+
 int pal_fs_copy(const char *src, const char *dst) {
     EXPAND_TILDE(src);
     EXPAND_TILDE(dst);
@@ -170,6 +199,38 @@ void *pal_fs_list(const char *path) {
         list = rt_list_push_ptr(list, name);
     }
     closedir(dir);
+    EXPAND_TILDE_END(path);
+    return list;
+}
+
+static void walk_recursive(const char *path, void *result_list) {
+    extern void *rt_list_push_ptr(void *list_ptr, void *value);
+    extern char *rt_strdup_raw(const char *src);
+    DIR *dir = opendir(path);
+    if (!dir) return;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.' && (entry->d_name[1] == '\0' || (entry->d_name[1] == '.' && entry->d_name[2] == '\0')))
+            continue;
+        char *full_path;
+        if (asprintf(&full_path, "%s/%s", path, entry->d_name) == -1) continue;
+        char *copied = rt_strdup_raw(full_path);
+        void *pushed = rt_list_push_ptr(result_list, copied);
+        if (pushed) result_list = pushed;
+        struct stat st;
+        if (stat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            walk_recursive(full_path, result_list);
+        }
+        free(full_path);
+    }
+    closedir(dir);
+}
+
+void *pal_fs_walk(const char *path) {
+    extern void *rt_list_create(int64_t initial_cap, int64_t elem_size);
+    void *list = rt_list_create(64, 8);
+    EXPAND_TILDE(path);
+    walk_recursive(path_real, list);
     EXPAND_TILDE_END(path);
     return list;
 }

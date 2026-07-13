@@ -3,10 +3,10 @@ use mire::error::format::format_diagnostic;
 use mire::lexer::tokenize;
 use mire::parser::parse;
 use mire::{
-    BuildMode, BuildOptions, CacheOverrides, ImportMode, MireDependency, MireError, OptLevel,
+    BuildMode, BuildOptions, BuildResult, CacheOverrides, ImportMode, MireError, OptLevel,
     WarningConfig, analyze_program, analyze_program_with_warnings_and_origins,
     compile_file_with_avenys, default_output_dir, find_project_root, load_program_with_metadata,
-    load_project_manifest, project_manifest_path, write_manifest,
+    load_project_manifest,
 };
 use std::collections::HashSet;
 use std::env;
@@ -66,8 +66,6 @@ fn run_cli() -> Result<i32, MireError> {
         "check" => check_command(&cwd, &args[2..]),
         "debug" => debug_command(&cwd, &args[2..]),
         "test" => test_command(&cwd, &args[2..]),
-        "validate" => validate_command(&cwd),
-        "owl" => owl_command(&cwd, &args[2..]),
 
         "help" | "--help" | "-h" => {
             print_help();
@@ -102,6 +100,7 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         cache: common.cache,
         warning_filter: common.warn.filter,
         deny_warnings: common.warn.deny,
+        test_mode: false,
         module_paths: Vec::new(),
     };
     let build = compile_file_with_avenys(&path, &options)?;
@@ -130,6 +129,7 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         cache: common.cache,
         warning_filter: common.warn.filter,
         deny_warnings: common.warn.deny,
+        test_mode: false,
         module_paths: Vec::new(),
     };
     let build = compile_file_with_avenys(&path, &options)?;
@@ -209,6 +209,7 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             cache: options.common.cache,
             warning_filter: options.common.warn.filter,
             deny_warnings: options.common.warn.deny,
+            test_mode: false,
             module_paths: Vec::new(),
         },
     )?;
@@ -231,14 +232,37 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut run = true;
     let mut verbose = false;
+    let mut jobs: usize = 0;
     let mut owl_home = None;
     let mut paths: Vec<String> = Vec::new();
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--help" | "-h" => {
+                println!("Usage: mire test [paths...] [options]");
+                println!();
+                println!("Run integration tests from tests/");
+                println!();
+                println!("Options:");
+                println!("  --no-run            Compile only, skip execution");
+                println!("  --verbose, -v       Show per-test results");
+                println!("  --jobs, -j <n>      Parallel compilation jobs (0 = logical CPUs)");
+                println!("  --owl-home <path>   Override the Owl module cache root");
+                println!("  --help, -h          Show this help message");
+                return Ok(0);
+            }
             "--no-run" => run = false,
             "--verbose" | "-v" => verbose = true,
+            "--jobs" | "-j" => {
+                i += 1;
+                let value = args.get(i).ok_or_else(|| {
+                    runtime_msg("Missing value for --jobs")
+                })?;
+                jobs = value.parse().map_err(|_| {
+                    runtime_msg("--jobs must be a positive integer")
+                })?;
+            }
             "--owl-home" => {
                 i += 1;
                 let value = args
@@ -246,7 +270,15 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                     .ok_or_else(|| runtime_msg("Missing value for --owl-home"))?;
                 owl_home = Some(PathBuf::from(value));
             }
-            _ => paths.push(args[i].clone()),
+            _ => {
+                if let Some(val) = args[i].strip_prefix("--jobs=") {
+                    jobs = val.parse().map_err(|_| {
+                        runtime_msg("--jobs must be a positive integer")
+                    })?;
+                } else {
+                    paths.push(args[i].clone());
+                }
+            }
         }
         i += 1;
     }
@@ -275,100 +307,190 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             entries.sort();
             test_files = entries;
         }
+        let main_candidates = [cwd.join("code/main.mire"), cwd.join("main.mire")];
+        for candidate in &main_candidates {
+            if candidate.exists() {
+                test_files.push(candidate.clone());
+                break;
+            }
+        }
     }
 
     if test_files.is_empty() {
-        println!("no extra tests found");
+        println!("no tests found");
         return Ok(0);
     }
 
-    let _total = test_files.len();
-    let mut passed = 0u32;
-    let mut failed = 0u32;
+    struct TestWork {
+        display: String,
+        target_file: PathBuf,
+        binary_path: PathBuf,
+        skip_run: bool,
+    }
+
+    let mut global_passed = 0u32;
+    let mut global_failed = 0u32;
+    let mut global_skipped = 0u32;
+    let test_dir = cwd.join("bin/.cache/test");
+    let _ = fs::create_dir_all(&test_dir);
+    let mut work_items: Vec<TestWork> = Vec::new();
 
     for file in &test_files {
         let display = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
 
-        if verbose {
-            print!("test {} ... ", display);
-        }
-
         if !file.exists() {
             if verbose {
-                println!("FAILED");
-            } else {
                 println!("FAILED: {} - file not found", display);
             }
-            failed += 1;
+            global_failed += 1;
             continue;
         }
 
-        let options = BuildOptions {
-            mode: BuildMode::Debug,
-            opt_level: OptLevel::O0,
-            debug_dump: false,
-            output: Some(default_output_dir(file, BuildMode::Debug).join("test")),
-            emit_binary: run,
-            persist_ir: false,
-            import_mode: ImportMode::default(),
-            cache: Default::default(),
-            warning_filter: WarningFilter::Default,
-            deny_warnings: HashSet::new(),
-            module_paths: Vec::new(),
+        let source = fs::read_to_string(file).unwrap_or_default();
+        let has_main = source.contains("pub fn main");
+        let has_load = source.contains("load ");
+        let has_test_fn = source.contains("@[test]");
+
+        let (target_file, stem) = if !has_main {
+            let relative = file.strip_prefix(cwd).unwrap_or(file);
+            let safe_stem = relative.to_string_lossy().replace('/', "_").replace('\\', "_");
+            let test_path = test_dir.join(format!("{}.mire", safe_stem));
+            if has_load || has_test_fn {
+                let _ = fs::write(&test_path, &source);
+            } else {
+                let patched = format!("pub fn main: () {{\n{}\n}}\n", source);
+                let _ = fs::write(&test_path, &patched);
+            }
+            (test_path, safe_stem)
+        } else {
+            let relative = file.strip_prefix(cwd).unwrap_or(file);
+            let safe_stem = relative.to_string_lossy().replace('/', "_").replace('\\', "_");
+            (file.clone(), safe_stem)
         };
 
-        match compile_file_with_avenys(file, &options) {
-            Ok(build) => {
-                if run {
-                    match Command::new(&build.binary_path).status() {
-                        Ok(status) if status.success() => {
-                            if verbose {
-                                println!("ok");
-                            }
-                            passed += 1;
-                        }
-                        Ok(status) => {
-                            if verbose {
-                                println!("FAILED");
-                            } else {
-                                println!("FAILED: {} (exit code: {:?})", display, status.code());
-                            }
-                            failed += 1;
-                        }
-                        Err(e) => {
-                            if verbose {
-                                println!("FAILED");
-                            } else {
-                                println!("FAILED: {} - run error: {}", display, e);
-                            }
-                            failed += 1;
-                        }
-                    }
-                } else {
-                    if verbose {
-                        println!("ok");
-                    }
-                    passed += 1;
+        let binary_path = cwd.join("bin/debug/test").join(&stem);
+
+        work_items.push(TestWork {
+            display,
+            target_file,
+            binary_path,
+            skip_run: has_main && !has_test_fn,
+        });
+    }
+
+    let jobs = if jobs == 0 {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .max(1)
+    } else {
+        jobs.max(1)
+    };
+
+    for chunk in work_items.chunks(jobs) {
+        let compile_results: Vec<Option<Result<BuildResult, MireError>>> =
+            std::thread::scope(|s| {
+                let mut handles = Vec::with_capacity(chunk.len());
+                for work in chunk {
+                    let options = BuildOptions {
+                        mode: BuildMode::Debug,
+                        opt_level: OptLevel::O0,
+                        output: Some(work.binary_path.clone()),
+                        emit_binary: run,
+                        persist_ir: false,
+                        import_mode: ImportMode::default(),
+                        cache: Default::default(),
+                        warning_filter: WarningFilter::Default,
+                        deny_warnings: HashSet::new(),
+                        test_mode: true,
+                        module_paths: Vec::new(),
+                    ..Default::default()
+                    };
+                    handles.push(s.spawn(move || {
+                        compile_file_with_avenys(&work.target_file, &options)
+                    }));
                 }
-            }
-            Err(e) => {
-                if verbose {
-                    println!("FAILED");
-                } else {
-                    println!("FAILED: {} - {}", display, e);
+                handles.into_iter().map(|h| Some(h.join().unwrap())).collect()
+            });
+
+        for (work, result) in chunk.iter().zip(compile_results.iter()) {
+            match result {
+                Some(Ok(build)) => {
+                    for w in &build.warnings {
+                        eprint!("{}", w);
+                    }
+                    if run && !work.skip_run {
+                        match Command::new(&build.binary_path).output() {
+                            Ok(output) => {
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                let mut file_passed = 0u32;
+                                let mut file_failed = 0u32;
+                                let mut file_skipped = 0u32;
+                                for line in stdout.lines() {
+                                    let trimmed = line.trim();
+                                    if trimmed.starts_with("[PASS]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_passed += 1;
+                                    } else if trimmed.starts_with("[FAIL]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_failed += 1;
+                                    } else if trimmed.starts_with("[SKIP]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_skipped += 1;
+                                    } else if !trimmed.is_empty() && verbose {
+                                        println!("  {}", trimmed);
+                                    }
+                                }
+                                println!(
+                                    "test {} ... {}",
+                                    work.display,
+                                    if file_failed == 0 { "ok" } else { "FAILED" }
+                                );
+                                global_passed += file_passed;
+                                global_failed += file_failed;
+                                global_skipped += file_skipped;
+                            }
+                            Err(e) => {
+                                println!("test {} ... FAILED (run error: {})", work.display, e);
+                                global_failed += 1;
+                            }
+                        }
+                    } else {
+                        let tag = if work.skip_run { "(no tests)" } else { "(compiled)" };
+                        println!("test {} ... ok {}", work.display, tag);
+                        global_passed += 1;
+                    }
                 }
-                failed += 1;
+                Some(Err(e)) => {
+                    println!("test {} ... FAILED ({})", work.display, e);
+                    global_failed += 1;
+                }
+                None => {
+                    println!("test {} ... FAILED (unknown error)", work.display);
+                    global_failed += 1;
+                }
             }
         }
     }
 
-    let status = if failed == 0 { "ok" } else { "FAILED" };
+    let total = global_passed + global_failed + global_skipped;
+    let ok_count = global_passed;
+    println!();
+    println!("test result:");
     println!(
-        "\ntest result: {}. {} passed; {} failed; finished",
-        status, passed, failed
+        "Ok: {} - Passed: {} - Failed: {} - Filtered Out: {}",
+        ok_count, global_passed, global_failed, global_skipped
     );
+    println!("Total: {}", total);
+    let exit_code = if global_failed == 0 { 0 } else { 1 };
 
-    Ok(if failed == 0 { 0 } else { 1 })
+    Ok(exit_code)
 }
 
 fn walkdir(dir: &Path, _pattern: &str) -> Result<Vec<PathBuf>, MireError> {
@@ -383,6 +505,10 @@ fn walkdir(dir: &Path, _pattern: &str) -> Result<Vec<PathBuf>, MireError> {
         };
         for entry in entries {
             let Ok(entry) = entry else { continue };
+            let Ok(ft) = entry.file_type() else { continue };
+            if ft.is_symlink() {
+                continue;
+            }
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
@@ -394,190 +520,6 @@ fn walkdir(dir: &Path, _pattern: &str) -> Result<Vec<PathBuf>, MireError> {
         }
     }
     Ok(results)
-}
-
-fn owl_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    if args.is_empty() {
-        return Err(runtime_msg("Usage: mire owl <validate|add|remove>"));
-    }
-    match args[0].as_str() {
-        "validate" => validate_command(cwd),
-        "add" => add_dependency_command(cwd, &args[1..]),
-        "remove" => remove_dependency_command(cwd, &args[1..]),
-        _ => {
-            eprintln!("Unknown owl command: {}", args[0]);
-            eprintln!("Usage: mire owl <validate|add|remove>");
-            Ok(1)
-        }
-    }
-}
-
-fn validate_command(cwd: &Path) -> Result<i32, MireError> {
-    let manifest_path = project_manifest_path(cwd);
-    if !manifest_path.exists() {
-        eprintln!("error: no owl.toml found in {}", cwd.display());
-        return Ok(1);
-    }
-
-    let manifest =
-        load_project_manifest(cwd)?.ok_or_else(|| runtime_msg("Could not parse owl.toml"))?;
-
-    let mut has_issues = false;
-
-    println!(
-        "Project: {} v{}",
-        manifest.project.name, manifest.project.version
-    );
-    println!("Entry: {}", manifest.project.entry);
-
-    println!("\n[dependencies]:");
-    if manifest.dependencies.entries.is_empty() {
-        println!("  (none)");
-    } else {
-        for (name, dep) in &manifest.dependencies.entries {
-            let resolved = match dep {
-                MireDependency::PathOnly { path } | MireDependency::WithPath { path, .. } => {
-                    let p = PathBuf::from(path);
-                    if p.is_absolute() {
-                        p.clone()
-                    } else {
-                        cwd.join(p)
-                    }
-                }
-                MireDependency::Simple { version } => {
-                    println!(
-                        "  {} = \"{}\" (version only, cannot validate path)",
-                        name, version
-                    );
-                    continue;
-                }
-            };
-            if resolved.exists() {
-                let canonical = resolved.canonicalize().unwrap_or(resolved);
-                println!("  {} -> {}", name, canonical.display());
-            } else {
-                eprintln!("  {} -> {} (NOT FOUND)", name, resolved.display());
-                has_issues = true;
-            }
-        }
-    }
-
-    if let Some(exports) = &manifest.exports {
-        println!("\n[exports]:");
-        for (name, path) in &exports.entries {
-            let resolved = cwd.join(path);
-            if resolved.exists() {
-                let canonical = resolved.canonicalize().unwrap_or(resolved);
-                println!("  {} -> {}", name, canonical.display());
-            } else {
-                eprintln!("  {} -> {} (NOT FOUND)", name, resolved.display());
-                has_issues = true;
-            }
-        }
-    }
-
-    if has_issues {
-        eprintln!("\nowl.toml has issues");
-        Ok(1)
-    } else {
-        println!("\nowl.toml is valid");
-        Ok(0)
-    }
-}
-
-fn add_dependency_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    if args.is_empty() {
-        return Err(runtime_msg(
-            "Usage: mire owl add <name> [--path <path>] [--version <ver>]",
-        ));
-    }
-    let name = &args[0];
-
-    let manifest_path = project_manifest_path(cwd);
-    if !manifest_path.exists() {
-        return Err(runtime_msg("No owl.toml found; create one first"));
-    }
-
-    let mut manifest = load_project_manifest(cwd)?
-        .ok_or_else(|| runtime_msg("Could not parse existing owl.toml"))?;
-
-    if manifest.dependencies.entries.contains_key(name) {
-        return Err(runtime_msg(&format!(
-            "Dependency '{}' already exists",
-            name
-        )));
-    }
-
-    let mut path = None;
-    let mut version = None;
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--path" => {
-                i += 1;
-                path = Some(
-                    args.get(i)
-                        .ok_or_else(|| runtime_msg("Missing value for --path"))?
-                        .clone(),
-                );
-            }
-            "--version" => {
-                i += 1;
-                version = Some(
-                    args.get(i)
-                        .ok_or_else(|| runtime_msg("Missing value for --version"))?
-                        .clone(),
-                );
-            }
-            _ => return Err(runtime_msg(&format!("Unknown option: {}", args[i]))),
-        }
-        i += 1;
-    }
-
-    let dep = match (path, version) {
-        (Some(p), Some(v)) => MireDependency::WithPath {
-            version: v,
-            path: p,
-        },
-        (Some(p), None) => MireDependency::PathOnly { path: p },
-        (None, Some(v)) => MireDependency::Simple { version: v },
-        (None, None) => {
-            return Err(runtime_msg(
-                "Specify --path or --version for the dependency",
-            ));
-        }
-    };
-
-    manifest.dependencies.entries.insert(name.clone(), dep);
-    write_manifest(&manifest, &manifest_path)?;
-    println!("Added dependency '{}' to [dependencies]", name);
-    Ok(0)
-}
-
-fn remove_dependency_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
-    if args.is_empty() {
-        return Err(runtime_msg("Usage: mire owl remove <name>"));
-    }
-    let name = &args[0];
-
-    let manifest_path = project_manifest_path(cwd);
-    if !manifest_path.exists() {
-        return Err(runtime_msg("No owl.toml found"));
-    }
-
-    let mut manifest = load_project_manifest(cwd)?
-        .ok_or_else(|| runtime_msg("Could not parse existing owl.toml"))?;
-
-    if manifest.dependencies.entries.remove(name).is_none() {
-        return Err(runtime_msg(&format!(
-            "Dependency '{}' not found in [dependencies]",
-            name
-        )));
-    }
-
-    write_manifest(&manifest, &manifest_path)?;
-    println!("Removed dependency '{}' from [dependencies]", name);
-    Ok(0)
 }
 
 fn parse_run_options(
@@ -821,25 +763,12 @@ fn parse_warning_code(value: &str) -> Result<DiagnosticCode, MireError> {
         "W0012" => Ok(DiagnosticCode::W0012),
         "W0013" => Ok(DiagnosticCode::W0013),
         "W0014" => Ok(DiagnosticCode::W0014),
-        "W0015" => Ok(DiagnosticCode::W0015),
-        "W0016" => Ok(DiagnosticCode::W0016),
         "W0017" => Ok(DiagnosticCode::W0017),
         "W0018" => Ok(DiagnosticCode::W0018),
         "W0019" => Ok(DiagnosticCode::W0019),
-        "W0020" => Ok(DiagnosticCode::W0020),
         "W0021" => Ok(DiagnosticCode::W0021),
-        "W0022" => Ok(DiagnosticCode::W0022),
-        "W0023" => Ok(DiagnosticCode::W0023),
         "W0024" => Ok(DiagnosticCode::W0024),
         "W0025" => Ok(DiagnosticCode::W0025),
-        "W0026" => Ok(DiagnosticCode::W0026),
-        "W0027" => Ok(DiagnosticCode::W0027),
-        "W0028" => Ok(DiagnosticCode::W0028),
-        "W0029" => Ok(DiagnosticCode::W0029),
-        "W0030" => Ok(DiagnosticCode::W0030),
-        "W0031" => Ok(DiagnosticCode::W0031),
-        "W0032" => Ok(DiagnosticCode::W0032),
-        "W0033" => Ok(DiagnosticCode::W0033),
         "W0034" => Ok(DiagnosticCode::W0034),
         "W0035" => Ok(DiagnosticCode::W0035),
         "W0036" => Ok(DiagnosticCode::W0036),
@@ -862,6 +791,8 @@ fn runtime_err(err: std::io::Error) -> MireError {
 fn print_help() {
     println!("Mire / Avenys v{}", env!("CARGO_PKG_VERSION"));
     println!("Usage: mire <run|build|check|debug> [file] [options]\n");
+    println!("Mire is the Avenys compiler. For project management, dependencies,");
+    println!("and scaffolding, use Owl (owl new / owl run / owl import).\n");
     println!("Profiles:");
     println!("  --debug               Build profile debug (default)");
     println!("  --release             Build profile release");
@@ -872,16 +803,10 @@ fn print_help() {
     println!("  build [file]          Compile only");
     println!("  check [file]          Analyze only");
     println!("  debug [file]          Debug build, emits IR");
-
     println!("  test [paths...]       Run integration tests from tests/");
     println!("    --no-run            Compile only, skip execution");
     println!("    --verbose, -v       Show per-test results");
-    println!("\nManifest commands:");
-    println!("  validate              Validate owl.toml");
-    println!("  owl add <name>        Add dependency to [dependencies]");
-    println!("    --path <path>       Path dependency");
-    println!("    --version <ver>     Version dependency");
-    println!("  owl remove <name>     Remove dependency from [dependencies]");
+    println!("    --jobs, -j <n>      Parallel compilation jobs (0 = logical CPUs)");
 }
 
 fn set_owl_home_env(path: Option<&PathBuf>) {

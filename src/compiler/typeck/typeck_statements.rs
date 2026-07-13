@@ -30,10 +30,14 @@ impl TypeChecker {
             inferred
         } else {
             if inferred != DataType::Unknown && !self.is_assignable(data_type, &inferred) {
-                return Err(type_error(format!(
-                    "Type mismatch in let '{}': expected {:?}, got {:?}",
-                    name, data_type, inferred
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "Type mismatch in let '{}': expected {:?}, got {:?}",
+                        name, data_type, inferred
+                    ),
+                ));
             }
             if let Some(expr) = value.as_ref() {
                 Self::validate_explicit_nested_literal(data_type, expr)?;
@@ -53,22 +57,35 @@ impl TypeChecker {
         value: &mut Expression,
     ) -> Result<()> {
         let value_type = self.check_expression(value)?;
-        let (mut target_type, is_target_mutable) = self
-            .resolve_assignment_target(target)?
-            .ok_or_else(|| type_error(format!("Assignment to undefined variable '{}'", target)))?;
+        let (mut target_type, is_target_mutable) =
+            self.resolve_assignment_target(target)?.ok_or_else(|| {
+                type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!("Assignment to undefined variable '{}'", target),
+                )
+            })?;
 
         if !self.is_assignable(&target_type, &value_type) {
-            return Err(type_error(format!(
-                "Type mismatch in assignment to '{}': expected {:?}, got {:?}",
-                target, target_type, value_type
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Type mismatch in assignment to '{}': expected {:?}, got {:?}",
+                    target, target_type, value_type
+                ),
+            ));
         }
 
         if !is_target_mutable {
-            return Err(type_error(format!(
-                "Variable '{}' is not mutable, maybe you meant to use 'mut'",
-                target
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Variable '{}' is not mutable, maybe you meant to use 'mut'",
+                    target
+                ),
+            ));
         }
 
         match target {
@@ -98,10 +115,11 @@ impl TypeChecker {
         };
 
         let (owner_type, owner_mutable) = self.lookup_var(owner).ok_or_else(|| {
-            type_error(format!(
-                "Cannot find variable '{}' for field assignment",
-                owner
-            ))
+            type_error(
+                self.current_line,
+                self.current_column,
+                format!("Cannot find variable '{}' for field assignment", owner),
+            )
         })?;
 
         if let DataType::StructNamed(ref struct_name) = owner_type
@@ -112,17 +130,22 @@ impl TypeChecker {
                 .iter()
                 .find(|f| f.name == field_name)
                 .ok_or_else(|| {
-                    type_error(format!(
-                        "Struct '{}' has no field '{}'",
-                        struct_name, field_name
-                    ))
+                    type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Struct '{}' has no field '{}'", struct_name, field_name),
+                    )
                 })?;
 
             if !self.is_assignable(&field.data_type, value_type) {
-                return Err(type_error(format!(
-                    "Type mismatch for field '{}': expected {:?}, got {:?}",
-                    field_name, field.data_type, value_type
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "Type mismatch for field '{}': expected {:?}, got {:?}",
+                        field_name, field.data_type, value_type
+                    ),
+                ));
             }
 
             let mut new_fields: Vec<Expression> = Vec::new();
@@ -148,7 +171,9 @@ impl TypeChecker {
                 name: struct_name.clone(),
                 args: new_fields,
                 type_args: Vec::new(),
-                data_type: owner_type.clone(),
+                name_line: 0,
+            name_column: 0,
+            data_type: owner_type.clone(),
             };
 
             self.insert_var(owner.to_string(), owner_type.clone(), owner_mutable);
@@ -168,10 +193,11 @@ impl TypeChecker {
     ) -> Result<()> {
         let cond_type = self.check_expression(condition)?;
         if !Self::is_bool_like(&cond_type) {
-            return Err(type_error(format!(
-                "If condition must be bool, got {:?}",
-                cond_type
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!("If condition must be bool, got {:?}", cond_type),
+            ));
         }
 
         self.push_scope();
@@ -194,10 +220,11 @@ impl TypeChecker {
     ) -> Result<()> {
         let cond_type = self.check_expression(condition)?;
         if !Self::is_bool_like(&cond_type) {
-            return Err(type_error(format!(
-                "While condition must be bool, got {:?}",
-                cond_type
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!("While condition must be bool, got {:?}", cond_type),
+            ));
         }
 
         self.push_scope();
@@ -259,10 +286,14 @@ impl TypeChecker {
                     && case_type != DataType::Unknown
                     && !self.is_assignable(&value_type, &case_type)
                 {
-                    return Err(type_error(format!(
-                        "Match case type mismatch: value is {:?}, case is {:?}",
-                        value_type, case_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Match case type mismatch: value is {:?}, case is {:?}",
+                            value_type, case_type
+                        ),
+                    ));
                 }
             }
 
@@ -340,10 +371,14 @@ impl TypeChecker {
         } else if inferred_return != DataType::Unknown
             && !self.is_assignable(return_type, &inferred_return)
         {
-            return Err(type_error(format!(
-                "Function '{}' return type mismatch: declared {:?}, inferred {:?}",
-                name, return_type, inferred_return
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Function '{}' return type mismatch: declared {:?}, inferred {:?}",
+                    name, return_type, inferred_return
+                ),
+            ));
         }
 
         self.pop_scope();
@@ -403,10 +438,14 @@ impl TypeChecker {
         if let Some(initial) = value {
             let initial_ty = self.check_expression(initial)?;
             if !self.is_assignable(declared_type, &initial_ty) {
-                return Err(type_error(format!(
-                    "new:: value type mismatch: declared {:?}, got {:?}",
-                    declared_type, initial_ty
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "new:: value type mismatch: declared {:?}, got {:?}",
+                        declared_type, initial_ty
+                    ),
+                ));
             }
         }
         Ok(())
@@ -421,10 +460,14 @@ impl TypeChecker {
         if let Some(initial) = value {
             let initial_ty = self.check_expression(initial)?;
             if !self.is_assignable(inner_type, &initial_ty) {
-                return Err(type_error(format!(
-                    "own:: value type mismatch: declared {:?}, got {:?}",
-                    inner_type, initial_ty
-                )));
+                return Err(type_error(
+                    self.current_line,
+                    self.current_column,
+                    format!(
+                        "own:: value type mismatch: declared {:?}, got {:?}",
+                        inner_type, initial_ty
+                    ),
+                ));
             }
         }
         Ok(())
@@ -468,10 +511,11 @@ impl TypeChecker {
             QueryOp::Update { condition, assigns } => {
                 let cond_type = self.check_expression(condition)?;
                 if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query update condition must be bool, got {:?}",
-                        cond_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Query update condition must be bool, got {:?}", cond_type),
+                    ));
                 }
                 for (_, expr) in assigns.iter_mut() {
                     self.check_expression(expr)?;
@@ -480,19 +524,21 @@ impl TypeChecker {
             QueryOp::Delete { condition } => {
                 let cond_type = self.check_expression(condition)?;
                 if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query delete condition must be bool, got {:?}",
-                        cond_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Query delete condition must be bool, got {:?}", cond_type),
+                    ));
                 }
             }
             QueryOp::Get(get) => {
                 let cond_type = self.check_expression(&mut get.condition)?;
                 if !Self::is_bool_like(&cond_type) {
-                    return Err(type_error(format!(
-                        "Query get condition must be bool, got {:?}",
-                        cond_type
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!("Query get condition must be bool, got {:?}", cond_type),
+                    ));
                 }
 
                 self.push_scope();
@@ -558,10 +604,11 @@ impl TypeChecker {
         methods: &[crate::parser::ast::TraitMethodSig],
     ) -> Result<()> {
         if methods.is_empty() {
-            return Err(type_error(format!(
-                "Skill '{}' must declare at least one method",
-                name
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!("Skill '{}' must declare at least one method", name),
+            ));
         }
         self.validate_trait_method_declarations(name, methods, "Skill")?;
         Ok(())

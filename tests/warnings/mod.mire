@@ -1,6 +1,4 @@
 pub fn main: () {
-    set hi = "hola" :char
-    set bye = "adios" :char
-
-    use dasu(hi)
+    set _unused = "this triggers W0001"
+    use dasu("ok")
 }

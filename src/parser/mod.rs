@@ -8,6 +8,7 @@ mod types;
 
 use crate::error::{MireError, Result};
 use crate::lexer::{Token, TokenType, tokenize};
+use crate::parser::ast::Attribute;
 use std::collections::{HashMap, HashSet};
 
 pub use ast::{EnumDef, EnumVariantDef, MireValue, Program, Statement};
@@ -26,6 +27,8 @@ pub fn parse_with_recovery(source: &str) -> (Program, Vec<MireError>) {
         Ok(tokens) => Parser::new(tokens).parse_with_recovery(),
         Err(e) => (
             Program {
+                file_attributes: vec![],
+                annotations: vec![],
                 statements: Vec::new(),
             },
             vec![e],
@@ -44,6 +47,7 @@ pub struct Parser {
     type_param_scopes: Vec<HashSet<String>>,
     function_body_depth: usize,
     errors: Vec<MireError>,
+    pending_attributes: Vec<Attribute>,
 }
 
 #[derive(Clone, Copy)]
@@ -67,6 +71,7 @@ impl Parser {
             type_param_scopes: vec![HashSet::new()],
             function_body_depth: 0,
             errors: Vec::new(),
+            pending_attributes: Vec::new(),
         }
     }
 
@@ -198,21 +203,42 @@ impl Parser {
 
     pub fn parse_with_recovery(&mut self) -> (Program, Vec<MireError>) {
         let mut statements = Vec::new();
+        let mut file_attributes: Vec<Attribute> = Vec::new();
         while !self.is_at_end() {
             self.skip_newlines();
             if self.is_at_end() {
                 break;
             }
+            let mut attrs = self.parse_attributes().unwrap_or_default();
+            self.skip_newlines();
+            while self.check(TokenType::At) && self.peek_n(1).ttype == TokenType::Lbracket {
+                let more = self.parse_attributes().unwrap_or_default();
+                self.skip_newlines();
+                attrs.extend(more);
+            }
+            self.pending_attributes = attrs;
             match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
+                Ok(stmt) => {
+                    let remaining = std::mem::take(&mut self.pending_attributes);
+                    file_attributes.extend(remaining);
+                    statements.push(stmt);
+                }
                 Err(err) => {
+                    self.pending_attributes.clear();
                     self.errors.push(err);
                     self.skip_to_statement_boundary();
                 }
             }
             self.skip_newlines();
         }
-        (Program { statements }, std::mem::take(&mut self.errors))
+        (
+            Program {
+                statements,
+                annotations: vec![],
+                file_attributes,
+            },
+            std::mem::take(&mut self.errors),
+        )
     }
 
     fn skip_to_statement_boundary(&mut self) {

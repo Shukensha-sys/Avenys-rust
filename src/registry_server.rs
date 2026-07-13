@@ -53,6 +53,12 @@ fn main() {
 
         if path.is_empty() || path == "/" {
             respond_index(&dir, request);
+        } else if path == "registry.json" {
+            serve_file(&dir.join("registry.json"), "application/json", request);
+        } else if path == "index.toml" {
+            serve_file(&dir.join("index.toml"), "application/toml", request);
+        } else if path == "index.toml.sig" {
+            serve_file(&dir.join("index.toml.sig"), "application/octet-stream", request);
         } else if let Some(rest) = path.strip_prefix("packages/") {
             respond_package(&dir, rest, request);
         } else {
@@ -63,7 +69,8 @@ fn main() {
 
 fn respond_index(dir: &Path, request: tiny_http::Request) {
     let mut packages = Vec::new();
-    if let Ok(entries) = fs::read_dir(dir) {
+    let packages_dir = dir.join("packages");
+    if let Ok(entries) = fs::read_dir(&packages_dir) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {

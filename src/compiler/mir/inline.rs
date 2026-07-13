@@ -35,9 +35,13 @@ fn max_temp_in_op(op: &MirOp, max: &mut usize) {
         | MirOp::Mul(d, s)
         | MirOp::SDiv(d, s)
         | MirOp::SRem(d, s)
-        | MirOp::Shl(d, s)
+        |         MirOp::Shl(d, s)
+        | MirOp::Shr(d, s)
         | MirOp::And(d, s)
         | MirOp::Or(d, s)
+        | MirOp::Xor(d, s)
+        | MirOp::BitAnd(d, s)
+        | MirOp::BitOr(d, s)
         | MirOp::ICmp(_, d, s)
         | MirOp::FCmp(_, d, s) => {
             max_temp_in_value(d, max);
@@ -227,8 +231,12 @@ fn remap_op(op: &MirOp, temp_offset: usize, callee: &MirFunction, args: &[MirVal
         MirOp::SDiv(l, r) => MirOp::SDiv(map(l), map(r)),
         MirOp::SRem(l, r) => MirOp::SRem(map(l), map(r)),
         MirOp::Shl(l, r) => MirOp::Shl(map(l), map(r)),
+        MirOp::Shr(l, r) => MirOp::Shr(map(l), map(r)),
         MirOp::And(l, r) => MirOp::And(map(l), map(r)),
         MirOp::Or(l, r) => MirOp::Or(map(l), map(r)),
+        MirOp::Xor(l, r) => MirOp::Xor(map(l), map(r)),
+        MirOp::BitAnd(l, r) => MirOp::BitAnd(map(l), map(r)),
+        MirOp::BitOr(l, r) => MirOp::BitOr(map(l), map(r)),
         MirOp::ICmp(c, l, r) => MirOp::ICmp(c.clone(), map(l), map(r)),
         MirOp::FCmp(c, l, r) => MirOp::FCmp(c.clone(), map(l), map(r)),
         MirOp::Gep(v, i, n) => MirOp::Gep(map(v), i.iter().map(&map).collect(), n.clone()),

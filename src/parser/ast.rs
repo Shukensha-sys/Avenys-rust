@@ -18,10 +18,12 @@ pub enum DataType {
     I16,
     I32,
     I64,
+    I128,
     U8,
     U16,
     U32,
     U64,
+    U128,
     F32,
     F64,
     Char,
@@ -73,6 +75,12 @@ pub enum DataType {
         ok: Box<DataType>,
         err: Box<DataType>,
     },
+    /// Closure as a first-class value with explicit signature.
+    /// Stores params and return type for type-safe closure usage.
+    Closure {
+        params: Vec<DataType>,
+        return_type: Box<DataType>,
+    },
     Generic(String),
 }
 
@@ -90,10 +98,12 @@ impl DataType {
             "i16" => DataType::I16,
             "i32" => DataType::I32,
             "i64" => DataType::I64,
+            "i128" => DataType::I128,
             "u8" => DataType::U8,
             "u16" => DataType::U16,
             "u32" => DataType::U32,
             "u64" => DataType::U64,
+            "u128" => DataType::U128,
             "f32" => DataType::F32,
             "f64" => DataType::F64,
             "char" => DataType::Char,
@@ -162,9 +172,42 @@ impl DataType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttributeArg {
+    pub name: Option<String>,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attribute {
+    pub name: String,
+    pub args: Vec<AttributeArg>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatementAnnotation {
+    pub statement_index: usize,
+    pub attributes: Vec<Attribute>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Program {
     pub statements: Vec<Statement>,
+    #[serde(default)]
+    pub annotations: Vec<StatementAnnotation>,
+    #[serde(default)]
+    pub file_attributes: Vec<Attribute>,
+}
+
+impl Program {
+    pub fn attributes_for(&self, statement_index: usize) -> &[Attribute] {
+        static EMPTY: &[Attribute] = &[];
+        self.annotations
+            .iter()
+            .find(|a| a.statement_index == statement_index)
+            .map(|a| a.attributes.as_slice())
+            .unwrap_or(EMPTY)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,6 +250,10 @@ pub enum Expression {
         args: Vec<Expression>,
         #[serde(default)]
         type_args: Vec<DataType>,
+        #[serde(default)]
+        name_line: usize,
+        #[serde(default)]
+        name_column: usize,
         data_type: DataType,
     },
     List {
@@ -503,6 +550,8 @@ pub enum Statement {
     Function {
         name: String,
         #[serde(default)]
+        attributes: Vec<Attribute>,
+        #[serde(default)]
         type_params: Vec<String>,
         #[serde(default)]
         type_param_bounds: Vec<(String, Vec<String>)>,
@@ -578,6 +627,8 @@ pub enum Statement {
         visibility: Visibility,
     },
     Unsafe {
+        line: usize,
+        column: usize,
         body: Vec<Statement>,
     },
     Asm {
@@ -691,10 +742,12 @@ pub enum MireValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    I128(i128),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
+    U128(u128),
     Float(MireFloat),
     F32(MireFloat32),
     F64(f64),
@@ -748,6 +801,8 @@ impl MireValue {
             (MireValue::U16(a), MireValue::U16(b)) => a == b,
             (MireValue::U32(a), MireValue::U32(b)) => a == b,
             (MireValue::U64(a), MireValue::U64(b)) => a == b,
+            (MireValue::I128(a), MireValue::I128(b)) => a == b,
+            (MireValue::U128(a), MireValue::U128(b)) => a == b,
             (MireValue::Float(a), MireValue::Float(b)) => a == b,
             (MireValue::F32(a), MireValue::F32(b)) => a == b,
             (MireValue::F64(a), MireValue::F64(b)) => a == b,

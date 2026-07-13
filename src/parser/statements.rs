@@ -1,12 +1,119 @@
 use crate::error::Result;
 use crate::lexer::{Token, TokenType};
 use crate::parser::ast::{
-    DataType, EnumVariantDef, Expression, Literal, Statement, TraitMethodSig, Visibility,
+    Attribute, AttributeArg, DataType, EnumVariantDef, Expression, Literal, Statement,
+    TraitMethodSig, Visibility,
 };
 
 use super::Parser;
 
 impl Parser {
+    pub(super) fn parse_attributes(&mut self) -> Result<Vec<Attribute>> {
+        let mut attrs = Vec::new();
+        while self.check(TokenType::At) && self.peek_n(1).ttype == TokenType::Lbracket {
+            self.advance(); // @
+            self.advance(); // [
+            let name = self.expect_ident()?;
+            let mut args = Vec::new();
+            if self.check(TokenType::Lparen) {
+                self.advance();
+                while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                    let token_type = self.peek().ttype;
+                    if token_type != TokenType::Rparen && token_type != TokenType::Comma {
+                        let tok = self.advance();
+                        args.push(AttributeArg {
+                            name: None,
+                            value: tok.value.clone().unwrap_or_default(),
+                        });
+                    } else if token_type == TokenType::Comma {
+                        self.advance();
+                    }
+                }
+                self.expect(TokenType::Rparen)?;
+            }
+            attrs.push(Attribute { name, args });
+            while self.check(TokenType::Comma) {
+                self.advance();
+                let attr_name = self.expect_ident()?;
+                let mut attr_args = Vec::new();
+                if self.check(TokenType::Lparen) {
+                    self.advance();
+                    while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                        let token_type = self.peek().ttype;
+                        if token_type != TokenType::Rparen && token_type != TokenType::Comma {
+                            let tok = self.advance();
+                            attr_args.push(AttributeArg {
+                                name: None,
+                                value: tok.value.clone().unwrap_or_default(),
+                            });
+                        } else if token_type == TokenType::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenType::Rparen)?;
+                }
+                attrs.push(Attribute {
+                    name: attr_name,
+                    args: attr_args,
+                });
+            }
+            self.expect(TokenType::Rbracket)?;
+            // Support chained brackets: @[test][section("math")]
+            while self.check(TokenType::Lbracket) {
+                self.advance(); // [
+                let chain_name = self.expect_ident()?;
+                let mut chain_args = Vec::new();
+                if self.check(TokenType::Lparen) {
+                    self.advance();
+                    while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                        let token_type = self.peek().ttype;
+                        if token_type != TokenType::Rparen && token_type != TokenType::Comma {
+                            let tok = self.advance();
+                            chain_args.push(AttributeArg {
+                                name: None,
+                                value: tok.value.clone().unwrap_or_default(),
+                            });
+                        } else if token_type == TokenType::Comma {
+                            self.advance();
+                        }
+                    }
+                    self.expect(TokenType::Rparen)?;
+                }
+                attrs.push(Attribute {
+                    name: chain_name,
+                    args: chain_args,
+                });
+                while self.check(TokenType::Comma) {
+                    self.advance();
+                    let comma_name = self.expect_ident()?;
+                    let mut comma_args = Vec::new();
+                    if self.check(TokenType::Lparen) {
+                        self.advance();
+                        while !self.check(TokenType::Rparen) && !self.is_at_end() {
+                            if self.check(TokenType::StrLit) {
+                                let tok = self.advance();
+                                comma_args.push(AttributeArg {
+                                    name: None,
+                                    value: tok.value.unwrap_or_default(),
+                                });
+                            }
+                            if self.check(TokenType::Comma) {
+                                self.advance();
+                            }
+                        }
+                        self.expect(TokenType::Rparen)?;
+                    }
+                    attrs.push(Attribute {
+                        name: comma_name,
+                        args: comma_args,
+                    });
+                }
+                self.expect(TokenType::Rbracket)?;
+            }
+        }
+        Ok(attrs)
+    }
+
     pub(super) fn parse_statement(&mut self) -> Result<Statement> {
         if self.is_legacy_add_statement() {
             let token = self.peek();
@@ -251,8 +358,10 @@ impl Parser {
         self.pop_type_param_scope();
         self.declare(&name);
 
+        let attributes = std::mem::take(&mut self.pending_attributes);
         Ok(Statement::Function {
             name,
+            attributes,
             type_params,
             type_param_bounds,
             params,
@@ -603,13 +712,16 @@ impl Parser {
     }
 
     fn parse_unsafe_statement(&mut self) -> Result<Statement> {
+        let token = self.peek();
+        let line = token.line;
+        let column = token.column;
         self.expect(TokenType::Unsafe)?;
         self.expect_block_open()?;
         self.push_scope();
         let body = self.parse_block()?;
         self.pop_scope();
         self.expect_block_close()?;
-        Ok(Statement::Unsafe { body })
+        Ok(Statement::Unsafe { line, column, body })
     }
 
     fn parse_extern_statement(&mut self) -> Result<Statement> {
@@ -789,6 +901,8 @@ impl Parser {
                 },
             ],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::None,
         }))
     }
@@ -808,7 +922,7 @@ impl Parser {
         Ok(Statement::Module { name })
     }
 
-    fn parse_block(&mut self) -> Result<Vec<Statement>> {
+    pub(super) fn parse_block(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
         loop {
             self.skip_newlines();

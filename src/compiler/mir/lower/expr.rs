@@ -3,6 +3,7 @@ use super::collections::lower_index_read;
 use super::types::{
     data_type_to_kind, extract_data_type, is_map_or_dict_type, is_trivial_deref, llvm_elem_type_str,
 };
+use crate::compiler::location::{NO_POSITION, expression_location};
 use crate::compiler::mir::*;
 use crate::parser::ast::{DataType, Expression, Literal, Statement};
 
@@ -16,6 +17,7 @@ impl MirLower {
                 if needs_wrap && is_map_or_dict_type(&arg_type) {
                     let str_result = self.new_temp();
                     let last = self.current_block;
+                    let a_loc = expression_location(a);
                     self.func.blocks[last].push(
                         Some(str_result),
                         MirOp::Call(
@@ -25,7 +27,7 @@ impl MirLower {
                                 data_type: DataType::Unknown,
                             },
                         ),
-                        (0, 0),
+                        a_loc,
                     );
                     MirValue::temp(str_result)
                 } else {
@@ -36,7 +38,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_expression(&mut self, expr: &Expression) -> MirValue {
-        let loc = (0, 0);
+        let loc = expression_location(expr);
         match expr {
             Expression::Literal(lit) => self.lower_literal(lit),
             Expression::Identifier(id) => {
@@ -93,6 +95,11 @@ impl MirLower {
                     ">=" => MirOp::ICmp(MirCmp::Ge, l, r),
                     "&&" => MirOp::And(l, r),
                     "||" => MirOp::Or(l, r),
+                    "&" => MirOp::BitAnd(l, r),
+                    "|" => MirOp::BitOr(l, r),
+                    "^" => MirOp::Xor(l, r),
+                    "<<" => MirOp::Shl(l, r),
+                    ">>" => MirOp::Shr(l, r),
                     _ => MirOp::Add(l, r),
                 };
                 let last = self.current_block;
@@ -206,7 +213,7 @@ impl MirLower {
                     DataType::Vector { element_type, .. }
                         if matches!(
                             &**element_type,
-                            DataType::I64 | DataType::Unknown | DataType::Anything
+                            DataType::I64 | DataType::I128 | DataType::U128 | DataType::Unknown | DataType::Anything
                         ) =>
                     {
                         "rt_lists_contains_i64"
@@ -299,15 +306,33 @@ impl MirLower {
                         .unwrap_or_else(|| name.clone());
                     (resolved, mir_args)
                 };
+
+                let is_closure_var = self.var_types.get(name)
+                    .map(|ty| matches!(ty, DataType::Closure { .. } | DataType::Function))
+                    .unwrap_or(false);
+
+                let callee = if is_closure_var {
+                    if let Some(&ptr) = self.vars.get(name) {
+                        MirValue::Temp(ptr)
+                    } else {
+                        MirValue::FunctionRef {
+                            name: resolved_name,
+                            env: Box::new(MirValue::Const(MirConst::None)),
+                        }
+                    }
+                } else {
+                    MirValue::FunctionRef {
+                        name: resolved_name,
+                        env: Box::new(MirValue::Const(MirConst::None)),
+                    }
+                };
+
                 let last = self.current_block;
                 if matches!(data_type, DataType::None) {
                     self.func.blocks[last].push(
                         None,
                         MirOp::Call(
-                            MirValue::FunctionRef {
-                                name: resolved_name,
-                                env: Box::new(MirValue::Const(MirConst::None)),
-                            },
+                            callee,
                             mir_args,
                             MirType {
                                 data_type: data_type.clone(),
@@ -321,10 +346,7 @@ impl MirLower {
                     self.func.blocks[last].push(
                         Some(result),
                         MirOp::Call(
-                            MirValue::FunctionRef {
-                                name: resolved_name,
-                                env: Box::new(MirValue::Const(MirConst::None)),
-                            },
+                            callee,
                             mir_args,
                             MirType {
                                 data_type: data_type.clone(),
@@ -883,7 +905,9 @@ impl MirLower {
                         loc,
                     );
                     let is_scalar = vt == &DataType::I64
+                        || vt == &DataType::I128
                         || vt == &DataType::U64
+                        || vt == &DataType::U128
                         || vt == &DataType::Char
                         || vt == &DataType::Bool
                         || vt == &DataType::I32
@@ -945,7 +969,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_map(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1139,7 +1163,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_filter(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let closure_val = self.lower_expression(&args[0]);
         let list_val = self.lower_expression(&args[1]);
 
@@ -1366,7 +1390,7 @@ impl MirLower {
     }
 
     pub(crate) fn lower_lists_fold(&mut self, args: &[Expression]) -> MirValue {
-        let loc = (0, 0);
+        let loc = args.first().map(expression_location).unwrap_or(NO_POSITION);
         let acc_init = self.lower_expression(&args[0]);
         let closure_val = self.lower_expression(&args[1]);
         let list_val = self.lower_expression(&args[2]);
@@ -1583,7 +1607,7 @@ impl MirLower {
         }
         let op = match (src_type, target_type) {
             (
-                DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8,
+                DataType::I64 | DataType::I128 | DataType::I32 | DataType::I16 | DataType::I8,
                 DataType::F64 | DataType::F32,
             ) => MirOp::Sitofp(
                 src_val,
@@ -1593,7 +1617,7 @@ impl MirLower {
             ),
             (
                 DataType::F64 | DataType::F32,
-                DataType::I64 | DataType::I32 | DataType::I16 | DataType::I8,
+                DataType::I64 | DataType::I128 | DataType::I32 | DataType::I16 | DataType::I8,
             ) => MirOp::Fptosi(
                 src_val,
                 MirType {

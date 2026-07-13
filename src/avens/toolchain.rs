@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn optimize_ir(ir: &str, opt_level: OptLevel) -> Result<String> {
+pub(super) fn optimize_ir(ir: &str, opt_level: OptLevel, source_filename: &str) -> Result<String> {
     let mut command = Command::new("opt");
     command
         .arg("-S")
@@ -9,29 +9,41 @@ pub(super) fn optimize_ir(ir: &str, opt_level: OptLevel) -> Result<String> {
         .stdout(Stdio::piped());
     let mut child = command.spawn().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Failed to run opt: {}", err),
         })
+        .with_filename(source_filename.to_string())
     })?;
     if let Some(stdin) = child.stdin.as_mut() {
         stdin.write_all(ir.as_bytes()).map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Failed to stream IR into opt: {}", err),
             })
+            .with_filename(source_filename.to_string())
         })?;
     }
     let output = child.wait_with_output().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Failed to wait for opt: {}", err),
         })
+        .with_filename(source_filename.to_string())
     })?;
     if !output.status.success() {
         return Err(MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!(
                 "opt failed with status {}.\nstderr:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stderr).trim()
             ),
-        }));
+        })
+        .with_filename(source_filename.to_string()));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
@@ -42,6 +54,7 @@ pub(super) fn compile_binary_from_ir(
     binary_path: &Path,
     extern_libs: &[(String, String)],
     pal_backend: &str,
+    source_filename: &str,
 ) -> Result<()> {
     let mut clang = Command::new("clang");
     let mut seen_objects = std::collections::HashSet::new();
@@ -69,11 +82,9 @@ pub(super) fn compile_binary_from_ir(
         clang.arg("-lm");
         clang.arg("-lssl");
         clang.arg("-lcrypto");
+        clang.arg("-pthread");
     }
 
-    if std::env::var("MIRE_DEBUG_LINK").is_ok() {
-        eprintln!("[link] extern_libs: {:?}", extern_libs);
-    }
     for (lib_name, lib_path) in extern_libs {
         let clean_name = if lib_name.contains('.') {
             lib_name.rsplit('.').next().unwrap_or(lib_name)
@@ -95,31 +106,43 @@ pub(super) fn compile_binary_from_ir(
 
     let mut child = clang.spawn().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Failed to run clang: {}", err),
         })
+        .with_filename(source_filename.to_string())
     })?;
     if let Some(stdin) = child.stdin.as_mut() {
         stdin.write_all(ir.as_bytes()).map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Failed to stream IR into clang: {}", err),
             })
+            .with_filename(source_filename.to_string())
         })?;
     }
     drop(child.stdin.take());
     let output = child.wait_with_output().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Failed to wait for clang: {}", err),
         })
+        .with_filename(source_filename.to_string())
     })?;
     if !output.status.success() {
         return Err(MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!(
                 "clang failed with status {}.\nstdout:\n{}\nstderr:\n{}",
                 output.status,
                 String::from_utf8_lossy(&output.stdout).trim(),
                 String::from_utf8_lossy(&output.stderr).trim()
             ),
-        }));
+        })
+        .with_filename(source_filename.to_string()));
     }
 
     Ok(())
@@ -131,11 +154,15 @@ pub(super) fn llvm_version() -> Result<String> {
         .output()
         .map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Failed to run llvm-config: {}", err),
             })
         })?;
     if !output.status.success() {
         return Err(MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: "llvm-config --version failed".to_string(),
         }));
     }

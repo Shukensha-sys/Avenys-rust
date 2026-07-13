@@ -16,11 +16,11 @@ jobs:
         with:
           path: Avenys-rust
 
-      - name: Checkout kioto from libs repo
+      - name: Checkout kioto
         uses: actions/checkout@v4
         with:
-          repository: mire-lang/libs
-          path: libs
+          repository: mire-lang/Kioto
+          path: kioto
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
@@ -47,9 +47,9 @@ jobs:
 
       - name: Setup owl dependencies
         run: |
-          cp -r libs/kioto ./kioto
+          cp -r kioto ./kioto
           mkdir -p ~/.owl/modules
-          cp -r libs/kioto ~/.owl/modules/kioto
+          cp -r kioto ~/.owl/modules/kioto
 
       - name: Build owl
         working-directory: owl-src
@@ -61,16 +61,22 @@ jobs:
           chmod +x bin/release/main
           ./bin/release/main -V
 
-      - name: Prepare tarball
+      - name: Prepare owl tarball
         run: |
-          mkdir -p dist/mire
-          cp Avenys-rust/target/release/mire dist/mire/
-          cp owl-src/bin/release/main dist/mire/owl
-          cp -r Avenys-rust/src/runtime dist/mire/runtime
-          cp -r Avenys-rust/src/pal dist/mire/pal
-          cp -r libs/kioto dist/mire/kioto
+          mkdir -p dist/owl
+          cp owl-src/bin/release/main dist/owl/owl
+          cp -r kioto dist/owl/kioto
           cd dist
-          tar czf ../mire-linux-x86_64.tar.gz mire/
+          tar czf ../owl-linux-x86_64.tar.gz owl/
+
+      - name: Prepare compiler tarball
+        run: |
+          mkdir -p dist/compiler
+          cp Avenys-rust/target/release/mire dist/compiler/mire
+          cp -r Avenys-rust/src/runtime dist/compiler/runtime
+          cp -r Avenys-rust/src/pal dist/compiler/pal
+          cd dist
+          tar czf ../mire-compiler-linux-x86_64.tar.gz compiler/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -78,4 +84,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Build ${{ github.ref_name }}"
           body_path: docs/CHANGELOG.md
-          files: mire-linux-x86_64.tar.gz
+          files: |
+            owl-linux-x86_64.tar.gz
+            mire-compiler-linux-x86_64.tar.gz

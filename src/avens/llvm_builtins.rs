@@ -4,6 +4,8 @@ impl LlvmIrGen {
     pub(super) fn compile_float(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys float(...) expects 1 argument".to_string(),
             }));
         }
@@ -14,6 +16,8 @@ impl LlvmIrGen {
     pub(super) fn compile_int(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys int(...) expects 1 argument".to_string(),
             }));
         }
@@ -24,6 +28,8 @@ impl LlvmIrGen {
     pub(super) fn compile_bool(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys bool(...) expects 1 argument".to_string(),
             }));
         }
@@ -34,6 +40,8 @@ impl LlvmIrGen {
     pub(super) fn compile_abs(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys abs(...) expects 1 argument".to_string(),
             }));
         }
@@ -51,6 +59,8 @@ impl LlvmIrGen {
     pub(super) fn compile_sqrt(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys sqrt(...) expects 1 argument".to_string(),
             }));
         }
@@ -71,6 +81,8 @@ impl LlvmIrGen {
     pub(super) fn compile_pow(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys pow(...) expects 2 arguments".to_string(),
             }));
         }
@@ -93,6 +105,8 @@ impl LlvmIrGen {
     pub(super) fn compile_floor(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys floor(...) expects 1 argument".to_string(),
             }));
         }
@@ -113,6 +127,8 @@ impl LlvmIrGen {
     pub(super) fn compile_ceil(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys ceil(...) expects 1 argument".to_string(),
             }));
         }
@@ -133,6 +149,8 @@ impl LlvmIrGen {
     pub(super) fn compile_round(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys round(...) expects 1 argument".to_string(),
             }));
         }
@@ -153,6 +171,8 @@ impl LlvmIrGen {
     pub(super) fn compile_min(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys min(...) expects 2 arguments".to_string(),
             }));
         }
@@ -173,6 +193,8 @@ impl LlvmIrGen {
     pub(super) fn compile_max(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys max(...) expects 2 arguments".to_string(),
             }));
         }
@@ -197,6 +219,8 @@ impl LlvmIrGen {
     pub(super) fn compile_sleep(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys sleep(...) expects 1 argument".to_string(),
             }));
         }
@@ -213,6 +237,8 @@ impl LlvmIrGen {
     pub(super) fn compile_exit(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys exit(...) expects 1 argument".to_string(),
             }));
         }
@@ -246,6 +272,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_write(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_write expects 2 arguments".to_string(),
             }));
         }
@@ -265,6 +293,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_append(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_append expects 2 arguments".to_string(),
             }));
         }
@@ -284,6 +314,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_read(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_read expects 1 argument".to_string(),
             }));
         }
@@ -303,6 +335,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_copy(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_copy expects 2 arguments".to_string(),
             }));
         }
@@ -323,6 +357,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_move(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_move expects 2 arguments".to_string(),
             }));
         }
@@ -343,6 +379,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_drop(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_drop expects 1 argument".to_string(),
             }));
         }
@@ -362,6 +400,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_mkdir(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_mkdir expects 1 argument".to_string(),
             }));
         }
@@ -381,6 +421,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_rmdir(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_rmdir expects 1 argument".to_string(),
             }));
         }
@@ -400,6 +442,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_exists(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_exists expects 1 argument".to_string(),
             }));
         }
@@ -419,6 +463,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_is_dir(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_is_dir expects 1 argument".to_string(),
             }));
         }
@@ -438,6 +484,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_is_file(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_is_file expects 1 argument".to_string(),
             }));
         }
@@ -457,6 +505,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_size(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_size expects 1 argument".to_string(),
             }));
         }
@@ -476,6 +526,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_list(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_list expects 1 argument".to_string(),
             }));
         }
@@ -492,9 +544,32 @@ impl LlvmIrGen {
         })
     }
 
+    pub(super) fn compile_fs_walk(&mut self, args: &[Expression]) -> Result<LlValue> {
+        if args.len() != 1 {
+            return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
+                message: "fs_walk expects 1 argument".to_string(),
+            }));
+        }
+        let path = self.compile_expr(&args[0])?;
+        let tmp = self.tmp();
+        self.body.push(format!(
+            "  {tmp} = call ptr @pal_fs_walk(ptr {})",
+            path.repr
+        ));
+        Ok(LlValue {
+            ty: LlType::Ptr,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
     pub(super) fn compile_fs_join(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_join expects 2 arguments".to_string(),
             }));
         }
@@ -515,6 +590,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_dir(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_dir expects 1 argument".to_string(),
             }));
         }
@@ -532,6 +609,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_name(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_name expects 1 argument".to_string(),
             }));
         }
@@ -551,6 +630,8 @@ impl LlvmIrGen {
     pub(super) fn compile_fs_ext(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "fs_ext expects 1 argument".to_string(),
             }));
         }
@@ -570,6 +651,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_run(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_run expects 1 argument".to_string(),
             }));
         }
@@ -589,6 +672,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_exec(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_exec expects 1 argument".to_string(),
             }));
         }
@@ -608,6 +693,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_spawn(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_spawn expects 1 argument".to_string(),
             }));
         }
@@ -627,6 +714,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_wait(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_wait expects 1 argument".to_string(),
             }));
         }
@@ -647,6 +736,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_kill(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_kill expects 1 argument".to_string(),
             }));
         }
@@ -664,6 +755,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_on(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_on expects 1 argument".to_string(),
             }));
         }
@@ -680,6 +773,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_exit(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_exit expects 1 argument".to_string(),
             }));
         }
@@ -697,6 +792,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_shell(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_shell expects 1 argument".to_string(),
             }));
         }
@@ -716,6 +813,8 @@ impl LlvmIrGen {
     pub(super) fn compile_proc_exists(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "proc_exists expects 1 argument".to_string(),
             }));
         }
@@ -738,6 +837,8 @@ impl LlvmIrGen {
     pub(super) fn compile_env_get(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "env_get expects 1 argument".to_string(),
             }));
         }
@@ -757,6 +858,8 @@ impl LlvmIrGen {
     pub(super) fn compile_env_set(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "env_set expects 2 arguments".to_string(),
             }));
         }
@@ -804,9 +907,55 @@ impl LlvmIrGen {
         })
     }
 
+    pub(super) fn compile_time_unix_ms(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_time_unix_ms()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_time_unix_ns(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_time_unix_ns()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_mem_used(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_mem_used()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
+    pub(super) fn compile_cpu_count(&mut self, _args: &[Expression]) -> Result<LlValue> {
+        let tmp = self.tmp();
+        self.body
+            .push(format!("  {tmp} = call i64 @pal_cpu_count()"));
+        Ok(LlValue {
+            ty: LlType::I64,
+            repr: tmp,
+            owned: false,
+        })
+    }
+
     pub(super) fn compile_time_elapsed_ms(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys time.elapsed_ms expects 1 argument".to_string(),
             }));
         }
@@ -826,6 +975,8 @@ impl LlvmIrGen {
     pub(super) fn compile_time_elapsed_ms_i64(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys time_elapsed_ms expects 1 argument".to_string(),
             }));
         }
@@ -856,6 +1007,8 @@ impl LlvmIrGen {
     pub(super) fn compile_cpu_elapsed_ms(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cpu.elapsed_ms expects 1 argument".to_string(),
             }));
         }
@@ -875,6 +1028,8 @@ impl LlvmIrGen {
     pub(super) fn compile_cpu_elapsed_ms_i64(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cpu_elapsed_ms expects 1 argument".to_string(),
             }));
         }
@@ -894,6 +1049,8 @@ impl LlvmIrGen {
     pub(super) fn compile_cpu_cycles_est(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys cpu.cycles_est expects 1 argument".to_string(),
             }));
         }
@@ -924,6 +1081,8 @@ impl LlvmIrGen {
     pub(super) fn compile_mem_format(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys mem.format expects 1 argument".to_string(),
             }));
         }
@@ -955,6 +1114,8 @@ impl LlvmIrGen {
     pub(super) fn compile_len(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys len(...) expects exactly 1 argument".to_string(),
             }));
         }
@@ -990,7 +1151,7 @@ impl LlvmIrGen {
             DataType::Str => {
                 let tmp = self.tmp();
                 self.body
-                    .push(format!("  {tmp} = call i64 @strlen(ptr {})", value.repr));
+                    .push(format!("  {tmp} = call i64 @rt_strings_len(ptr {})", value.repr));
                 Ok(LlValue {
                     ty: LlType::I64,
                     repr: tmp,
@@ -1000,12 +1161,14 @@ impl LlvmIrGen {
             DataType::List | DataType::Vector { .. } => self.compile_list_len(args),
             _ => match value.ty {
                 LlType::Ptr => self.compile_list_len(args),
-                LlType::I64 | LlType::I1 | LlType::F64 | LlType::I8 => Ok(LlValue {
+                LlType::I64 | LlType::I128 | LlType::I1 | LlType::F64 | LlType::I8 => Ok(LlValue {
                     ty: LlType::I64,
                     repr: "0".to_string(),
                     owned: false,
                 }),
                 LlType::Struct(_) => Err(MireError::new(ErrorKind::Backend {
+                    line: self.current_line,
+                    column: self.current_column,
                     message: "Struct type not supported here".to_string(),
                 })),
             },
@@ -1020,6 +1183,8 @@ impl LlvmIrGen {
         match expr {
             Expression::Closure { params, body, .. } if params.is_empty() => Ok(body),
             _ => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Avenys expects a zero-arg closure for {}", ctx),
             })),
         }
@@ -1036,6 +1201,8 @@ impl LlvmIrGen {
                     Ok(value)
                 } else {
                     Err(MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!(
                             "Avenys expects {} closure to be a single return expression",
                             ctx
@@ -1044,6 +1211,8 @@ impl LlvmIrGen {
                 }
             }
             _ => Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Avenys expects a zero-arg closure for {}", ctx),
             })),
         }

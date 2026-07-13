@@ -44,7 +44,9 @@ impl Parser {
                 data_type: slot, ..
             }
             | Expression::Call {
-                data_type: slot, ..
+                name_line: 0,
+            name_column: 0,
+            data_type: slot, ..
             }
             | Expression::List {
                 data_type: slot,
@@ -113,8 +115,10 @@ impl Parser {
 
     fn parse_or(&mut self) -> Result<Expression> {
         let mut expr = self.parse_xor()?;
+        self.skip_newlines();
         while self.check(TokenType::PipePipe) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_xor()?;
             expr = Expression::BinaryOp {
                 operator: "||".to_string(),
@@ -122,14 +126,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_xor(&mut self) -> Result<Expression> {
         let mut expr = self.parse_and()?;
+        self.skip_newlines();
         while self.check(TokenType::Xor) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_and()?;
             expr = Expression::BinaryOp {
                 operator: "^".to_string(),
@@ -137,14 +144,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_and(&mut self) -> Result<Expression> {
         let mut expr = self.parse_equality()?;
+        self.skip_newlines();
         while self.check(TokenType::AmpAmp) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_equality()?;
             expr = Expression::BinaryOp {
                 operator: "&&".to_string(),
@@ -152,6 +162,7 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Bool,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
@@ -159,8 +170,10 @@ impl Parser {
     fn parse_equality(&mut self) -> Result<Expression> {
         let mut expr = self.parse_bitwise_or()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Eq) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "==".to_string(),
@@ -170,6 +183,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Neq) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_bitwise_or()?;
                 expr = Expression::BinaryOp {
                     operator: "!=".to_string(),
@@ -186,7 +200,9 @@ impl Parser {
                     name: "__is".to_string(),
                     args: vec![expr, right],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             } else {
                 break;
@@ -197,8 +213,10 @@ impl Parser {
 
     fn parse_bitwise_or(&mut self) -> Result<Expression> {
         let mut expr = self.parse_bitwise_and()?;
+        self.skip_newlines();
         while self.check(TokenType::Pipe) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_bitwise_and()?;
             expr = Expression::BinaryOp {
                 operator: "|".to_string(),
@@ -206,14 +224,17 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Unknown,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
 
     fn parse_bitwise_and(&mut self) -> Result<Expression> {
         let mut expr = self.parse_comparison()?;
+        self.skip_newlines();
         while self.check(TokenType::Amp) {
             self.advance();
+            self.skip_newlines();
             let right = self.parse_comparison()?;
             expr = Expression::BinaryOp {
                 operator: "&".to_string(),
@@ -221,6 +242,7 @@ impl Parser {
                 right: Box::new(right),
                 data_type: DataType::Unknown,
             };
+            self.skip_newlines();
         }
         Ok(expr)
     }
@@ -229,9 +251,11 @@ impl Parser {
         let mut expr = self.parse_additive()?;
 
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Pipeline) || self.check(TokenType::PipelineSafe) {
                 let is_safe = self.check(TokenType::PipelineSafe);
                 self.advance();
+                self.skip_newlines();
                 let stage = self.parse_additive()?;
                 expr = self.apply_pipeline(expr, stage, is_safe)?;
                 continue;
@@ -239,6 +263,7 @@ impl Parser {
 
             if self.check(TokenType::Gt) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: ">".to_string(),
@@ -248,6 +273,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Lt) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "<".to_string(),
@@ -257,6 +283,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Gte) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: ">=".to_string(),
@@ -266,6 +293,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Lte) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "<=".to_string(),
@@ -275,6 +303,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::In) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::BinaryOp {
                     operator: "in".to_string(),
@@ -289,10 +318,13 @@ impl Parser {
                     name: "__type_matches".to_string(),
                     args: vec![expr, string_expr(&ty)],
                     type_args: Vec::new(),
-                    data_type: DataType::Bool,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::Bool,
                 };
             } else if self.check(TokenType::At) {
                 self.advance();
+                self.skip_newlines();
                 let index = self.parse_additive()?;
                 expr = Expression::Index {
                     target: Box::new(expr),
@@ -301,12 +333,15 @@ impl Parser {
                 };
             } else if self.check(TokenType::To) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_additive()?;
                 expr = Expression::Call {
                     name: "range".to_string(),
                     args: vec![expr, right],
                     type_args: Vec::new(),
-                    data_type: DataType::List,
+                    name_line: 0,
+            name_column: 0,
+            data_type: DataType::List,
                 };
             } else {
                 break;
@@ -318,8 +353,10 @@ impl Parser {
     fn parse_additive(&mut self) -> Result<Expression> {
         let mut expr = self.parse_shift()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Plus) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "+".to_string(),
@@ -329,6 +366,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Minus) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_shift()?;
                 expr = Expression::BinaryOp {
                     operator: "-".to_string(),
@@ -346,8 +384,10 @@ impl Parser {
     fn parse_shift(&mut self) -> Result<Expression> {
         let mut expr = self.parse_multiplicative()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::LShift) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_multiplicative()?;
                 expr = Expression::BinaryOp {
                     operator: "<<".to_string(),
@@ -357,6 +397,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::RShift) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_multiplicative()?;
                 expr = Expression::BinaryOp {
                     operator: ">>".to_string(),
@@ -374,8 +415,10 @@ impl Parser {
     fn parse_multiplicative(&mut self) -> Result<Expression> {
         let mut expr = self.parse_unary()?;
         loop {
+            self.skip_newlines();
             if self.check(TokenType::Star) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "*".to_string(),
@@ -385,6 +428,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Slash) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "/".to_string(),
@@ -394,6 +438,7 @@ impl Parser {
                 };
             } else if self.check(TokenType::Percent) {
                 self.advance();
+                self.skip_newlines();
                 let right = self.parse_unary()?;
                 expr = Expression::BinaryOp {
                     operator: "%".to_string(),
@@ -475,7 +520,9 @@ impl Parser {
                         name,
                         args,
                         type_args,
-                        data_type: DataType::Unknown,
+                        name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                     };
                     continue;
                 }
@@ -550,6 +597,10 @@ impl Parser {
                         };
                         continue;
                     }
+                    let (name_line, name_column) = match &expr {
+                        Expression::Identifier(ident) => (ident.line, ident.column),
+                        _ => (0, 0),
+                    };
                     if matches!(name.as_str(), "dasu" | "ireru") {
                         expr = self.parse_io_call(name)?;
                     } else {
@@ -558,6 +609,8 @@ impl Parser {
                             name,
                             args,
                             type_args: Vec::new(),
+                            name_line,
+                            name_column,
                             data_type: DataType::Unknown,
                         };
                     }
@@ -569,6 +622,8 @@ impl Parser {
                         name: "call".to_string(),
                         args: call_args,
                         type_args: Vec::new(),
+                        name_line: 0,
+                        name_column: 0,
                         data_type: DataType::Unknown,
                     };
                 }
@@ -759,13 +814,38 @@ impl Parser {
                         name: "type".to_string(),
                         args: vec![expr],
                         type_args: Vec::new(),
-                        data_type: DataType::Str,
+                        name_line: 0,
+            name_column: 0,
+            data_type: DataType::Str,
                     });
                 }
                 if self.check_double_colon() && Self::is_member_name_token(self.peek_n(2).ttype) {
                     self.advance();
                     self.advance();
                     let member = self.expect_member_name()?;
+
+                    if self.check(TokenType::Dot) && self.peek_n(1).ttype == TokenType::Ident {
+                        if self.enum_names.contains(&member) {
+                            self.advance();
+                            let variant_name = self.advance().value.unwrap_or_default();
+                            let enum_name = format!("{}::{}", name, member);
+                            if self.check(TokenType::Lparen) {
+                                let payloads = self.parse_enum_variant_arguments()?;
+                                return Ok(Expression::EnumVariant {
+                                    enum_name: enum_name.clone(),
+                                    variant_name,
+                                    payloads,
+                                    data_type: DataType::EnumNamed(enum_name),
+                                });
+                            }
+                            return Ok(Expression::EnumVariantPath {
+                                enum_name: enum_name.clone(),
+                                variant_name,
+                                data_type: DataType::EnumNamed(enum_name),
+                            });
+                        }
+                    }
+
                     return Ok(Expression::MemberAccess {
                         target: Box::new(identifier_expr_with_pos(&name, token.line, token.column)),
                         member,
@@ -850,7 +930,9 @@ impl Parser {
                             name: full_name,
                             args,
                             type_args: Vec::new(),
-                            data_type: DataType::Unknown,
+                            name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                         });
                     }
                 }
@@ -908,7 +990,9 @@ impl Parser {
                                 name: type_name,
                                 args,
                                 type_args: Vec::new(),
-                                data_type: DataType::Unknown,
+                                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
                             });
                         }
                     }
@@ -925,11 +1009,11 @@ impl Parser {
                         self.expect_ident()?
                     };
                     self.advance();
-                    let body_expr = self.parse_or()?;
+                    let body = self.parse_closure_body()?;
                     self.expect(TokenType::Rparen)?;
                     return Ok(Expression::Closure {
                         params: vec![(param_name, DataType::Unknown)],
-                        body: vec![Statement::Return(Some(body_expr))],
+                        body,
                         return_type: DataType::Unknown,
                         capture: Vec::new(),
                     });
@@ -994,6 +1078,8 @@ impl Parser {
             name,
             args,
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Unknown,
         })
     }
@@ -1015,14 +1101,31 @@ impl Parser {
 
         self.advance();
         self.advance();
-        let body_expr = self.parse_or()?;
+        let body = self.parse_closure_body()?;
 
         Ok(Some(Expression::Closure {
             params,
-            body: vec![Statement::Return(Some(body_expr))],
+            body,
             return_type: DataType::Unknown,
             capture: Vec::new(),
         }))
+    }
+
+    fn parse_closure_body(&mut self) -> Result<Vec<Statement>> {
+        if self.check(TokenType::Lbrace) {
+            self.advance();
+            let mut stmts = self.parse_block()?;
+            self.expect_block_close()?;
+            if let Some(Statement::Expression(_)) = stmts.last() {
+                if let Statement::Expression(expr) = stmts.pop().unwrap() {
+                    stmts.push(Statement::Return(Some(expr)));
+                }
+            }
+            Ok(stmts)
+        } else {
+            let body_expr = self.parse_or()?;
+            Ok(vec![Statement::Return(Some(body_expr))])
+        }
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression> {
@@ -1054,6 +1157,8 @@ impl Parser {
                 },
             ],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Unknown,
         })
     }
@@ -1067,7 +1172,9 @@ impl Parser {
                 name: ident.name.clone(),
                 args: Vec::new(),
                 type_args: Vec::new(),
-                data_type: DataType::Unknown,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Unknown,
             }
         } else {
             expr
@@ -1240,6 +1347,8 @@ impl Parser {
             name,
             args,
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type,
         })
     }
@@ -1343,7 +1452,9 @@ impl Parser {
                 name: "__mire_fmt".to_string(),
                 args: vec![expr, string_expr(&spec)],
                 type_args: Vec::new(),
-                data_type: DataType::Str,
+                name_line: 0,
+            name_column: 0,
+            data_type: DataType::Str,
             });
         }
 
@@ -1356,6 +1467,8 @@ impl Parser {
             name: "str".to_string(),
             args: vec![expr],
             type_args: Vec::new(),
+            name_line: 0,
+            name_column: 0,
             data_type: DataType::Str,
         })
     }

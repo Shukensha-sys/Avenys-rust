@@ -43,6 +43,31 @@ char *pal_fs_read(const char *path) {
     return buf;
 }
 
+char *pal_fs_read_bytes(const char *path) {
+    extern char *rt_managed_alloc(size_t len);
+    extern char *rt_managed_from_slice(const char *src, size_t len);
+    FILE *fh = fopen(path, "rb");
+    if (!fh) return rt_managed_from_slice("", 0);
+    fseek(fh, 0, SEEK_END);
+    long size = ftell(fh);
+    fseek(fh, 0, SEEK_SET);
+    char *result = rt_managed_alloc((size_t)size);
+    if (!result) { fclose(fh); return rt_managed_from_slice("", 0); }
+    if (size > 0) fread(result, 1, (size_t)size, fh);
+    result[size] = '\0';
+    fclose(fh);
+    return result;
+}
+
+int pal_fs_write_bytes(const char *path, const char *data, int64_t len) {
+    if (len < 0) len = 0;
+    FILE *fh = fopen(path, "wb");
+    if (!fh) return 0;
+    fwrite(data, 1, (size_t)len, fh);
+    fclose(fh);
+    return 1;
+}
+
 int pal_fs_copy(const char *src, const char *dst) {
     FILE *in = fopen(src, "rb");
     if (!in) return 0;

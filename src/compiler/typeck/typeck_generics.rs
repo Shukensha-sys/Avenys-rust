@@ -69,10 +69,14 @@ impl TypeChecker {
                     if !self.is_assignable(existing, actual)
                         || !self.is_assignable(actual, existing)
                     {
-                        return Err(type_error(format!(
-                            "Conflicting inference for generic '{}': {:?} vs {:?}",
-                            name, existing, actual
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Conflicting inference for generic '{}': {:?} vs {:?}",
+                                name, existing, actual
+                            ),
+                        ));
                     }
                 } else {
                     inferred.insert(name.clone(), actual.clone());
@@ -129,10 +133,14 @@ impl TypeChecker {
             let mut resolved = Vec::with_capacity(sig.type_params.len());
             for param in &sig.type_params {
                 let inferred_type = inferred.get(param).cloned().ok_or_else(|| {
-                    type_error(format!(
-                        "Could not infer generic type '{}'; specify it explicitly",
-                        param
-                    ))
+                    type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Could not infer generic type '{}'; specify it explicitly",
+                            param
+                        ),
+                    )
                 })?;
                 resolved.push(inferred_type);
             }
@@ -140,11 +148,15 @@ impl TypeChecker {
         }
 
         if explicit_type_args.len() != sig.type_params.len() {
-            return Err(type_error(format!(
-                "Function generic arity mismatch: expected {}, got {}",
-                sig.type_params.len(),
-                explicit_type_args.len()
-            )));
+            return Err(type_error(
+                self.current_line,
+                self.current_column,
+                format!(
+                    "Function generic arity mismatch: expected {}, got {}",
+                    sig.type_params.len(),
+                    explicit_type_args.len()
+                ),
+            ));
         }
         Ok(explicit_type_args.to_vec())
     }
@@ -163,20 +175,28 @@ impl TypeChecker {
             let actual = bindings.get(param).cloned().unwrap_or(DataType::Unknown);
             for bound in bounds {
                 if !self.traits.contains_key(bound) {
-                    return Err(type_error(format!(
-                        "Function '{}' generic bound refers to unknown trait '{}'",
-                        fn_name, bound
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Function '{}' generic bound refers to unknown trait '{}'",
+                            fn_name, bound
+                        ),
+                    ));
                 }
                 let type_name = match &actual {
                     DataType::StructNamed(name) | DataType::EnumNamed(name) => {
                         Self::split_nominal_type_args(name).0.to_string()
                     }
                     _ => {
-                        return Err(type_error(format!(
-                            "Function '{}' requires '{}' to implement trait '{}'",
-                            fn_name, param, bound
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Function '{}' requires '{}' to implement trait '{}'",
+                                fn_name, param, bound
+                            ),
+                        ));
                     }
                 };
                 let ok = self
@@ -184,10 +204,14 @@ impl TypeChecker {
                     .get(&type_name)
                     .is_some_and(|set| set.contains(bound));
                 if !ok {
-                    return Err(type_error(format!(
-                        "Function '{}' requires '{}' to implement trait '{}'",
-                        fn_name, param, bound
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Function '{}' requires '{}' to implement trait '{}'",
+                            fn_name, param, bound
+                        ),
+                    ));
                 }
             }
         }
@@ -204,20 +228,28 @@ impl TypeChecker {
             let actual = bindings.get(param).cloned().unwrap_or(DataType::Unknown);
             for bound in trait_bounds {
                 if !self.traits.contains_key(bound) {
-                    return Err(type_error(format!(
-                        "Type '{}' generic bound refers to unknown trait '{}'",
-                        nominal_name, bound
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Type '{}' generic bound refers to unknown trait '{}'",
+                            nominal_name, bound
+                        ),
+                    ));
                 }
                 let type_name = match &actual {
                     DataType::StructNamed(name) | DataType::EnumNamed(name) => {
                         Self::split_nominal_type_args(name).0.to_string()
                     }
                     _ => {
-                        return Err(type_error(format!(
-                            "Type '{}' requires '{}' to implement trait '{}'",
-                            nominal_name, param, bound
-                        )));
+                        return Err(type_error(
+                            self.current_line,
+                            self.current_column,
+                            format!(
+                                "Type '{}' requires '{}' to implement trait '{}'",
+                                nominal_name, param, bound
+                            ),
+                        ));
                     }
                 };
                 let ok = self
@@ -225,10 +257,14 @@ impl TypeChecker {
                     .get(&type_name)
                     .is_some_and(|set| set.contains(bound));
                 if !ok {
-                    return Err(type_error(format!(
-                        "Type '{}' requires '{}' to implement trait '{}'",
-                        nominal_name, param, bound
-                    )));
+                    return Err(type_error(
+                        self.current_line,
+                        self.current_column,
+                        format!(
+                            "Type '{}' requires '{}' to implement trait '{}'",
+                            nominal_name, param, bound
+                        ),
+                    ));
                 }
             }
         }

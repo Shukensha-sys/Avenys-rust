@@ -4,6 +4,8 @@ impl LlvmIrGen {
     pub(super) fn compile_list_len(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.len expects 1 argument".to_string(),
             }));
         }
@@ -53,6 +55,8 @@ impl LlvmIrGen {
     pub(super) fn compile_list_get(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.get expects 2 arguments".to_string(),
             }));
         }
@@ -71,6 +75,8 @@ impl LlvmIrGen {
     pub(super) fn compile_list_pop(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys list.pop(...) expects 1 argument".to_string(),
             }));
         }
@@ -91,6 +97,8 @@ impl LlvmIrGen {
     pub(super) fn compile_lists_push(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.push expects 2 arguments".to_string(),
             }));
         }
@@ -137,6 +145,8 @@ impl LlvmIrGen {
     pub(super) fn compile_lists_fold(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.fold expects 3 arguments (initial, fn, list)".to_string(),
             }));
         }
@@ -152,6 +162,8 @@ impl LlvmIrGen {
             DataType::Slice { element_type } => *element_type.clone(),
             other => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys lists.fold expects vec/arr/slice input, got {:?}",
                         other
@@ -167,11 +179,15 @@ impl LlvmIrGen {
         } = &args[1]
         else {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.fold expects a closure as second argument".to_string(),
             }));
         };
         if params.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.fold closure must have exactly 2 parameters".to_string(),
             }));
         }
@@ -237,6 +253,8 @@ impl LlvmIrGen {
     pub(super) fn compile_lists_map(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.map expects 2 arguments (fn, list)".to_string(),
             }));
         }
@@ -250,6 +268,8 @@ impl LlvmIrGen {
             DataType::Slice { element_type } => *element_type.clone(),
             other => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys lists.map expects vec/arr/slice input, got {:?}",
                         other
@@ -265,11 +285,15 @@ impl LlvmIrGen {
         } = &args[0]
         else {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.map expects a closure as first argument".to_string(),
             }));
         };
         if params.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.map closure must have exactly 1 parameter".to_string(),
             }));
         }
@@ -364,6 +388,8 @@ impl LlvmIrGen {
     pub(super) fn compile_lists_filter(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 2 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.filter expects 2 arguments (fn, list)".to_string(),
             }));
         }
@@ -377,6 +403,8 @@ impl LlvmIrGen {
             DataType::Slice { element_type } => *element_type.clone(),
             other => {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Avenys lists.filter expects vec/arr/slice input, got {:?}",
                         other
@@ -392,11 +420,15 @@ impl LlvmIrGen {
         } = &args[0]
         else {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.filter expects a closure as first argument".to_string(),
             }));
         };
         if params.len() != 1 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.filter closure must have exactly 1 parameter".to_string(),
             }));
         }
@@ -504,6 +536,8 @@ impl LlvmIrGen {
     pub(super) fn compile_lists_slice(&mut self, args: &[Expression]) -> Result<LlValue> {
         if args.len() != 3 {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: "Avenys lists.slice expects 3 arguments".to_string(),
             }));
         }

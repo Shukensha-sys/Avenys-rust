@@ -10,7 +10,6 @@ use crate::incremental::{
 };
 use crate::parser::ast::{
     AssignmentTarget, DataType, EnumVariantDef, Expression, Identifier, Literal, Statement,
-    Visibility,
 };
 use crate::parser::{Program, parse};
 use std::collections::{HashMap, HashSet};
@@ -39,6 +38,8 @@ pub fn load_program_with_metadata_with_settings(
 ) -> Result<LoadedProgram> {
     let canonical = path.canonicalize().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not resolve '{}': {}", path.display(), err),
         })
     })?;
@@ -69,6 +70,8 @@ pub fn load_program_with_metadata_with_settings(
         cache.save()?;
         return Ok(LoadedProgram {
             program: Program {
+                file_attributes: vec![],
+                annotations: vec![],
                 statements: program_statements,
             },
             files,
@@ -90,6 +93,8 @@ pub fn load_program_with_metadata_with_settings(
     cache.save()?;
     Ok(LoadedProgram {
         program: Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: program_statements,
         },
         files,
@@ -107,6 +112,8 @@ pub fn load_program_with_cache(
 ) -> Result<LoadedProgram> {
     let canonical = path.canonicalize().map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not resolve '{}': {}", path.display(), err),
         })
     })?;
@@ -128,6 +135,8 @@ pub fn load_program_with_cache(
         let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
         return Ok(LoadedProgram {
             program: Program {
+                file_attributes: vec![],
+                annotations: vec![],
                 statements: program_statements,
             },
             files: resolver.files,
@@ -143,6 +152,8 @@ pub fn load_program_with_cache(
     let program_statements = statements.into_iter().map(|stmt| stmt.statement).collect();
     Ok(LoadedProgram {
         program: Program {
+            file_attributes: vec![],
+            annotations: vec![],
             statements: program_statements,
         },
         files: resolver.files,
@@ -194,6 +205,8 @@ impl<'a> ImportResolver<'a> {
     fn load_file(&mut self, path: &Path) -> Result<Vec<ExpandedStatement>> {
         let canonical = path.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Could not resolve '{}': {}", path.display(), err),
             })
         })?;
@@ -204,6 +217,8 @@ impl<'a> ImportResolver<'a> {
 
         if !self.active_stack.insert(canonical.clone()) {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!("Cyclic local load detected at '{}'", canonical.display()),
             }));
         }
@@ -309,6 +324,8 @@ impl<'a> ImportResolver<'a> {
             }
         } else {
             return Err(MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Package '{}' not found in [dependencies] of {}",
                     name,
@@ -319,6 +336,8 @@ impl<'a> ImportResolver<'a> {
 
         let canonical_root = package_root.canonicalize().map_err(|err| {
             MireError::new(ErrorKind::Runtime {
+                line: 0,
+                column: 0,
                 message: format!(
                     "Could not resolve package '{}' at '{}': {}",
                     name,
@@ -378,6 +397,8 @@ impl<'a> ImportResolver<'a> {
             let target =
                 resolve_export_path(&current_exports, &current_root, segment).ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!("Package '{}' has no export '{}'", segments[0], segment),
                     })
                 })?;
@@ -397,6 +418,8 @@ impl<'a> ImportResolver<'a> {
                 current_root = parent;
             } else {
                 return Err(MireError::new(ErrorKind::Runtime {
+                    line: 0,
+                    column: 0,
                     message: format!(
                         "Cannot resolve '{}': '{}' has no sub-exports",
                         segments[i + 1..].join("::"),
@@ -602,7 +625,9 @@ fn statement_prefix(module_name: &str, module_path: &Path, origin: &Path) -> Str
     }
 
     let base = module_path.parent().unwrap_or(module_path);
-    let relative = origin.strip_prefix(base).ok().unwrap_or(origin);
+    let Ok(relative) = origin.strip_prefix(base) else {
+        return String::new();
+    };
     let mut parts = Vec::new();
     for component in relative.components() {
         let part = component.as_os_str().to_string_lossy().to_string();
@@ -711,6 +736,7 @@ impl<'a> ModuleRenamer<'a> {
                 return_type,
                 visibility,
                 is_method,
+                attributes,
             } => {
                 let name = self.rename_decl_name(name, scope_stack, top_level);
                 let mut body_scope = scope_stack.clone();
@@ -739,6 +765,7 @@ impl<'a> ModuleRenamer<'a> {
                 let return_type = self.rename_data_type(return_type, scope_stack);
                 let body = self.rename_statement_block(body, &mut body_scope);
                 Statement::Function {
+                    attributes,
                     name,
                     type_params,
                     type_param_bounds,
@@ -831,7 +858,7 @@ impl<'a> ModuleRenamer<'a> {
                 }
             }
             Statement::Type {
-                visibility: _,
+                visibility,
                 name,
                 type_params,
                 type_param_bounds,
@@ -858,7 +885,7 @@ impl<'a> ModuleRenamer<'a> {
                 let parent = parent.map(|parent| self.rename_type_name(parent, scope_stack));
                 let fields = self.rename_statement_block(fields, &mut fields_scope);
                 Statement::Type {
-                    visibility: Visibility::Public,
+                    visibility,
                     name,
                     type_params,
                     type_param_bounds,
@@ -866,9 +893,9 @@ impl<'a> ModuleRenamer<'a> {
                     fields,
                 }
             }
-            Statement::Skill { name, methods, .. } => Statement::Skill {
+            Statement::Skill { name, visibility, methods } => Statement::Skill {
                 name: self.rename_decl_name(name, scope_stack, top_level),
-                visibility: Visibility::Public,
+                visibility,
                 methods: methods
                     .into_iter()
                     .map(|mut method| {
@@ -940,7 +967,11 @@ impl<'a> ModuleRenamer<'a> {
                 return_type: self.rename_data_type(return_type, scope_stack),
                 visibility,
             },
-            Statement::Unsafe { body } => Statement::Unsafe {
+            Statement::Unsafe {
+                line, column, body, ..
+            } => Statement::Unsafe {
+                line,
+                column,
                 body: self.rename_statement_block(body, &mut scope_stack.clone()),
             },
             Statement::Asm { instructions } => Statement::Asm {
@@ -972,7 +1003,7 @@ impl<'a> ModuleRenamer<'a> {
                 value: self.rename_expression(value, scope_stack),
             },
             Statement::Enum {
-                visibility: _,
+                visibility,
                 name,
                 type_params,
                 type_param_bounds,
@@ -996,7 +1027,7 @@ impl<'a> ModuleRenamer<'a> {
                     .map(|variant| self.rename_enum_variant(variant, &name, scope_stack))
                     .collect();
                 Statement::Enum {
-                    visibility: Visibility::Public,
+                    visibility,
                     name,
                     type_params,
                     type_param_bounds,
@@ -1188,6 +1219,8 @@ impl<'a> ModuleRenamer<'a> {
                 name,
                 args,
                 type_args,
+                name_line,
+                name_column,
                 data_type,
             } if name == "__match_guard" || name == "__match_or" => Expression::Call {
                 name,
@@ -1199,6 +1232,8 @@ impl<'a> ModuleRenamer<'a> {
                     .into_iter()
                     .map(|data_type| self.rename_data_type(data_type, scope_stack))
                     .collect(),
+                name_line,
+                name_column,
                 data_type,
             },
             other => self.rename_expression(other, scope_stack),
@@ -1255,6 +1290,8 @@ impl<'a> ModuleRenamer<'a> {
                 name,
                 args,
                 type_args,
+                name_line,
+                name_column,
                 data_type,
             } => {
                 let name = self.rename_type_name(name, scope_stack);
@@ -1268,6 +1305,8 @@ impl<'a> ModuleRenamer<'a> {
                         .into_iter()
                         .map(|data_type| self.rename_data_type(data_type, scope_stack))
                         .collect(),
+                    name_line,
+                    name_column,
                     data_type: self.rename_data_type(data_type, scope_stack),
                 }
             }
@@ -1598,6 +1637,8 @@ fn select_imported_statements(
                 .map(|(idx, _)| idx)
                 .ok_or_else(|| {
                     MireError::new(ErrorKind::Runtime {
+                        line: 0,
+                        column: 0,
                         message: format!(
                             "Local load '{}' does not export '{}'",
                             import_path.display(),
@@ -1626,7 +1667,66 @@ fn select_imported_statements(
                         continue;
                     };
                     for (dep_idx, statement) in statements.iter().enumerate() {
-                        if statement_export_name(&statement.statement) == Some(candidate_name)
+                        let export_name = statement_export_name(&statement.statement);
+                        let internal_name = match &statement.statement {
+                            Statement::ExternFunction { name, .. }
+                            | Statement::ExternLib { name, .. } => Some(name.as_str()),
+                            _ => None,
+                        };
+                        if (export_name == Some(candidate_name)
+                            || internal_name == Some(candidate_name))
+                            && selected.insert(dep_idx)
+                        {
+                            selected_indices.push(dep_idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Second pass: include impl blocks for selected types, then process their deps
+        let mut selected_types: HashSet<String> = HashSet::new();
+        for idx in &selected_indices {
+            if let Statement::Type { name, .. } | Statement::Enum { name, .. } =
+                &statements[*idx].statement
+            {
+                selected_types.insert(name.clone());
+            }
+        }
+        for (idx, statement) in statements.iter().enumerate() {
+            if !selected.contains(&idx)
+                && let Statement::Impl { type_name, .. } = &statement.statement
+            {
+                let base = type_name.rsplit('.').next().unwrap_or(type_name);
+                if selected_types.contains(type_name) || selected_types.contains(base) {
+                    selected.insert(idx);
+                    selected_indices.push(idx);
+                }
+            }
+        }
+        // Process dependencies of newly added impl blocks (they reference trait names)
+        while cursor < selected_indices.len() {
+            let idx = selected_indices[cursor];
+            cursor += 1;
+            let mut deps = Vec::new();
+            collect_statement_dependencies(&statements[idx].statement, &mut deps);
+            for dependency in deps {
+                for candidate in [
+                    Some(dependency.as_str()),
+                    dependency.rsplit_once('.').map(|(_, tail)| tail),
+                ] {
+                    let Some(candidate_name) = candidate else {
+                        continue;
+                    };
+                    for (dep_idx, statement) in statements.iter().enumerate() {
+                        let export_name = statement_export_name(&statement.statement);
+                        let internal_name = match &statement.statement {
+                            Statement::ExternFunction { name, .. }
+                            | Statement::ExternLib { name, .. } => Some(name.as_str()),
+                            _ => None,
+                        };
+                        if (export_name == Some(candidate_name)
+                            || internal_name == Some(candidate_name))
                             && selected.insert(dep_idx)
                         {
                             selected_indices.push(dep_idx);
@@ -1645,16 +1745,22 @@ fn select_imported_statements(
         return Ok(reachable);
     }
 
-    Ok(statements
+    let result: Vec<ExpandedStatement> = statements
         .iter()
-        .filter(|statement| statement_export_name(&statement.statement).is_some())
+        .filter(|statement| {
+            statement_export_name(&statement.statement).is_some()
+                || matches!(&statement.statement, Statement::Impl { .. })
+        })
         .cloned()
-        .collect())
+        .collect();
+    Ok(result)
 }
 
 fn read_source_file(path: &Path) -> Result<String> {
     fs::read_to_string(path).map_err(|err| {
         MireError::new(ErrorKind::Runtime {
+            line: 0,
+            column: 0,
             message: format!("Could not read '{}': {}", path.display(), err),
         })
     })

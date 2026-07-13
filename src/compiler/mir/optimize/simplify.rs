@@ -153,9 +153,13 @@ fn replace_value_in_op(op: &mut MirOp, copies: &HashMap<usize, MirValue>) -> usi
         | MirOp::Mul(l, r)
         | MirOp::SDiv(l, r)
         | MirOp::SRem(l, r)
-        | MirOp::Shl(l, r)
+        |         MirOp::Shl(l, r)
+        | MirOp::Shr(l, r)
         | MirOp::And(l, r)
         | MirOp::Or(l, r)
+        | MirOp::Xor(l, r)
+        | MirOp::BitAnd(l, r)
+        | MirOp::BitOr(l, r)
         | MirOp::ICmp(_, l, r)
         | MirOp::FCmp(_, l, r) => {
             replace(l, copies, &mut count);
