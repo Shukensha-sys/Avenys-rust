@@ -325,6 +325,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         display: String,
         target_file: PathBuf,
         binary_path: PathBuf,
+        skip_run: bool,
     }
 
     let mut global_passed = 0u32;
@@ -373,6 +374,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             display,
             target_file,
             binary_path,
+            skip_run: has_main && !has_test_fn,
         });
     }
 
@@ -417,7 +419,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                     for w in &build.warnings {
                         eprint!("{}", w);
                     }
-                    if run {
+                    if run && !work.skip_run {
                         match Command::new(&build.binary_path).output() {
                             Ok(output) => {
                                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -460,7 +462,8 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                             }
                         }
                     } else {
-                        println!("test {} ... ok (compiled)", work.display);
+                        let tag = if work.skip_run { "(no tests)" } else { "(compiled)" };
+                        println!("test {} ... ok {}", work.display, tag);
                         global_passed += 1;
                     }
                 }
