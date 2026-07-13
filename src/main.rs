@@ -3,7 +3,7 @@ use mire::error::format::format_diagnostic;
 use mire::lexer::tokenize;
 use mire::parser::parse;
 use mire::{
-    BuildMode, BuildOptions, CacheOverrides, ImportMode, MireError, OptLevel,
+    BuildMode, BuildOptions, BuildResult, CacheOverrides, ImportMode, MireError, OptLevel,
     WarningConfig, analyze_program, analyze_program_with_warnings_and_origins,
     compile_file_with_avenys, default_output_dir, find_project_root, load_program_with_metadata,
     load_project_manifest,
@@ -232,6 +232,7 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
 fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut run = true;
     let mut verbose = false;
+    let mut jobs: usize = 0;
     let mut owl_home = None;
     let mut paths: Vec<String> = Vec::new();
 
@@ -240,6 +241,15 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         match args[i].as_str() {
             "--no-run" => run = false,
             "--verbose" | "-v" => verbose = true,
+            "--jobs" | "-j" => {
+                i += 1;
+                let value = args.get(i).ok_or_else(|| {
+                    runtime_msg("Missing value for --jobs")
+                })?;
+                jobs = value.parse().map_err(|_| {
+                    runtime_msg("--jobs must be a positive integer")
+                })?;
+            }
             "--owl-home" => {
                 i += 1;
                 let value = args
@@ -247,7 +257,15 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                     .ok_or_else(|| runtime_msg("Missing value for --owl-home"))?;
                 owl_home = Some(PathBuf::from(value));
             }
-            _ => paths.push(args[i].clone()),
+            _ => {
+                if let Some(val) = args[i].strip_prefix("--jobs=") {
+                    jobs = val.parse().map_err(|_| {
+                        runtime_msg("--jobs must be a positive integer")
+                    })?;
+                } else {
+                    paths.push(args[i].clone());
+                }
+            }
         }
         i += 1;
     }
@@ -290,9 +308,18 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         return Ok(0);
     }
 
+    struct TestWork {
+        display: String,
+        target_file: PathBuf,
+        binary_path: PathBuf,
+    }
+
     let mut global_passed = 0u32;
     let mut global_failed = 0u32;
     let mut global_skipped = 0u32;
+    let test_dir = cwd.join("bin/.cache/test");
+    let _ = fs::create_dir_all(&test_dir);
+    let mut work_items: Vec<TestWork> = Vec::new();
 
     for file in &test_files {
         let display = file.strip_prefix(cwd).unwrap_or(file).display().to_string();
@@ -305,92 +332,130 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             continue;
         }
 
-        let options = BuildOptions {
-            mode: BuildMode::Debug,
-            opt_level: OptLevel::O0,
-            debug_dump: false,
-            output: Some(default_output_dir(file, BuildMode::Debug).join("test")),
-            emit_binary: run,
-            persist_ir: false,
-            import_mode: ImportMode::default(),
-            cache: Default::default(),
-            warning_filter: WarningFilter::Default,
-            deny_warnings: HashSet::new(),
-            test_mode: true,
-            module_paths: Vec::new(),
-        };
-
-        let source = std::fs::read_to_string(file).unwrap_or_default();
+        let source = fs::read_to_string(file).unwrap_or_default();
         let has_main = source.contains("pub fn main");
         let has_load = source.contains("load ");
         let has_test_fn = source.contains("@[test]");
-        let target_file = if !has_main {
+
+        let (target_file, stem) = if !has_main {
+            let relative = file.strip_prefix(cwd).unwrap_or(file);
+            let safe_stem = relative.to_string_lossy().replace('/', "_").replace('\\', "_");
+            let test_path = test_dir.join(format!("{}.mire", safe_stem));
             if has_load || has_test_fn {
-                let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
-                let _ = std::fs::write(&tmp, &source);
-                tmp
+                let _ = fs::write(&test_path, &source);
             } else {
                 let patched = format!("pub fn main: () {{\n{}\n}}\n", source);
-                let tmp = std::env::temp_dir().join(format!("mire_test_{}", file.file_stem().unwrap_or_default().to_string_lossy()));
-                let _ = std::fs::write(&tmp, &patched);
-                tmp
+                let _ = fs::write(&test_path, &patched);
             }
+            (test_path, safe_stem)
         } else {
-            file.clone()
+            let relative = file.strip_prefix(cwd).unwrap_or(file);
+            let safe_stem = relative.to_string_lossy().replace('/', "_").replace('\\', "_");
+            (file.clone(), safe_stem)
         };
 
-        match compile_file_with_avenys(&target_file, &options) {
-            Ok(build) => {
-                if run {
-                    match Command::new(&build.binary_path).output() {
-                        Ok(output) => {
-                            let stdout = String::from_utf8_lossy(&output.stdout);
-                            let mut file_passed = 0u32;
-                            let mut file_failed = 0u32;
-                            let mut file_skipped = 0u32;
-                            for line in stdout.lines() {
-                                let trimmed = line.trim();
-                                if trimmed.starts_with("[PASS]") {
-                                    if verbose {
-                                        println!("  {}", trimmed);
-                                    }
-                                    file_passed += 1;
-                                } else if trimmed.starts_with("[FAIL]") {
-                                    if verbose {
-                                        println!("  {}", trimmed);
-                                    }
-                                    file_failed += 1;
-                                } else if trimmed.starts_with("[SKIP]") {
-                                    if verbose {
-                                        println!("  {}", trimmed);
-                                    }
-                                    file_skipped += 1;
-                                } else if !trimmed.is_empty() && verbose {
-                                    println!("  {}", trimmed);
-                                }
-                            }
-                            println!(
-                                "test {} ... {}",
-                                display,
-                                if file_failed == 0 { "ok" } else { "FAILED" }
-                            );
-                            global_passed += file_passed;
-                            global_failed += file_failed;
-                            global_skipped += file_skipped;
-                        }
-                        Err(e) => {
-                            println!("test {} ... FAILED (run error: {})", display, e);
-                            global_failed += 1;
-                        }
-                    }
-                } else {
-                    println!("test {} ... ok (compiled)", display);
-                    global_passed += 1;
+        let binary_path = cwd.join("bin/debug/test").join(&stem);
+
+        work_items.push(TestWork {
+            display,
+            target_file,
+            binary_path,
+        });
+    }
+
+    let jobs = if jobs == 0 {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .max(1)
+    } else {
+        jobs.max(1)
+    };
+
+    for chunk in work_items.chunks(jobs) {
+        let compile_results: Vec<Option<Result<BuildResult, MireError>>> =
+            std::thread::scope(|s| {
+                let mut handles = Vec::with_capacity(chunk.len());
+                for work in chunk {
+                    let options = BuildOptions {
+                        mode: BuildMode::Debug,
+                        opt_level: OptLevel::O0,
+                        debug_dump: false,
+                        output: Some(work.binary_path.clone()),
+                        emit_binary: run,
+                        persist_ir: false,
+                        import_mode: ImportMode::default(),
+                        cache: Default::default(),
+                        warning_filter: WarningFilter::Default,
+                        deny_warnings: HashSet::new(),
+                        test_mode: true,
+                        module_paths: Vec::new(),
+                    };
+                    handles.push(s.spawn(move || {
+                        compile_file_with_avenys(&work.target_file, &options)
+                    }));
                 }
-            }
-            Err(e) => {
-                println!("test {} ... FAILED ({})", display, e);
-                global_failed += 1;
+                handles.into_iter().map(|h| Some(h.join().unwrap())).collect()
+            });
+
+        for (work, result) in chunk.iter().zip(compile_results.iter()) {
+            match result {
+                Some(Ok(build)) => {
+                    if run {
+                        match Command::new(&build.binary_path).output() {
+                            Ok(output) => {
+                                let stdout = String::from_utf8_lossy(&output.stdout);
+                                let mut file_passed = 0u32;
+                                let mut file_failed = 0u32;
+                                let mut file_skipped = 0u32;
+                                for line in stdout.lines() {
+                                    let trimmed = line.trim();
+                                    if trimmed.starts_with("[PASS]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_passed += 1;
+                                    } else if trimmed.starts_with("[FAIL]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_failed += 1;
+                                    } else if trimmed.starts_with("[SKIP]") {
+                                        if verbose {
+                                            println!("  {}", trimmed);
+                                        }
+                                        file_skipped += 1;
+                                    } else if !trimmed.is_empty() && verbose {
+                                        println!("  {}", trimmed);
+                                    }
+                                }
+                                println!(
+                                    "test {} ... {}",
+                                    work.display,
+                                    if file_failed == 0 { "ok" } else { "FAILED" }
+                                );
+                                global_passed += file_passed;
+                                global_failed += file_failed;
+                                global_skipped += file_skipped;
+                            }
+                            Err(e) => {
+                                println!("test {} ... FAILED (run error: {})", work.display, e);
+                                global_failed += 1;
+                            }
+                        }
+                    } else {
+                        println!("test {} ... ok (compiled)", work.display);
+                        global_passed += 1;
+                    }
+                }
+                Some(Err(e)) => {
+                    println!("test {} ... FAILED ({})", work.display, e);
+                    global_failed += 1;
+                }
+                None => {
+                    println!("test {} ... FAILED (unknown error)", work.display);
+                    global_failed += 1;
+                }
             }
         }
     }
@@ -679,25 +744,12 @@ fn parse_warning_code(value: &str) -> Result<DiagnosticCode, MireError> {
         "W0012" => Ok(DiagnosticCode::W0012),
         "W0013" => Ok(DiagnosticCode::W0013),
         "W0014" => Ok(DiagnosticCode::W0014),
-        "W0015" => Ok(DiagnosticCode::W0015),
-        "W0016" => Ok(DiagnosticCode::W0016),
         "W0017" => Ok(DiagnosticCode::W0017),
         "W0018" => Ok(DiagnosticCode::W0018),
         "W0019" => Ok(DiagnosticCode::W0019),
-        "W0020" => Ok(DiagnosticCode::W0020),
         "W0021" => Ok(DiagnosticCode::W0021),
-        "W0022" => Ok(DiagnosticCode::W0022),
-        "W0023" => Ok(DiagnosticCode::W0023),
         "W0024" => Ok(DiagnosticCode::W0024),
         "W0025" => Ok(DiagnosticCode::W0025),
-        "W0026" => Ok(DiagnosticCode::W0026),
-        "W0027" => Ok(DiagnosticCode::W0027),
-        "W0028" => Ok(DiagnosticCode::W0028),
-        "W0029" => Ok(DiagnosticCode::W0029),
-        "W0030" => Ok(DiagnosticCode::W0030),
-        "W0031" => Ok(DiagnosticCode::W0031),
-        "W0032" => Ok(DiagnosticCode::W0032),
-        "W0033" => Ok(DiagnosticCode::W0033),
         "W0034" => Ok(DiagnosticCode::W0034),
         "W0035" => Ok(DiagnosticCode::W0035),
         "W0036" => Ok(DiagnosticCode::W0036),
@@ -735,6 +787,7 @@ fn print_help() {
     println!("  test [paths...]       Run integration tests from tests/");
     println!("    --no-run            Compile only, skip execution");
     println!("    --verbose, -v       Show per-test results");
+    println!("    --jobs, -j <n>      Parallel compilation jobs (0 = logical CPUs)");
 }
 
 fn set_owl_home_env(path: Option<&PathBuf>) {

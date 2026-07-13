@@ -370,7 +370,6 @@ fn map_kind(kind: &ErrorKind) -> (usize, usize, &'static str, String, Diagnostic
 fn default_help_for_code(code: DiagnosticCode) -> Option<String> {
     match code {
         DiagnosticCode::E0005 => Some("review the declared type and assigned expression".to_string()),
-        DiagnosticCode::E0006 => Some("define the identifier before use".to_string()),
         DiagnosticCode::E0014 => Some(
             "The frontend accepted this program, but the current Avenys backend cannot lower this construct yet."
                 .to_string(),

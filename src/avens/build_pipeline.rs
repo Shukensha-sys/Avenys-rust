@@ -365,13 +365,6 @@ fn precompile_c_object(c_path: &str, cache_dir: &Path, runtime_base: &Path) -> R
     })?;
     let obj_path = cache_dir.join(format!("{:x}.o", hash));
     if !obj_path.exists() {
-        if std::env::var("MIRE_DEBUG_CACHE").is_ok() {
-            eprintln!(
-                "[MIR] compiling C object: {} -> {}",
-                c_path,
-                obj_path.display()
-            );
-        }
         let status = std::process::Command::new("clang")
             .args(["-c", "-O0", "-o"])
             .arg(&obj_path)
@@ -937,10 +930,6 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             })
         })?;
     }
-    if options.debug_dump {
-        eprintln!("[DEBUG IR]\n{}", ir);
-    }
-
     let final_ir = if matches!(options.opt_level, OptLevel::O0) {
         ir
     } else {
