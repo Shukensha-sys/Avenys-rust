@@ -2,6 +2,36 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.14.0] - 2026-07-13
+
+### Added
+
+- **`mire test --jobs, -j <n>`**: Parallel compilation of test files. When `0`
+  (default), uses `std::thread::available_parallelism()`. Test harnesses are
+  compiled in chunks of size `n` inside a `std::thread::scope`.
+- **`mire test --jobs=N`** syntax: Alternative `--jobs=4` form supported in
+  argument parsing.
+
+### Changed
+
+- **`mire test` now compiles in parallel**: All test files are compiled
+  concurrently within a thread scope, then executed sequentially. This
+  dramatically reduces wall-clock time on multi-core machines.
+- **Test harnesses moved to `bin/.cache/test/`**: Instead of writing to
+  `/tmp/`, the auto-generated test wrappers live in `bin/.cache/test/<stem>.mire`.
+  This ensures `find_project_root()` can locate `owl.toml`, making the
+  incremental compilation cache reusable across all tests in a single run.
+
+### Removed
+
+- **Phase 0 dead code**: Debug-dump environment variables `MIRE_DEBUG_CACHE`
+  and `MIRE_DEBUG_LINK`, and the `[DEBUG IR]` eprintln from
+  `build_pipeline.rs` removed. Error codes `E0002`, `E0004`, `E0006` and 13
+  unreferenced warning codes (`W0015`, `W0016`, `W0020`, `W0022`, `W0023`,
+  `W0026`–`W0033`) eliminated from `diagnostic.rs`.
+- **Redundant `async::exists()`**: Removed from kioto's `core/async/mod.mire`
+  — identical to and superseded by `proc::exists()`.
+
 ## [3.13.0] - 2026-07-12
 
 ### Fixed

@@ -85,9 +85,6 @@ pub(super) fn compile_binary_from_ir(
         clang.arg("-pthread");
     }
 
-    if std::env::var("MIRE_DEBUG_LINK").is_ok() {
-        eprintln!("[link] extern_libs: {:?}", extern_libs);
-    }
     for (lib_name, lib_path) in extern_libs {
         let clean_name = if lib_name.contains('.') {
             lib_name.rsplit('.').next().unwrap_or(lib_name)

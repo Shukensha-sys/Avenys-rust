@@ -29,11 +29,8 @@ pub enum WarningCategory {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiagnosticCode {
     E0001,
-    E0002,
     E0003,
-    E0004,
     E0005,
-    E0006,
     E0007,
     E0008,
     E0009,
@@ -58,25 +55,12 @@ pub enum DiagnosticCode {
     W0012,
     W0013,
     W0014,
-    W0015,
-    W0016,
     W0017,
     W0018,
     W0019,
-    W0020,
     W0021,
-    W0022,
-    W0023,
     W0024,
     W0025,
-    W0026,
-    W0027,
-    W0028,
-    W0029,
-    W0030,
-    W0031,
-    W0032,
-    W0033,
     W0034,
     W0035,
     W0036,
@@ -97,11 +81,8 @@ impl DiagnosticCode {
     pub fn as_str(self) -> &'static str {
         match self {
             DiagnosticCode::E0001 => "E0001",
-            DiagnosticCode::E0002 => "E0002",
             DiagnosticCode::E0003 => "E0003",
-            DiagnosticCode::E0004 => "E0004",
             DiagnosticCode::E0005 => "E0005",
-            DiagnosticCode::E0006 => "E0006",
             DiagnosticCode::E0007 => "E0007",
             DiagnosticCode::E0008 => "E0008",
             DiagnosticCode::E0009 => "E0009",
@@ -126,25 +107,12 @@ impl DiagnosticCode {
             DiagnosticCode::W0012 => "W0012",
             DiagnosticCode::W0013 => "W0013",
             DiagnosticCode::W0014 => "W0014",
-            DiagnosticCode::W0015 => "W0015",
-            DiagnosticCode::W0016 => "W0016",
             DiagnosticCode::W0017 => "W0017",
             DiagnosticCode::W0018 => "W0018",
             DiagnosticCode::W0019 => "W0019",
-            DiagnosticCode::W0020 => "W0020",
             DiagnosticCode::W0021 => "W0021",
-            DiagnosticCode::W0022 => "W0022",
-            DiagnosticCode::W0023 => "W0023",
             DiagnosticCode::W0024 => "W0024",
             DiagnosticCode::W0025 => "W0025",
-            DiagnosticCode::W0026 => "W0026",
-            DiagnosticCode::W0027 => "W0027",
-            DiagnosticCode::W0028 => "W0028",
-            DiagnosticCode::W0029 => "W0029",
-            DiagnosticCode::W0030 => "W0030",
-            DiagnosticCode::W0031 => "W0031",
-            DiagnosticCode::W0032 => "W0032",
-            DiagnosticCode::W0033 => "W0033",
             DiagnosticCode::W0034 => "W0034",
             DiagnosticCode::W0035 => "W0035",
             DiagnosticCode::W0036 => "W0036",
@@ -167,34 +135,19 @@ impl DiagnosticCode {
             DiagnosticCode::W0001 | DiagnosticCode::W0002 | DiagnosticCode::W0003 => {
                 Some(WarningCategory::Unused)
             }
-            DiagnosticCode::W0004
-            | DiagnosticCode::W0005
-            | DiagnosticCode::W0020
-            | DiagnosticCode::W0021 => Some(WarningCategory::Type),
-            DiagnosticCode::W0007
-            | DiagnosticCode::W0008
-            | DiagnosticCode::W0009
-            | DiagnosticCode::W0027
-            | DiagnosticCode::W0033 => Some(WarningCategory::Performance),
+            DiagnosticCode::W0004 | DiagnosticCode::W0005 | DiagnosticCode::W0021 => {
+                Some(WarningCategory::Type)
+            }
+            DiagnosticCode::W0007 | DiagnosticCode::W0008 | DiagnosticCode::W0009 => {
+                Some(WarningCategory::Performance)
+            }
             DiagnosticCode::W0006
             | DiagnosticCode::W0012
             | DiagnosticCode::W0013
             | DiagnosticCode::W0014
-            | DiagnosticCode::W0022
-            | DiagnosticCode::W0023
-            | DiagnosticCode::W0024
-            | DiagnosticCode::W0026 => Some(WarningCategory::Style),
+            | DiagnosticCode::W0024 => Some(WarningCategory::Style),
             DiagnosticCode::W0011 | DiagnosticCode::W0018 => Some(WarningCategory::Complexity),
-            DiagnosticCode::W0015
-            | DiagnosticCode::W0016
-            | DiagnosticCode::W0017
-            | DiagnosticCode::W0019
-            | DiagnosticCode::W0028
-            | DiagnosticCode::W0029
-            | DiagnosticCode::W0030
-            | DiagnosticCode::W0031
-            | DiagnosticCode::W0032
-            | DiagnosticCode::W0036
+            DiagnosticCode::W0017 | DiagnosticCode::W0019 | DiagnosticCode::W0036
             | DiagnosticCode::W0038
             | DiagnosticCode::W0040 => Some(WarningCategory::Logic),
             DiagnosticCode::W0041
@@ -234,25 +187,12 @@ impl DiagnosticCode {
             DiagnosticCode::W0012 => "many_parameters",
             DiagnosticCode::W0013 => "empty_loop_body",
             DiagnosticCode::W0014 => "empty_if_branches",
-            DiagnosticCode::W0015 => "W0015",
-            DiagnosticCode::W0016 => "infinite_loop",
             DiagnosticCode::W0017 => "unreachable_loop",
             DiagnosticCode::W0018 => "deep_loop_nesting",
             DiagnosticCode::W0019 => "break_outside_loop",
-            DiagnosticCode::W0020 => "unknown_function",
             DiagnosticCode::W0021 => "negative_index",
-            DiagnosticCode::W0022 => "negative_literal",
-            DiagnosticCode::W0023 => "W0023",
             DiagnosticCode::W0024 => "long_string_literal",
             DiagnosticCode::W0025 => "large_literal",
-            DiagnosticCode::W0026 => "magic_number",
-            DiagnosticCode::W0027 => "unnecessary_clone",
-            DiagnosticCode::W0028 => "implicit_move",
-            DiagnosticCode::W0029 => "implicit_copy",
-            DiagnosticCode::W0030 => "implicit_drop",
-            DiagnosticCode::W0031 => "unclear_ownership",
-            DiagnosticCode::W0032 => "W0032",
-            DiagnosticCode::W0033 => "W0033",
             DiagnosticCode::W0034 => "non_snake_case_variable",
             DiagnosticCode::W0035 => "non_snake_case_function",
             DiagnosticCode::W0036 => "self_comparison",
