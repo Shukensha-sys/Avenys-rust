@@ -47,7 +47,6 @@ jobs:
 
       - name: Setup owl dependencies
         run: |
-          cp -r kioto ./kioto
           mkdir -p ~/.owl/modules
           cp -r kioto ~/.owl/modules/kioto
 

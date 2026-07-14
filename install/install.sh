@@ -18,14 +18,19 @@ set -e
 
 REPO_OWL="${OWL_REPO:-mire-lang/owl}"
 REPO_COMPILER="${COMPILER_REPO:-mire-lang/Avenys-rust}"
+REPO_KIOTO="${KIOTO_REPO:-mire-lang/Kioto}"
 TARBALL="mire-linux-x86_64.tar.gz"
 PREFIX=""
 TAG_OWL=""
 TAG_COMPILER=""
+TAG_KIOTO=""
 YES=0
 NO_PROFILE=0
 INSTALL_COMPILER=0
+INSTALL_OWL=1
+INSTALL_KIOTO=1
 COMPILER_ONLY=0
+KIOTO_ONLY=0
 
 usage() {
     cat <<'USAGE'
@@ -35,34 +40,42 @@ Usage:
   install.sh [options]
 
 Options:
-  --yes, -y           Non-interactive (skip confirmations)
-  --prefix <path>      Install prefix (default: /usr/local)
-  --compiler           Also install the Mire compiler
-  --compiler-only       Install compiler only (de-emphasized)
-  --no-profile         Skip shell profile PATH modification
-  --tag-owl <tag>      Specific owl release tag (default: latest)
-  --tag-compiler <tag> Specific compiler release tag (default: latest)
-  --help, -h           Show this help
+  --yes, -y             Non-interactive (skip confirmations)
+  --prefix <path>        Install prefix (default: /usr/local)
+  --compiler             Also install the Mire compiler
+  --compiler-only        Install compiler only (de-emphasized)
+  --kioto-only           Install kioto stdlib only (sets up ~/.owl/)
+  --owl-only             Install owl only (no compiler, no kioto unless needed)
+  --no-profile           Skip shell profile PATH modification
+  --tag-owl <tag>        Specific owl release tag (default: latest)
+  --tag-compiler <tag>   Specific compiler release tag (default: latest)
+  --tag-kioto <tag>      Specific kioto release tag (default: latest)
+  --help, -h             Show this help
 
 Examples:
-  curl https://.../install.sh | sh                 # install owl
-  curl https://.../install.sh | sh -s -- --compiler # install owl + compiler
+  curl https://.../install.sh | sh                     # install owl + kioto (default)
+  curl https://.../install.sh | sh -s -- --compiler     # install owl + kioto + compiler
+  curl https://.../install.sh | sh -s -- --compiler-only # compiler only
+  curl https://.../install.sh | sh -s -- --kioto-only    # kioto only, sets up ~/.owl/
 USAGE
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --yes|-y)           YES=1; shift ;;
-        --prefix)            PREFIX="$2"; shift 2 ;;
-        --compiler)          INSTALL_COMPILER=1; shift ;;
-        --compiler-only)      COMPILER_ONLY=1; shift ;;
-        --no-profile)        NO_PROFILE=1; shift ;;
-        --tag-owl)            TAG_OWL="$2"; shift 2 ;;
-        --tag-compiler)       TAG_COMPILER="$2"; shift 2 ;;
-        --help|-h)            usage; exit 0 ;;
-        --)                   shift; break ;;
-        -*)                   echo "error: unknown option: $1" >&2; usage; exit 1 ;;
-        *)                    echo "error: unexpected argument: $1" >&2; usage; exit 1 ;;
+        --yes|-y)             YES=1; shift ;;
+        --prefix)              PREFIX="$2"; shift 2 ;;
+        --compiler)            INSTALL_COMPILER=1; shift ;;
+        --compiler-only)        COMPILER_ONLY=1; INSTALL_OWL=0; INSTALL_KIOTO=0; shift ;;
+        --kioto-only)           KIOTO_ONLY=1; INSTALL_COMPILER=0; shift ;;
+        --owl-only)             INSTALL_OWL=1; INSTALL_KIOTO=0; INSTALL_COMPILER=0; shift ;;
+        --no-profile)          NO_PROFILE=1; shift ;;
+        --tag-owl)              TAG_OWL="$2"; shift 2 ;;
+        --tag-compiler)         TAG_COMPILER="$2"; shift 2 ;;
+        --tag-kioto)            TAG_KIOTO="$2"; shift 2 ;;
+        --help|-h)              usage; exit 0 ;;
+        --)                     shift; break ;;
+        -*)                     echo "error: unknown option: $1" >&2; usage; exit 1 ;;
+        *)                      echo "error: unexpected argument: $1" >&2; usage; exit 1 ;;
     esac
 done
 
@@ -83,12 +96,18 @@ banner() {
     echo ""
     echo "┌─ Mire Toolchain Install ─────────────────────────────────────────┐"
     echo "│ prefix: ${PREFIX}"
-    if [ "$COMPILER_ONLY" = "1" ]; then
+    if [ "$KIOTO_ONLY" = "1" ]; then
+        echo "│ mode:   kioto only (stdlib)"
+    elif [ "$COMPILER_ONLY" = "1" ]; then
         echo "│ mode:   compiler only"
     elif [ "$INSTALL_COMPILER" = "1" ]; then
-        echo "│ mode:   owl + compiler"
+        echo "│ mode:   owl + kioto + compiler (full)"
+    elif [ "$INSTALL_OWL" = "1" ] && [ "$INSTALL_KIOTO" = "1" ]; then
+        echo "│ mode:   owl + kioto (default)"
+    elif [ "$INSTALL_OWL" = "1" ]; then
+        echo "│ mode:   owl only"
     else
-        echo "│ mode:   owl (default)"
+        echo "│ mode:   compiler only"
     fi
     echo "└──────────────────────────────────────────────────────────────────┘"
 }
@@ -261,15 +280,79 @@ trap 'rm -rf "$TMPDIR"' EXIT
 OWL_BIN=""
 COMPILER_BIN=""
 
+# ── Kioto only ───────────────────────────────────────────────────────
+if [ "$KIOTO_ONLY" = "1" ]; then
+    echo ""
+    echo "  ── Installing kioto stdlib ───────────────────────────────────"
+    echo ""
+
+    if [ "$YES" != "1" ]; then
+        echo "  Will install:"
+        echo "    • kioto stdlib   → ${OWL_HOME}/modules/kioto/"
+        echo "    • owl home       → ${OWL_HOME}/"
+        echo ""
+        read -r -p "  continue? [Y/n] " ans
+        case "$ans" in
+            [nN]*) echo "  aborted."; exit 0 ;;
+        esac
+    fi
+
+    mkdir -p "${OWL_HOME}/modules" "${OWL_HOME}/tmp"
+
+    if [ ! -f "$OWL_HOME/config.toml" ]; then
+        cat > "$OWL_HOME/config.toml" << 'CONFIG'
+[owl]
+version = "1.0.0"
+
+[modules]
+path = "~/.owl/modules"
+
+[download]
+timeout = 30
+retry = 3
+CONFIG
+        echo "  created ${OWL_HOME}/config.toml"
+    fi
+
+    TAG_KIOTO="${TAG_KIOTO:-$(get_latest_tag "$REPO_KIOTO")}"
+    echo "  downloading kioto ${TAG_KIOTO:-latest}..."
+
+    set -e
+    cd "$TMPDIR"
+    rm -rf kioto-clone
+    if command -v git >/dev/null 2>&1; then
+        git clone --depth 1 --branch "${TAG_KIOTO:-main}" "https://github.com/${REPO_KIOTO}" kioto-clone 2>/dev/null || \
+            git clone --depth 1 "https://github.com/${REPO_KIOTO}" kioto-clone
+    else
+        echo "  error: git is required for kioto-only install"
+        exit 1
+    fi
+
+    rm -rf "${OWL_HOME}/modules/kioto"
+    cp -r kioto-clone "${OWL_HOME}/modules/kioto"
+
+    echo "  installed kioto to ${OWL_HOME}/modules/kioto/"
+    echo ""
+    echo "  ─────────────────────────────────────────────────────────────────"
+    echo "  kioto install complete"
+    echo ""
+    echo "  To use kioto, add to your owl.toml sources path:"
+    echo "    sources = \"code,/root/.owl/modules/kioto/core\""
+    echo ""
+    exit 0
+fi
+
 # ── Install owl (primary) ─────────────────────────────────────────────
 echo ""
 echo "  ── Installing owl ──────────────────────────────────────────────"
 echo ""
 
-if [ "$YES" != "1" ] && [ "$COMPILER_ONLY" != "1" ]; then
+if [ "$YES" != "1" ] && [ "$INSTALL_OWL" = "1" ]; then
     echo "  Will install:"
     echo "    • owl (pm)       → ${BIN_DIR}/owl"
-    echo "    • kioto stdlib   → ${OWL_HOME}/modules/kioto/"
+    if [ "$INSTALL_KIOTO" = "1" ]; then
+        echo "    • kioto stdlib   → ${OWL_HOME}/modules/kioto/"
+    fi
     echo "    • owl home       → ${OWL_HOME}/"
     if needs_sudo; then
         echo ""
@@ -309,7 +392,7 @@ else
         OWL_BIN="${BIN_DIR}/owl"
     fi
 
-    if [ -d "$TMPDIR/mire/kioto" ]; then
+    if [ -d "$TMPDIR/mire/kioto" ] && [ "$INSTALL_KIOTO" = "1" ]; then
         mkdir -p "${OWL_HOME}/modules" "${OWL_HOME}/tmp"
         rm -rf "${OWL_HOME}/modules/kioto"
         cp -r "$TMPDIR/mire/kioto" "${OWL_HOME}/modules/kioto"

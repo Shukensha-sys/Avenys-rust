@@ -25,25 +25,88 @@ Hello, world!
 
 ## Install
 
+The install script supports modular installation of the Mire toolchain components:
+- **owl** — package manager
+- **mire** — compiler (Avenys)
+- **kioto** — standard library
+
+All install methods use the same script from `install/install.sh`.
+
 ### Linux (x86_64)
 
-```bash
-# Quick install (mire + owl + kioto → /usr/local)
-curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh | sh
+#### Option 1: Quick full install (recommended)
 
-# Auditable: review before executing
+```bash
+# Installs: owl + kioto + mire compiler
+curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh | sh
+```
+
+#### Option 2: Auditable install
+
+```bash
+# Review the script before running
 curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh -o install.sh
 less install.sh
 chmod +x install.sh && ./install.sh
-
-# User-local install
-curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh | sh -s -- --prefix ~/.local
-
-# Compiler only (no owl)
-curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh | sh -s -- --no-owl
 ```
 
-Prerequisites are installed automatically (`clang`, `llvm`, `curl`, `tar`) via your package manager.
+#### Option 3: User-local install (no sudo)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mire-lang/Avenys-rust/main/install/install.sh | sh -s -- --prefix ~/.local
+```
+
+### Install options
+
+```bash
+# Owl only (package manager + kioto stdlib)
+curl -fsSL ... | sh
+curl -fsSL ... | sh -s --        # same as above, defaults to owl
+
+# Owl + Mire compiler
+curl -fsSL ... | sh -s -- --compiler
+
+# Mire compiler only (no owl)
+curl -fsSL ... | sh -s -- --compiler-only
+
+# Kioto stdlib only (sets up owl home with kioto)
+# Downloads and installs kioto to ~/.owl/modules/kioto/
+curl -fsSL ... | sh -s -- --kioto-only
+```
+
+### Prerequisites
+
+The script installs these automatically via your package manager:
+- `curl`, `tar`, `clang`, `llvm`, `libssl`, `libsdl2`
+
+Or install them manually:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install curl tar clang llvm-dev libssl-dev libsdl2-dev
+
+# Arch Linux
+sudo pacman -S curl tar clang llvm openssl sdl2
+
+# Fedora/RHEL
+sudo dnf install curl tar clang llvm-devel openssl-devel SDL2-devel
+```
+
+### Post-install
+
+```bash
+# Restart your shell or source your profile
+source ~/.bashrc   # or ~/.zshrc
+
+# Verify installation
+owl --version
+mire --version
+
+# Create a new project
+owl new myproject
+cd myproject
+owl run
+```
 
 ## Quick start
 
