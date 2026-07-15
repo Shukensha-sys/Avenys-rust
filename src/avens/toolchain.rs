@@ -54,6 +54,7 @@ pub(super) fn compile_binary_from_ir(
     binary_path: &Path,
     extern_libs: &[(String, String)],
     pal_backend: &str,
+    opt_level: OptLevel,
     source_filename: &str,
 ) -> Result<()> {
     let mut clang = Command::new("clang");
@@ -76,7 +77,7 @@ pub(super) fn compile_binary_from_ir(
         .stderr(Stdio::piped());
 
     clang.arg("-o").arg(binary_path);
-    clang.arg("-O0");
+    clang.arg(opt_level.as_opt_flag());
 
     if pal_backend != "wasm" {
         clang.arg("-lm");

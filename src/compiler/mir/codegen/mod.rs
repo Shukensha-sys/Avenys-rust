@@ -104,6 +104,10 @@ pub fn mir_to_llvm(program: &MirProgram) -> (String, Vec<(String, String)>) {
     out.extend(extern_decls);
     out.extend(pal_extern_decls());
     out.push(String::new());
+    for (name, ty) in &program.globals {
+        out.push(format!("@{} = global {} zeroinitializer", name, llvm_type_str(ty)));
+    }
+    out.push(String::new());
     out.extend(strings);
     out.push(String::new());
     out.extend(function_irs);

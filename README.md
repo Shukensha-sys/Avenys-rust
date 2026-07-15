@@ -239,7 +239,7 @@ mire run    [file] [--release] [-O<0-3|s|z>] [-- args...]
 mire build  [file] [--release] [-O<0-3|s|z>]
 mire check  [file] [--warn-all] [--deny <code>]
 mire debug  [file] [--tokens] [--ast] [--ir]
-mire test   [paths...] [--no-run] [--verbose]
+mire test   [paths...] [--no-run] [--verbose] [-O<0-3|s|z>] [-r] [-d]
 ```
 
 ---

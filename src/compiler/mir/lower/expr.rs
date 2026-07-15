@@ -68,6 +68,21 @@ impl MirLower {
                         return self.emit_convert(loaded_val, &ty, &id.data_type, loc);
                     }
                     loaded_val
+                } else if let Some(gty) = self.globals.get(&id.name) {
+                    let gty = gty.clone();
+                    let loaded = self.new_temp();
+                    let last = self.current_block;
+                    self.func.blocks[last].push(
+                        Some(loaded),
+                        MirOp::Load(
+                            MirValue::Global(id.name.clone()),
+                            MirType {
+                                data_type: gty.clone(),
+                            },
+                        ),
+                        loc,
+                    );
+                    MirValue::temp(loaded)
                 } else {
                     MirValue::Global(id.name.clone())
                 }

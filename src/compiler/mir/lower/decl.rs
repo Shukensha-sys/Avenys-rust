@@ -69,6 +69,7 @@ impl MirLower {
             next_temp: 0,
             vars: HashMap::new(),
             var_types: HashMap::new(),
+            globals: self.globals.clone(),
             struct_types: self.struct_types.clone(),
             enum_types: self.enum_types.clone(),
             bare_to_qualified: self.bare_to_qualified.clone(),

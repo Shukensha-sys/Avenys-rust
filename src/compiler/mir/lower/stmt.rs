@@ -15,6 +15,21 @@ impl MirLower {
                 value,
                 ..
             } => {
+                if self.globals.contains_key(name) {
+                    if self.func.blocks.is_empty() {
+                        self.func.push_block("entry".to_string());
+                    }
+                    if let Some(val) = value {
+                        let v = self.lower_expression(val);
+                        let last = self.current_block;
+                        self.func.blocks[last].push(
+                            None,
+                            MirOp::Store(MirValue::Global(name.clone()), v),
+                            loc,
+                        );
+                    }
+                    return;
+                }
                 if self.func.blocks.is_empty() {
                     self.func.push_block("entry".to_string());
                 }
@@ -66,7 +81,13 @@ impl MirLower {
                 let last = self.current_block;
                 match target {
                     AssignmentTarget::Variable(name) => {
-                        if let Some(&ptr) = self.vars.get(name) {
+                        if self.globals.contains_key(name) {
+                            self.func.blocks[last].push(
+                                None,
+                                MirOp::Store(MirValue::Global(name.clone()), v),
+                                loc,
+                            );
+                        } else if let Some(&ptr) = self.vars.get(name) {
                             self.func.blocks[last].push(
                                 None,
                                 MirOp::Store(MirValue::temp(ptr), v),

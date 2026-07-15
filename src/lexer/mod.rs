@@ -687,8 +687,14 @@ impl<'a> Lexer<'a> {
                         } else {
                             self.read_number()
                         };
-                        Token::new(TokenType::IntLit, start_line, start_col)
-                            .with_value(format!("-{num}"))
+                        // A negative literal with a decimal point is a float, not
+                        // an int (e.g. `-2.0` must lex as FloatLit, not IntLit).
+                        let (ttype, value) = if num.contains('.') {
+                            (TokenType::FloatLit, format!("-{num}"))
+                        } else {
+                            (TokenType::IntLit, format!("-{num}"))
+                        };
+                        Token::new(ttype, start_line, start_col).with_value(value)
                     } else {
                         Token::new(TokenType::Minus, start_line, start_col)
                     }

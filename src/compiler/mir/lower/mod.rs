@@ -1,5 +1,5 @@
 use super::*;
-use crate::parser::ast::{DataType, Program, Statement};
+use crate::parser::ast::{AssignmentTarget, DataType, Expression, Literal, Program, Statement};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -14,6 +14,11 @@ struct MirLower {
     next_temp: usize,
     vars: HashMap<String, usize>,
     var_types: HashMap<String, DataType>,
+    /// Module-level `set`/`let` bindings, lowered as true globals so they are
+    /// visible from every function (not just `main`). The legacy backend kept
+    /// these in a single cross-function `self.vars` map; the MIR path must
+    /// model them explicitly.
+    globals: HashMap<String, DataType>,
     struct_types: HashMap<String, Vec<(String, DataType)>>,
     enum_types: HashMap<String, Vec<(String, usize)>>,
     bare_to_qualified: HashMap<String, String>,
@@ -106,6 +111,58 @@ fn extract_bare_name_map(
     map
 }
 
+/// Resolve the MIR type of a module-level `set`/`let` binding so it can be
+/// lowered as a true global. Uses the explicit annotation when present,
+/// otherwise infers from a simple literal.
+fn top_level_global_type(stmt: &Statement) -> Option<DataType> {
+    match stmt {
+        Statement::Let {
+            data_type, value, ..
+        } => {
+            if *data_type != DataType::Unknown {
+                return Some(data_type.clone());
+            }
+            value.as_ref().and_then(infer_literal_type)
+        }
+        Statement::Assignment { value, .. } => infer_literal_type(value),
+        _ => None,
+    }
+}
+
+/// Only primitive (value) types can be modelled as true MIR globals in this
+/// backend: they map directly to an SSA `load`/`store` of the global pointer.
+/// Aggregate types (structs, vectors, lists, maps) are lowered as main-prologue
+/// locals instead, because their values are pointer-based in this ABI and a bare
+/// `store` of an SSA aggregate does not initialize the global correctly.
+fn is_global_compatible(ty: &DataType) -> bool {
+    matches!(
+        ty,
+        DataType::I64
+            | DataType::I32
+            | DataType::F64
+            | DataType::F32
+            | DataType::Bool
+            | DataType::Char
+            | DataType::Str
+            | DataType::None
+    )
+}
+
+fn infer_literal_type(expr: &Expression) -> Option<DataType> {
+    match expr {
+        Expression::Literal(lit) => Some(match lit {
+            Literal::Int(_) => DataType::I64,
+            Literal::Float(_) => DataType::F64,
+            Literal::Char(_) => DataType::Char,
+            Literal::Str(_) => DataType::Str,
+            Literal::Bool(_) => DataType::Bool,
+            Literal::None => DataType::None,
+            _ => return None,
+        }),
+        _ => None,
+    }
+}
+
 pub fn lower_program(program: &Program) -> MirProgram {
     let mut functions = Vec::new();
     let mut entry_point = None;
@@ -183,6 +240,38 @@ pub fn lower_program(program: &Program) -> MirProgram {
 
     let bare_to_qualified = extract_bare_name_map(program, &seen_functions);
 
+    // Collect module-level `set`/`let` bindings. These are lowered as true
+    // globals so they are visible from *every* function (not only `main`),
+    // matching the legacy backend's cross-function `self.vars` map. The MIR
+    // path previously dropped them, producing link errors for scalars and
+    // *silent* wrong output (e.g. `0,0`) for struct literals.
+    let mut globals: HashMap<String, DataType> = HashMap::new();
+    let mut top_level_binding_stmts: Vec<Statement> = Vec::new();
+    for stmt in &program.statements {
+        match stmt {
+            Statement::Let { name, .. } => {
+                if let Some(ty) = top_level_global_type(stmt) {
+                    if is_global_compatible(&ty) {
+                        globals.insert(name.clone(), ty);
+                    }
+                }
+                top_level_binding_stmts.push(stmt.clone());
+            }
+            Statement::Assignment {
+                target: AssignmentTarget::Variable(name),
+                ..
+            } => {
+                if let Some(ty) = top_level_global_type(stmt) {
+                    if is_global_compatible(&ty) {
+                        globals.entry(name.clone()).or_insert(ty);
+                    }
+                }
+                top_level_binding_stmts.push(stmt.clone());
+            }
+            _ => {}
+        }
+    }
+
     seen_functions.clear();
 
     for stmt in &program.statements {
@@ -210,6 +299,7 @@ pub fn lower_program(program: &Program) -> MirProgram {
                     next_temp: 0,
                     vars: HashMap::new(),
                     var_types: HashMap::new(),
+                    globals: globals.clone(),
                     struct_types: struct_types.clone(),
                     enum_types: enum_types.clone(),
                     bare_to_qualified: bare_to_qualified.clone(),
@@ -219,7 +309,14 @@ pub fn lower_program(program: &Program) -> MirProgram {
                     closure_counter: 0,
                 };
 
-                lower.lower_function_body(body);
+                let body_with_top_level = if name == "main" && !top_level_binding_stmts.is_empty() {
+                    let mut combined: Vec<Statement> = top_level_binding_stmts.clone();
+                    combined.extend(body.iter().cloned());
+                    combined
+                } else {
+                    body.clone()
+                };
+                lower.lower_function_body(&body_with_top_level);
                 struct_types.extend(lower.struct_types.clone());
                 functions.extend(lower.closure_functions);
                 if !lower.func.blocks.is_empty() {
@@ -268,6 +365,7 @@ pub fn lower_program(program: &Program) -> MirProgram {
                             next_temp: 0,
                             vars: HashMap::new(),
                             var_types: HashMap::new(),
+                            globals: globals.clone(),
                             struct_types: struct_types.clone(),
                             enum_types: enum_types.clone(),
                             bare_to_qualified: bare_to_qualified.clone(),
@@ -296,6 +394,7 @@ pub fn lower_program(program: &Program) -> MirProgram {
     mp.extern_functions = extern_functions;
     mp.extern_libs = extern_libs;
     mp.struct_types = struct_types;
+    mp.globals = globals;
     mp
 }
 
