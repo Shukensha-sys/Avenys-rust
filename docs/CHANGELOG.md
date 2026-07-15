@@ -2,6 +2,40 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.14.1] - 2026-07-15
+
+### Fixed
+
+- **Final `clang` codegen now respects the selected optimization level**:
+  `compile_binary_from_ir` in `toolchain.rs` emitted `clang` with a hardcoded
+  `-O0`, discarding the optimization performed by `opt -O3`. The opt level is now
+  threaded through `build_pipeline.rs` and applied via `opt_level.as_opt_flag()`,
+  so release builds (`-O1`/`-O2`/`-O3`/`Os`/`Oz`) get real machine-code
+  optimization. Debug builds are unchanged (`as_opt_flag()` returns `-O0` for
+  `O0`). **Blast radius:** affects codegen of every program built at `-O1`..`-O3`.
+  This closed a 2.6× runtime gap vs Rust on optimized builds (Mandelbrot
+  2000×2000@1000 went from 4.37s to 1.67s, matching Rust, with identical FP
+  results — `clang -O3` on unchanged IR is bit-identical without fast-math).
+- **`mire test` harness created `bin/debug/test`**: The test runner built each
+  test binary at `bin/debug/test/<stem>` but never created the `bin/debug/test`
+  directory, so every test failed at the `clang` link step with
+  `Not a directory` / `No such file or directory`. The directory is now created
+  (and a stale file at that path is removed first) before compilation.
+
+### Added
+
+- **`mire test -O`, `--opt-level <n>`, `-r`/`--release`, `-d`/`--debug`**: Test
+  binaries can now be compiled at a chosen optimization level. Previously the
+  harness hardcoded `OptLevel::O0`, so the suite could never exercise the
+  optimized codegen path. `-r` maps to `-O3`, `-d` to `-O0` (default).
+
+### Validation
+
+- Full kioto test suite run at both `-O0` and `-O3` yields identical results
+  (74 passing / 1 failing in both). The single failure is a pre-existing Mire
+  limitation (no negative float literals, e.g. `-2.0`), unrelated to this change.
+  No precision regression from the codegen change.
+
 ## [3.14.0] - 2026-07-13
 
 ### Added
