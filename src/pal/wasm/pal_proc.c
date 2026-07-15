@@ -15,3 +15,8 @@ int64_t pal_proc_exists(int64_t pid) { (void)pid; return 0; }
 void pal_proc_exit(int64_t status) {
     __builtin_trap();
 }
+
+void pal_proc_on(const char *signal_name) {
+    (void)signal_name;
+    // Signal handlers are not supported under WASI.
+}
