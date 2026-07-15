@@ -815,31 +815,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         ));
     }
 
-    let legacy_env = std::env::var("MIRE_LEGACY_CODEGEN").is_ok();
-    if legacy_env && !options.allow_legacy {
-        return Err(MireError::runtime(
-            "The legacy Avenys (LlvmIrGen) codegen backend is known-broken: it produces \
-             incorrect numeric and string output and does not support `load kioto` or `;` \
-             statement separators. It is disabled by default. To explicitly opt in, pass the \
-             `--allow-legacy-known-broken` flag."
-                .to_string(),
-        ));
-    }
-    let use_legacy = legacy_env;
-    let (mut ir, extern_libs) = if use_legacy {
-        LlvmIrGen::new().compile_program(&program).map_err(|err| {
-            let err = if err.source().is_none() {
-                err.with_source(source.clone())
-            } else {
-                err
-            };
-            if err.filename().is_none() {
-                err.with_filename(source_filename.clone())
-            } else {
-                err
-            }
-        })?
-    } else {
+    let (mut ir, extern_libs) = {
         let mut mir = lower_program(&program);
 
         // Compute combined hash of all MIR function bodies for caching
@@ -898,7 +874,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         }
     };
     // Append runtime declarations and struct constructor functions (MIR codegen path)
-    if !use_legacy {
+    {
         let runtime_decls = generate_runtime_declarations(&ir);
         if !runtime_decls.is_empty() {
             if let Some(pos) = ir.find('\n') {

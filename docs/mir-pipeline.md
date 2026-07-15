@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MIR pipeline is the **default codegen** for Avenys. It replaces the original `LlvmIrGen` AST→LLVM walker with a 4-phase mid-level intermediate representation. The legacy walker can be used via `MIRE_LEGACY_CODEGEN=1`.
+The MIR pipeline is the **only codegen** for Avenys: a 4-phase mid-level intermediate representation lowered to LLVM IR.
 
 Source: `src/compiler/mir/`
 
@@ -170,9 +170,7 @@ Returns total number of applied transformations.
 
 ## Integration
 
-- **Default**: MIR pipeline is the default codegen path
-- **Legacy (known-broken)**: `MIRE_LEGACY_CODEGEN=1` selects the legacy `LlvmIrGen` AST walker. This backend produces incorrect numeric/string output, does not support `load kioto`, and rejects `;` statement separators. It is **disabled by default and rejected** unless the `--allow-legacy-known-broken` flag is passed. There is no silent fallback to legacy.
-- **Toggle point**: gate in `compile_file_with_avenys()` → `build_pipeline.rs` (`use_legacy` selection, centered around `:818`)
+- **Default**: MIR pipeline is the only codegen path; there is no alternative backend.
 - **Runtime helpers**: C runtime files in `src/runtime/` and `src/pal/<pal>/*.c`
 
 ## Known Limitations
@@ -185,7 +183,7 @@ Returns total number of applied transformations.
 
 4. **First-class function values**: `FunctionRef` is only a symbol. A real `{ fn_ptr, env_ptr }` struct value has not been materialized yet, so closures cannot capture variables and function values cannot be stored in variables/structs/returned from functions. All indirect calls currently pass `ptr null` as the environment pointer.
 
-5. **Inline closure expansion is legacy**: `call((x) => ..., ...)` still has a dedicated inline-expansion path in the lowerer. Once function values are real structs and `call()` works with any function-typed value, this path should be removed.
+5. **Inline closure expansion is a transitional path**: `call((x) => ..., ...)` still has a dedicated inline-expansion path in the lowerer. Once function values are real structs and `call()` works with any function-typed value, this path should be removed.
 
 6. **Dict/Map literals, enums with payloads**: Dict/map literals return `Const(None)` in some paths. Enum variants with payloads return discriminant only (payload data not bound/marshalled). Enum payload bindings in match patterns are not extracted.
 

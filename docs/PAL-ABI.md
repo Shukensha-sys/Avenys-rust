@@ -141,12 +141,12 @@ char *pal_dns_lookup(const char *host) {
 }
 ```
 
-### Step 4: Register LLVM declaration in `llvm_functions.rs`
+### Step 4: Register the LLVM declaration
 
 ```rust
-// src/avens/llvm_functions.rs
+// src/compiler/mir/codegen/builtins.rs
 
-// Add near the other NET declarations:
+// Add near the other NET declarations inside `pal_extern_decls()`:
 "declare ptr @pal_dns_lookup(ptr)".to_string(),
 ```
 
@@ -312,7 +312,7 @@ These are always linked regardless of platform. They use only standard C
 
 | Symptom | Likely Cause |
 |---------|-------------|
-| `undefined reference to pal_foo` at link | Missing `declare` in `llvm_functions.rs` OR missing C implementation |
+| `undefined reference to pal_foo` at link | Missing `declare` in `src/compiler/mir/codegen/builtins.rs` (`pal_extern_decls()`) OR missing C implementation |
 | Segfault in PAL function | String ownership issue (PAL freed a Mire string) OR null pointer not checked |
 | `str` argument is garbage | Parameter type mismatch — use `const char *` not `char *` |
 | `str` return causes leak | Not returning `malloc`'d memory — use `strdup()` or `malloc()+strcpy()` |

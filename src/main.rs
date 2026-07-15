@@ -23,7 +23,6 @@ struct CommonOptions {
     owl_home: Option<PathBuf>,
     warn: WarningCliOptions,
     verbose: bool,
-    allow_legacy: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +102,6 @@ fn run_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         deny_warnings: common.warn.deny,
         test_mode: false,
         module_paths: Vec::new(),
-        allow_legacy: common.allow_legacy,
     };
     let build = compile_file_with_avenys(&path, &options)?;
     let mut cmd = Command::new(&build.binary_path);
@@ -133,7 +131,6 @@ fn build_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
         deny_warnings: common.warn.deny,
         test_mode: false,
         module_paths: Vec::new(),
-        allow_legacy: common.allow_legacy,
     };
     let build = compile_file_with_avenys(&path, &options)?;
     println!("{}", build.binary_path.display());
@@ -214,7 +211,6 @@ fn debug_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
             deny_warnings: options.common.warn.deny,
             test_mode: false,
             module_paths: Vec::new(),
-            allow_legacy: options.common.allow_legacy,
         },
     )?;
 
@@ -238,7 +234,6 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut verbose = false;
     let mut jobs: usize = 0;
     let mut owl_home = None;
-    let mut allow_legacy = false;
     let mut paths: Vec<String> = Vec::new();
     let mut opt_level = OptLevel::O0;
 
@@ -262,7 +257,6 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                 return Ok(0);
             }
             "--no-run" => run = false,
-            "--allow-legacy-known-broken" => allow_legacy = true,
             "--verbose" | "-v" => verbose = true,
             "--jobs" | "-j" => {
                 i += 1;
@@ -431,7 +425,6 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                         deny_warnings: HashSet::new(),
                         test_mode: true,
                         module_paths: Vec::new(),
-                        allow_legacy,
                     ..Default::default()
                     };
                     handles.push(s.spawn(move || {
@@ -582,7 +575,6 @@ fn parse_common_with_file(
     let mut cache = CacheOverrides::default();
     let mut owl_home = None;
     let mut verbose = false;
-    let mut allow_legacy = false;
     let mut warn_all = false;
     let mut warn_codes = HashSet::new();
     let mut deny_codes = HashSet::new();
@@ -656,7 +648,6 @@ fn parse_common_with_file(
                 deny_codes.insert(parse_warning_code(code)?);
             }
             "--verbose" | "-v" => verbose = true,
-            "--allow-legacy-known-broken" => allow_legacy = true,
             "--progress" => {
                 unsafe { std::env::set_var("OWL_PROGRESS", "1") };
             }
@@ -701,7 +692,6 @@ fn parse_common_with_file(
                 deny: deny_codes,
             },
             verbose,
-            allow_legacy,
         },
         file,
     ))

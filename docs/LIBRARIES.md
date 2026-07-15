@@ -202,7 +202,7 @@ LLVM `declare` and link against the C runtime."
 kioto/core/net/mod.mire  ← extern fn pal_tls_connect: (...) :i64 lib "c"
      │
      ▼
-Avenys → llvm_functions.rs  ← declare i64 @pal_tls_connect(ptr, i64)
+Avenys → src/compiler/mir/codegen/builtins.rs  ← declare i64 @pal_tls_connect(ptr, i64)
      │
      ▼
 LLVM IR → clang linker  ← looks for symbol pal_tls_connect
