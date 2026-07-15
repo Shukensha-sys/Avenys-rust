@@ -4,6 +4,87 @@ All notable changes to Mire are documented in this file.
 
 ## [3.14.1] - 2026-07-15
 
+### Added
+
+- **CI guard `scripts/check_syntax_version.sh`** fails the build if
+  `SYNTAX.md`'s version line or example count drifts from `Cargo.toml` / the
+  actual ```` ```mire ```` fenced-block count. `SYNTAX.md:3` was stale
+  (`3.11.38 · 287 tests`), now `3.14.1 · 55 examples`.
+
+### Fixed
+
+- **Parser no longer infinite-loops on comma-separated struct/type field lists**.
+  In `parse_nominal_type_statement` (`src/parser/statements.rs`), the field loop
+  only advanced when the current token was `Ident`; a `,` separator (as in
+  `struct P { x :i64, y :i64 }`) was never consumed, so the loop spun forever and
+  `mire build`/`check` hung with no timeout (a CI DoS). The loop now consumes `,`
+  field separators and, defensively, always makes forward progress on unexpected
+  tokens. Verified by a minimal `struct P { x :i64, y :i64 }` program that hung
+  before the fix and now builds.
+
+- **MIR backend no longer silently drops module-level `set`/`let` bindings**.
+  `lower_program` (`src/compiler/mir/lower/mod.rs`) only lowered
+  `Function`/`Impl`/`Extern`/`Struct`/`Enum` statements, so a top-level
+  `set p = (P x: 5, y: 3)` was never lowered. The binding's slot was absent, so
+  field reads (e.g. `p.x`) folded to `0` and the program printed the **wrong**
+  output `0,0` with no error — the legacy backend handled this via entry-block
+  allocas. Scalars failed louder (`undefined value '@n'` at link time). The fix
+  lowers module-level bindings correctly:
+  - **Primitive-typed** top-level `set`/`let` (i64/i32/f64/f32/bool/char/str)
+    become **true MIR globals** (`MirProgram.globals`, emitted as
+    `@name = global <type> zeroinitializer`), loaded/stored via
+    `MirValue::Global`. Because they are globals, they are visible from *any*
+    function — not just `main` — so a module/library function can read a
+    module-level const (the dangerous case where the const is consumed by a
+    function other than `main`, e.g. a `load`ed library).
+  - **Aggregate-typed** top-level bindings (structs, vectors, lists, maps) are
+    prepended to the `main` prologue as ordinary locals (alloca + store),
+    matching legacy for the reported struct-literal case (a bare `store` of an
+    SSA aggregate does not initialize a global correctly in this ABI, so
+    aggregates stay local).
+  - **Loader reachability** (`src/loader.rs`, `select_imported_statements`) now
+    also treats private top-level `Let`/`Assignment` as reachable internal names,
+    so a private module-level `set` consumed by an imported function is pulled in
+    under `load`. Previously a private top-level `set` used by a library function
+    was dropped, causing "Avenys unknown identifier".
+  Verified by `benchmarks/struct_literal_top_level/run.sh` and `kioto`
+  (`mire test`: 78/78). The silent-wrong-output variant is the dangerous one.
+
+- **Negative float literals now lex correctly**. In `src/lexer/mod.rs` the
+  `-<digit>` branch always emitted an `IntLit` (with value `"-2.0"`), so negative
+  floats failed with `Invalid integer literal '-2.0'` in every context (args,
+  list elements, comparisons, `&&`/`||` RHS, struct fields, etc.). The branch now
+  emits `FloatLit` when the magnitude contains a decimal point, mirroring the
+  positive-number path. Note: negative exponent floats (`-2.0e3`) are still not a
+  single token — same pre-existing limitation as positive exponent floats, out of
+  scope.
+
+### Changed
+
+- **Legacy Avenys (`LlvmIrGen`) codegen is now disabled by default and rejected
+  without explicit opt-in**. The legacy backend is known-broken: it produces
+  incorrect numeric/string output and does not support `load kioto` or `;`
+  statement separators. It was reachable only via the `MIRE_LEGACY_CODEGEN` env
+  var. From this release, setting that env var without the new
+  `--allow-legacy-known-broken` flag is a hard error. There is **no** silent
+  fallback to legacy; MIR is always the default. Affected commands: `mire build`,
+  `mire run`, `mire debug`, `mire test`. (Verified manually:
+  `MIRE_LEGACY_CODEGEN=1 mire build ...` now errors with "legacy codegen is
+  known-broken... pass --allow-legacy-known-broken" unless the flag is given.)
+
+### Known Issues (environment)
+
+- **Stale local install shadows the current build — layer-8 / process issue, not a
+  compiler defect**. During validation we found the installed `mire`
+  (`~/.local/bin/mire`, `~/.cargo/bin/mire`) was an older build (v3.12.5) while the
+  working tree was v3.14.1, so tests "failed" or behaved differently until the
+  binary was rebuilt and reinstalled. The compiler was correct; the divergence was
+  purely environment / path-hygiene. **Mitigation:** after pulling compiler
+  changes, rebuild (`cargo build --release -p Avenys`) and reinstall `mire` to
+  every `PATH` location that shadows it; verify with `mire --version`. The same
+  applies to `owl` and the `kioto` module under `~/.owl/modules/`. This is tracked
+  as an environment ("layer 8") concern, not a code bug.
+
 ### Fixed
 
 - **Final `clang` codegen now respects the selected optimization level**:

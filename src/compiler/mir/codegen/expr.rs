@@ -50,7 +50,7 @@ pub(crate) fn compile_inst(inst: &MirInst, ctx: &mut LlvmCtx) -> Vec<String> {
                 _ => {
                     let (src_s, src_ty) = resolve_typed(src, ctx);
                     let (dst_s, _) = resolve_typed(dst, ctx);
-                    if src_ty == "ptr" {
+                    if src_ty == "ptr" && !matches!(dst, MirValue::Global(_)) {
                         let old_ptr = tmp_extra(ctx, "ptr");
                         extra.push(format!("{} = load ptr, ptr {}", old_ptr, dst_s));
                         extra.push(format!("call void @rt_managed_free(ptr {})", old_ptr));

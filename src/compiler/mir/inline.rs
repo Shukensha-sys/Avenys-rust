@@ -350,6 +350,7 @@ mod tests {
             extern_functions: vec![],
             extern_libs: vec![],
             struct_types: HashMap::new(),
+            globals: HashMap::new(),
         };
         let count = inlining(&mut prog);
         assert_eq!(count, 1, "should have inlined add42");
@@ -386,6 +387,7 @@ mod tests {
             extern_functions: vec![],
             extern_libs: vec![],
             struct_types: HashMap::new(),
+            globals: HashMap::new(),
         };
         let count = inlining(&mut prog);
         assert_eq!(count, 0, "no inlining should happen");
@@ -457,6 +459,7 @@ mod tests {
             extern_functions: vec![],
             extern_libs: vec![],
             struct_types: HashMap::new(),
+            globals: HashMap::new(),
         };
         let count = inlining(&mut prog);
         assert_eq!(count, 0, "big function should not be inlined");
