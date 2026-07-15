@@ -171,8 +171,8 @@ Returns total number of applied transformations.
 ## Integration
 
 - **Default**: MIR pipeline is the default codegen path
-- **Legacy**: `MIRE_LEGACY_CODEGEN=1` falls back to `LlvmIrGen` AST walker
-- **Toggle point**: `compile_file_with_avenys()` in `build_pipeline.rs:225`
+- **Legacy (known-broken)**: `MIRE_LEGACY_CODEGEN=1` selects the legacy `LlvmIrGen` AST walker. This backend produces incorrect numeric/string output, does not support `load kioto`, and rejects `;` statement separators. It is **disabled by default and rejected** unless the `--allow-legacy-known-broken` flag is passed. There is no silent fallback to legacy.
+- **Toggle point**: gate in `compile_file_with_avenys()` → `build_pipeline.rs` (`use_legacy` selection, centered around `:818`)
 - **Runtime helpers**: C runtime files in `src/runtime/` and `src/pal/<pal>/*.c`
 
 ## Known Limitations

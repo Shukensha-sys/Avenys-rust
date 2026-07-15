@@ -423,6 +423,17 @@ impl Parser {
                     name_line: field_token.line,
                     name_column: field_token.column,
                 });
+                // Fields may be separated by commas (as in struct literals).
+                if self.check(TokenType::Comma) {
+                    self.advance();
+                }
+            } else if self.check(TokenType::Comma) {
+                // Tolerate stray/leading commas between fields.
+                self.advance();
+            } else {
+                // Defensive: never spin on an unexpected token. Advance to make
+                // forward progress so a malformed body cannot hang the parser.
+                self.advance();
             }
             self.skip_newlines();
         }

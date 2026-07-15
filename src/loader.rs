@@ -1671,6 +1671,18 @@ fn select_imported_statements(
                         let internal_name = match &statement.statement {
                             Statement::ExternFunction { name, .. }
                             | Statement::ExternLib { name, .. } => Some(name.as_str()),
+                            // Module-level `set`/`let`/`const` bindings are shared
+                            // module state. They must be includable as transitive
+                            // dependencies of an imported function (e.g. a module
+                            // const consumed by one of its own functions), even when
+                            // they are not `pub`. Without this, importing a module
+                            // drops its top-level bindings and downstream functions
+                            // fail to resolve them.
+                            Statement::Let { name, .. } => Some(name.as_str()),
+                            Statement::Assignment {
+                                target: AssignmentTarget::Variable(name),
+                                ..
+                            } => Some(name.as_str()),
                             _ => None,
                         };
                         if (export_name == Some(candidate_name)
@@ -1723,6 +1735,18 @@ fn select_imported_statements(
                         let internal_name = match &statement.statement {
                             Statement::ExternFunction { name, .. }
                             | Statement::ExternLib { name, .. } => Some(name.as_str()),
+                            // Module-level `set`/`let`/`const` bindings are shared
+                            // module state. They must be includable as transitive
+                            // dependencies of an imported function (e.g. a module
+                            // const consumed by one of its own functions), even when
+                            // they are not `pub`. Without this, importing a module
+                            // drops its top-level bindings and downstream functions
+                            // fail to resolve them.
+                            Statement::Let { name, .. } => Some(name.as_str()),
+                            Statement::Assignment {
+                                target: AssignmentTarget::Variable(name),
+                                ..
+                            } => Some(name.as_str()),
                             _ => None,
                         };
                         if (export_name == Some(candidate_name)

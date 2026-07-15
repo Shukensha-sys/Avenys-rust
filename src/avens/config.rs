@@ -67,6 +67,10 @@ pub struct BuildOptions {
     pub deny_warnings: HashSet<DiagnosticCode>,
     pub module_paths: Vec<PathBuf>,
     pub test_mode: bool,
+    /// When true, allows the legacy Avenys (LlvmIrGen) codegen path, which is
+    /// known-broken (produces incorrect numeric/string output). Reached only via
+    /// the `MIRE_LEGACY_CODEGEN` env var; without this flag its use is rejected.
+    pub allow_legacy: bool,
 }
 
 #[derive(Debug, Clone)]

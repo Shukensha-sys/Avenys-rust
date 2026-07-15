@@ -239,6 +239,8 @@ pub struct MirProgram {
     pub extern_functions: Vec<MirExternFunction>,
     pub extern_libs: Vec<(String, String)>,
     pub struct_types: HashMap<String, Vec<(String, DataType)>>,
+    /// Module-level `set`/`let` bindings lowered as globals (name -> type).
+    pub globals: HashMap<String, DataType>,
 }
 
 #[derive(Debug, Clone)]
@@ -386,6 +388,7 @@ impl MirProgram {
             extern_functions: Vec::new(),
             extern_libs: Vec::new(),
             struct_types: HashMap::new(),
+            globals: HashMap::new(),
         }
     }
 }

@@ -815,7 +815,17 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
         ));
     }
 
-    let use_legacy = std::env::var("MIRE_LEGACY_CODEGEN").is_ok();
+    let legacy_env = std::env::var("MIRE_LEGACY_CODEGEN").is_ok();
+    if legacy_env && !options.allow_legacy {
+        return Err(MireError::runtime(
+            "The legacy Avenys (LlvmIrGen) codegen backend is known-broken: it produces \
+             incorrect numeric and string output and does not support `load kioto` or `;` \
+             statement separators. It is disabled by default. To explicitly opt in, pass the \
+             `--allow-legacy-known-broken` flag."
+                .to_string(),
+        ));
+    }
+    let use_legacy = legacy_env;
     let (mut ir, extern_libs) = if use_legacy {
         LlvmIrGen::new().compile_program(&program).map_err(|err| {
             let err = if err.source().is_none() {
@@ -1011,6 +1021,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             &binary_path,
             &extern_libs,
             &pal_backend,
+            options.opt_level,
             &source_filename,
         )?;
         let phase_link = build_start.elapsed().as_millis() as u64;
