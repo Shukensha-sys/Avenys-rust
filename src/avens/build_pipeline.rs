@@ -1011,6 +1011,7 @@ pub fn compile_file_with_avenys(source_path: &Path, options: &BuildOptions) -> R
             &binary_path,
             &extern_libs,
             &pal_backend,
+            options.opt_level,
             &source_filename,
         )?;
         let phase_link = build_start.elapsed().as_millis() as u64;

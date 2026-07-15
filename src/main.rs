@@ -235,6 +235,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut jobs: usize = 0;
     let mut owl_home = None;
     let mut paths: Vec<String> = Vec::new();
+    let mut opt_level = OptLevel::O0;
 
     let mut i = 0;
     while i < args.len() {
@@ -249,6 +250,9 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                 println!("  --verbose, -v       Show per-test results");
                 println!("  --jobs, -j <n>      Parallel compilation jobs (0 = logical CPUs)");
                 println!("  --owl-home <path>   Override the Owl module cache root");
+                println!("  -O, --opt-level <n> Optimization level for test binaries (0,1,2,3,s,z)");
+                println!("  -r, --release       Shorthand for --opt-level 3");
+                println!("  -d, --debug         Shorthand for --opt-level 0 (default)");
                 println!("  --help, -h          Show this help message");
                 return Ok(0);
             }
@@ -270,6 +274,18 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                     .ok_or_else(|| runtime_msg("Missing value for --owl-home"))?;
                 owl_home = Some(PathBuf::from(value));
             }
+            "-O" | "--opt-level" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| runtime_msg("Missing value for --opt-level"))?;
+                match OptLevel::parse(value) {
+                    Some(level) => opt_level = level,
+                    None => return Err(runtime_msg("Invalid opt-level")),
+                }
+            }
+            "-r" | "--release" => opt_level = OptLevel::O3,
+            "-d" | "--debug" => opt_level = OptLevel::O0,
             _ => {
                 if let Some(val) = args[i].strip_prefix("--jobs=") {
                     jobs = val.parse().map_err(|_| {
@@ -333,6 +349,11 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
     let mut global_skipped = 0u32;
     let test_dir = cwd.join("bin/.cache/test");
     let _ = fs::create_dir_all(&test_dir);
+    let test_bin_dir = cwd.join("bin/debug/test");
+    if test_bin_dir.exists() && !test_bin_dir.is_dir() {
+        let _ = fs::remove_file(&test_bin_dir);
+    }
+    let _ = fs::create_dir_all(&test_bin_dir);
     let mut work_items: Vec<TestWork> = Vec::new();
 
     for file in &test_files {
@@ -394,7 +415,7 @@ fn test_command(cwd: &Path, args: &[String]) -> Result<i32, MireError> {
                 for work in chunk {
                     let options = BuildOptions {
                         mode: BuildMode::Debug,
-                        opt_level: OptLevel::O0,
+                        opt_level,
                         output: Some(work.binary_path.clone()),
                         emit_binary: run,
                         persist_ir: false,
