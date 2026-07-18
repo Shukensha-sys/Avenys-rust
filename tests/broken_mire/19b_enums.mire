@@ -1,0 +1,17 @@
+load kioto
+
+enum Result {
+    Ok
+    Err
+}
+pub fn main: () {
+    set r = Result.Ok
+    match r {
+        Ok {
+            use dasu(ok)
+        }
+        Err {
+            use dasu(err)
+        }
+    }
+}

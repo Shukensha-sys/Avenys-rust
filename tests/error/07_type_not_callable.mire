@@ -1,0 +1,5 @@
+load kioto
+
+pub fn main: () {
+    set x = not_a_function
+}

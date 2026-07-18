@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "B*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Avenys-rust
+
+      - name: Checkout kioto
+        uses: actions/checkout@v4
+        with:
+          repository: mire-lang/Kioto
+          path: kioto
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq llvm-dev clang libssl-dev libsdl2-dev
+
+      - name: Build mire binary
+        working-directory: Avenys-rust
+        run: cargo build --release
+
+      - name: Install mire so owl can use it
+        run: |
+          sudo cp Avenys-rust/target/release/mire /usr/local/bin/mire
+          sudo chmod +x /usr/local/bin/mire
+          mire --version
+
+      - name: Checkout owl source
+        uses: actions/checkout@v4
+        with:
+          repository: mire-lang/owl
+          path: owl-src
+
+      - name: Setup owl dependencies
+        run: |
+          mkdir -p ~/.owl/modules
+          cp -r kioto ~/.owl/modules/kioto
+
+      - name: Build owl
+        working-directory: owl-src
+        run: mire build code/main.mire --release -O3 --no-analysis-cache
+
+      - name: Verify owl
+        working-directory: owl-src
+        run: |
+          chmod +x bin/release/main
+          ./bin/release/main -V
+
+      - name: Prepare owl tarball
+        run: |
+          mkdir -p dist/owl
+          cp owl-src/bin/release/main dist/owl/owl
+          cp -r kioto dist/owl/kioto
+          cd dist
+          tar czf ../owl-linux-x86_64.tar.gz owl/
+
+      - name: Prepare compiler tarball
+        run: |
+          mkdir -p dist/compiler
+          cp Avenys-rust/target/release/mire dist/compiler/mire
+          cp -r Avenys-rust/src/runtime dist/compiler/runtime
+          cp -r Avenys-rust/src/pal dist/compiler/pal
+          cd dist
+          tar czf ../mire-compiler-linux-x86_64.tar.gz compiler/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Build ${{ github.ref_name }}"
+          body_path: docs/CHANGELOG.md
+          files: |
+            owl-linux-x86_64.tar.gz
+            mire-compiler-linux-x86_64.tar.gz

@@ -1,0 +1,5 @@
+load kioto
+
+pub fn main: () {
+    dasu("hello world")
+}

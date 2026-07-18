@@ -1,0 +1,15 @@
+load kioto
+
+enum Status {
+    Ok
+    Error
+}
+
+pub fn main: () {
+    set r = Status.Ok
+    set m = match r {
+        Status.Ok { "success" }
+        Status.Error { "failed" }
+    } :str
+    use dasu(m)
+}

@@ -1,0 +1,5 @@
+load kioto
+
+pub fn main: () {
+    use dasu(Hello) => use dasu("{self}")
+}

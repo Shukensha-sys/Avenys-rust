@@ -1,0 +1,247 @@
+use super::{LlvmCtx, const_str, sanitize_fn_name, tmp_extra, tmp_result};
+use crate::compiler::mir::{MirConst, MirValue};
+
+pub(crate) fn resolve_typed(val: &MirValue, ctx: &mut LlvmCtx) -> (String, String) {
+    match val {
+        MirValue::Const(c) => {
+            let v = const_str(c, ctx);
+            let t = match c {
+                MirConst::Int(_) | MirConst::Char(_) | MirConst::None => "i64",
+                MirConst::Float(_) => "double",
+                MirConst::Bool(_) => "i1",
+                MirConst::Str(_) => "ptr",
+            };
+            (v, t.to_string())
+        }
+        MirValue::Temp(id) => {
+            let n = ctx
+                .vars
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| format!("%t{}", id));
+            let t = ctx
+                .temp_types
+                .get(id)
+                .cloned()
+                .unwrap_or_else(|| "i64".to_string());
+            (n, t)
+        }
+        MirValue::Param(name) => {
+            let t = ctx
+                .param_types
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| "i64".to_string());
+            (format!("%arg_{}", name), t)
+        }
+        MirValue::Global(name) => {
+            let llvm_name = if let Some(wrapper) = ctx.extern_wrapper_names.get(name) {
+                wrapper.clone()
+            } else if ctx.defined_fn_names.contains(name) {
+                format!("@fn_{}", sanitize_fn_name(name))
+            } else {
+                format!("@{}", name)
+            };
+            (llvm_name, "ptr".to_string())
+        }
+        MirValue::EnvPtr => ("%env_ptr".to_string(), "ptr".to_string()),
+        MirValue::FunctionRef { name, .. } => {
+            (format!("@fn_{}", sanitize_fn_name(name)), "ptr".to_string())
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_named_call(
+    name: &str,
+    env: &MirValue,
+    args: &[MirValue],
+    ll_ret: &str,
+    is_void: bool,
+    result_id: Option<usize>,
+    ctx: &mut LlvmCtx,
+    extra: &mut Vec<String>,
+    is_str_return: bool,
+) -> String {
+    let mut arg_strs = Vec::new();
+    for a in args {
+        let (v, t) = resolve_typed(a, ctx);
+        if t == "i1" {
+            let zext = tmp_extra(ctx, "i64");
+            extra.push(format!("{} = zext i1 {} to i64", zext, v));
+            arg_strs.push(format!("i64 {}", zext));
+        } else {
+            arg_strs.push(format!("{} {}", t, v));
+        }
+    }
+    let (fn_name, needs_env) = if let Some(wrapper) = ctx.extern_wrapper_names.get(name) {
+        (wrapper.clone(), true)
+    } else if ctx.defined_fn_names.contains(name) {
+        (format!("@fn_{}", sanitize_fn_name(name)), true)
+    } else if ctx.extern_fn_names.contains(name) {
+        (format!("@{}", name), false)
+    } else {
+        // Try stripping root namespaces (e.g. "kioto.net.http.get" -> "http.get")
+        // Multiple prefix levels may need to be stripped since 'load kioto' flattens
+        // the top-level namespace with empty prefix.
+        let stripped = name.match_indices('.').rev().find_map(|(i, _)| {
+            let rest = &name[i + 1..];
+            if ctx.defined_fn_names.contains(rest) {
+                Some(format!("@fn_{}", sanitize_fn_name(rest)))
+            } else if ctx.extern_fn_names.contains(rest) {
+                Some(format!("@{}", rest))
+            } else {
+                None
+            }
+        });
+        let llvm_name = stripped.unwrap_or_else(|| format!("@{}", name));
+        let needs = llvm_name.starts_with("@fn_");
+        (llvm_name, needs)
+    };
+    // Mire functions carry an implicit environment pointer as the first argument.
+    if needs_env {
+        let env_str = match env {
+            MirValue::Const(MirConst::None) => "ptr null".to_string(),
+            other => {
+                let (v, t) = resolve_typed(other, ctx);
+                if t == "ptr" {
+                    format!("ptr {}", v)
+                } else {
+                    let tmp = tmp_extra(ctx, "ptr");
+                    extra.push(format!("{} = inttoptr {} {} to ptr", tmp, t, v));
+                    format!("ptr {}", tmp)
+                }
+            }
+        };
+        arg_strs.insert(0, env_str);
+    }
+    // Only wrap PAL functions (pal_*) that return str — they return raw malloc'd char*.
+    let is_pal_str = is_str_return
+        && (name.starts_with("pal_")
+            || name
+                .split_once('.')
+                .is_some_and(|(_, rest)| rest.starts_with("pal_")));
+    if is_void {
+        format!("call void {}({})", fn_name, arg_strs.join(", "))
+    } else if is_pal_str {
+        // PAL returns raw malloc'd char* — wrap with managed copy and free the raw.
+        let raw_tmp = tmp_extra(ctx, "ptr");
+        let result = tmp_result(ctx, "ptr", result_id);
+        extra.push(format!(
+            "{} = call ptr {}({})",
+            raw_tmp,
+            fn_name,
+            arg_strs.join(", ")
+        ));
+        extra.push(format!(
+            "%t{} = call ptr @rt_managed_from_cstr(ptr {})",
+            result, raw_tmp
+        ));
+        extra.push(format!("call void @free(ptr {})", raw_tmp));
+        if let Some(id) = result_id {
+            ctx.owned_string_temps.insert(id);
+        }
+        String::new() // The result id was already registered by tmp_result
+    } else if is_str_return && ll_ret == "ptr" {
+        // Regular function returning str: ensure result is managed (copy if literal)
+        let raw_tmp = tmp_extra(ctx, "ptr");
+        let result = tmp_result(ctx, "ptr", result_id);
+        extra.push(format!(
+            "{} = call {} {}({})",
+            raw_tmp,
+            ll_ret,
+            fn_name,
+            arg_strs.join(", ")
+        ));
+        extra.push(format!(
+            "%t{} = call ptr @rt_managed_ensure_managed(ptr {})",
+            result, raw_tmp
+        ));
+        if let Some(id) = result_id {
+            ctx.owned_string_temps.insert(id);
+        }
+        String::new()
+    } else {
+        let result = tmp_result(ctx, ll_ret, result_id);
+        format!(
+            "%t{} = call {} {}({})",
+            result,
+            ll_ret,
+            fn_name,
+            arg_strs.join(", ")
+        )
+    }
+}
+
+pub(crate) fn coerce_to_bool(
+    operand: &str,
+    from_ty: &str,
+    ctx: &mut LlvmCtx,
+    extra: &mut Vec<String>,
+) -> String {
+    if from_ty == "i1" {
+        return operand.to_string();
+    }
+    let conv = tmp_extra(ctx, "i1");
+    extra.push(format!("{} = icmp ne {} {}, 0", conv, from_ty, operand));
+    conv
+}
+
+pub(crate) fn coerce_to(
+    operand: &str,
+    from_ty: &str,
+    to_ty: &str,
+    ctx: &mut LlvmCtx,
+    extra: &mut Vec<String>,
+) -> String {
+    if from_ty == to_ty {
+        return operand.to_string();
+    }
+    // bool (i1) <-> enteros: el resto del codegen ya zexta bool a i64 antes de llamar.
+    if to_ty == "double" && from_ty == "i64" {
+        let conv = tmp_extra(ctx, "double");
+        extra.push(format!("{} = sitofp i64 {} to double", conv, operand));
+        return conv;
+    }
+    if to_ty == "float" && from_ty == "i64" {
+        let conv = tmp_extra(ctx, "float");
+        extra.push(format!("{} = sitofp i64 {} to float", conv, operand));
+        return conv;
+    }
+    if to_ty == "double" && from_ty == "float" {
+        let conv = tmp_extra(ctx, "double");
+        extra.push(format!("{} = fpext float {} to double", conv, operand));
+        return conv;
+    }
+    if to_ty == "float" && from_ty == "double" {
+        let conv = tmp_extra(ctx, "float");
+        extra.push(format!("{} = fptrunc double {} to float", conv, operand));
+        return conv;
+    }
+    // Entero -> entero de distinto ancho (extensiones/truncamientos explícitos).
+    let int_width = |t: &str| match t {
+        "i1" => 1,
+        "i8" => 8,
+        "i16" => 16,
+        "i32" => 32,
+        "i64" => 64,
+        "i128" => 128,
+        _ => 0,
+    };
+    let from_w = int_width(from_ty);
+    let to_w = int_width(to_ty);
+    if from_w > 0 && to_w > 0 {
+        if to_w > from_w {
+            // Asumimos extensión con signo para los casos de coerción en llamadas;
+            // los literales con ascripción ya emiten zext/sext explicitos en el lower.
+            let conv = tmp_extra(ctx, to_ty);
+            extra.push(format!("{} = sext {} {} to {}", conv, from_ty, operand, to_ty));
+            return conv;
+        } else if to_w < from_w {
+            let conv = tmp_extra(ctx, to_ty);
+            extra.push(format!("{} = trunc {} {} to {}", conv, from_ty, operand, to_ty));
+            return conv;
+        }
+    }
+    operand.to_string()
+}

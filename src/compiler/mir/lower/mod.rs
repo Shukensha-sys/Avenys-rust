@@ -1,0 +1,427 @@
+use super::*;
+use crate::parser::ast::{AssignmentTarget, DataType, Expression, Literal, Program, Statement};
+use std::collections::HashMap;
+use std::collections::HashSet;
+
+mod collections;
+mod decl;
+mod expr;
+mod stmt;
+mod types;
+
+struct MirLower {
+    func: MirFunction,
+    next_temp: usize,
+    vars: HashMap<String, usize>,
+    var_types: HashMap<String, DataType>,
+    /// Module-level `set`/`let` bindings, lowered as true globals so they are
+    /// visible from every function (not just `main`). The legacy backend kept
+    /// these in a single cross-function `self.vars` map; the MIR path must
+    /// model them explicitly.
+    globals: HashMap<String, DataType>,
+    struct_types: HashMap<String, Vec<(String, DataType)>>,
+    enum_types: HashMap<String, Vec<(String, usize)>>,
+    bare_to_qualified: HashMap<String, String>,
+    method_map: HashMap<String, HashMap<String, String>>,
+    current_block: usize,
+    closure_functions: Vec<MirFunction>,
+    closure_counter: usize,
+    filename: String,
+}
+
+fn extract_struct_types(program: &Program) -> HashMap<String, Vec<(String, DataType)>> {
+    let mut struct_types = HashMap::new();
+    for stmt in &program.statements {
+        if let Statement::Type { name, fields, .. } = stmt {
+            let mut field_list = Vec::new();
+            for f in fields {
+                if let Statement::Let {
+                    name, data_type, ..
+                } = f
+                {
+                    field_list.push((name.clone(), data_type.clone()));
+                }
+            }
+            struct_types.insert(name.clone(), field_list);
+        }
+    }
+    struct_types
+}
+
+fn extract_enum_types(program: &Program) -> HashMap<String, Vec<(String, usize)>> {
+    let mut enum_types = HashMap::new();
+    for stmt in &program.statements {
+        if let Statement::Enum { name, variants, .. } = stmt {
+            let mapped: Vec<(String, usize)> = variants
+                .iter()
+                .enumerate()
+                .map(|(i, v)| (v.name.clone(), i))
+                .collect();
+            enum_types.insert(name.clone(), mapped);
+        }
+    }
+    enum_types
+}
+
+fn extract_method_map(program: &Program) -> HashMap<String, HashMap<String, String>> {
+    let mut map: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for stmt in &program.statements {
+        if let Statement::Impl {
+            type_name, methods, ..
+        } = stmt
+        {
+            let norm = type_name
+                .split_once('[')
+                .map(|(b, _)| b.to_string())
+                .unwrap_or_else(|| type_name.clone());
+            let entry = map.entry(norm).or_default();
+            for method in methods {
+                if let Statement::Function { name, .. } = method {
+                    entry.insert(name.clone(), format!("{}.{}", type_name, name));
+                }
+            }
+        }
+    }
+    map
+}
+
+fn extract_bare_name_map(
+    _program: &Program,
+    seen_functions: &std::collections::HashSet<String>,
+) -> HashMap<String, String> {
+    // Builtin names that should NOT be shadowed by qualified module functions.
+    // The str() builtin converts values to string; get.str(list, index) from
+    // kioto/lists/get.mire has a different arity and would produce wrong code.
+    let builtin_names: &[&str] = &[
+        "str",
+    ];
+    let mut map = HashMap::new();
+    for name in seen_functions.iter() {
+        if let Some((_, bare)) = name.rsplit_once('.') {
+            if seen_functions.contains(bare) {
+                continue;
+            }
+            if builtin_names.contains(&bare) {
+                continue;
+            }
+            if !map.contains_key(bare) {
+                map.insert(bare.to_string(), name.clone());
+            }
+        }
+    }
+    map
+}
+
+/// Resolve the MIR type of a module-level `set`/`let` binding so it can be
+/// lowered as a true global. Uses the explicit annotation when present,
+/// otherwise infers from a simple literal.
+fn top_level_global_type(stmt: &Statement) -> Option<DataType> {
+    match stmt {
+        Statement::Let {
+            data_type, value, ..
+        } => {
+            if *data_type != DataType::Unknown {
+                return Some(data_type.clone());
+            }
+            value.as_ref().and_then(infer_literal_type)
+        }
+        Statement::Assignment { value, .. } => infer_literal_type(value),
+        _ => None,
+    }
+}
+
+/// Only primitive (value) types can be modelled as true MIR globals in this
+/// backend: they map directly to an SSA `load`/`store` of the global pointer.
+/// Aggregate types (structs, vectors, lists, maps) are lowered as main-prologue
+/// locals instead, because their values are pointer-based in this ABI and a bare
+/// `store` of an SSA aggregate does not initialize the global correctly.
+fn is_global_compatible(ty: &DataType) -> bool {
+    matches!(
+        ty,
+        DataType::I64
+            | DataType::I32
+            | DataType::F64
+            | DataType::F32
+            | DataType::Bool
+            | DataType::Char
+            | DataType::Str
+            | DataType::None
+    )
+}
+
+fn infer_literal_type(expr: &Expression) -> Option<DataType> {
+    match expr {
+        Expression::Literal(lit) => Some(match lit {
+            Literal::Int(_) => DataType::I64,
+            Literal::Float(_) => DataType::F64,
+            Literal::Char(_) => DataType::Char,
+            Literal::Str(_) => DataType::Str,
+            Literal::Bool(_) => DataType::Bool,
+            Literal::None => DataType::None,
+            _ => return None,
+        }),
+        _ => None,
+    }
+}
+
+pub fn lower_program(program: &Program) -> MirProgram {
+    lower_program_with_filename(program, "")
+}
+
+pub fn lower_program_with_filename(program: &Program, filename: &str) -> MirProgram {
+    let mut functions = Vec::new();
+    let mut entry_point = None;
+    let mut extern_functions = Vec::new();
+    let mut extern_libs = Vec::new();
+    let mut seen_functions = HashSet::new();
+    let mut struct_types = extract_struct_types(program);
+    let enum_types = extract_enum_types(program);
+    let method_map = extract_method_map(program);
+
+    for stmt in &program.statements {
+        if let Statement::ExternFunction {
+            name,
+            params,
+            return_type,
+            lib_name,
+            ..
+        } = stmt
+        {
+            extern_functions.push(MirExternFunction {
+                name: name.clone(),
+                lib_name: lib_name.clone(),
+                params: params.iter().map(|(_, t)| t.clone()).collect(),
+                return_type: return_type.clone(),
+            });
+        }
+        if let Statement::ExternLib { name, path } = stmt {
+            let clean = name.rsplit('.').next().unwrap_or(name);
+            extern_libs.push((clean.to_string(), path.clone()));
+        }
+    }
+
+    // Predeclare runtime externs for built-in functions (bare contains etc.)
+    let builtin_runtime_externs: Vec<MirExternFunction> = vec![
+        MirExternFunction {
+            name: "rt_strings_contains".to_string(),
+            lib_name: "c".to_string(),
+            params: vec![DataType::Str, DataType::Str],
+            return_type: DataType::Bool,
+        },
+        MirExternFunction {
+            name: "rt_lists_contains_i64".to_string(),
+            lib_name: "c".to_string(),
+            params: vec![
+                DataType::Vector {
+                    element_type: Box::new(DataType::I64),
+                    dynamic: true,
+                },
+                DataType::I64,
+            ],
+            return_type: DataType::Bool,
+        },
+    ];
+    for ext in builtin_runtime_externs {
+        if !extern_functions.iter().any(|e| e.name == ext.name) {
+            extern_functions.push(ext);
+        }
+    }
+
+    for stmt in &program.statements {
+        if let Statement::Function { name, .. } = stmt {
+            seen_functions.insert(name.clone());
+        }
+        if let Statement::Impl {
+            type_name, methods, ..
+        } = stmt
+        {
+            for method in methods {
+                if let Statement::Function { name, .. } = method {
+                    seen_functions.insert(format!("{}.{}", type_name, name));
+                }
+            }
+        }
+    }
+
+    let bare_to_qualified = extract_bare_name_map(program, &seen_functions);
+
+    // Collect module-level `set`/`let` bindings. These are lowered as true
+    // globals so they are visible from *every* function (not only `main`),
+    // matching the legacy backend's cross-function `self.vars` map. The MIR
+    // path previously dropped them, producing link errors for scalars and
+    // *silent* wrong output (e.g. `0,0`) for struct literals.
+    let mut globals: HashMap<String, DataType> = HashMap::new();
+    let mut top_level_binding_stmts: Vec<Statement> = Vec::new();
+    for stmt in &program.statements {
+        match stmt {
+            Statement::Let { name, .. } => {
+                if let Some(ty) = top_level_global_type(stmt) {
+                    if is_global_compatible(&ty) {
+                        globals.insert(name.clone(), ty);
+                    }
+                }
+                top_level_binding_stmts.push(stmt.clone());
+            }
+            Statement::Assignment {
+                target: AssignmentTarget::Variable(name),
+                ..
+            } => {
+                if let Some(ty) = top_level_global_type(stmt) {
+                    if is_global_compatible(&ty) {
+                        globals.entry(name.clone()).or_insert(ty);
+                    }
+                }
+                top_level_binding_stmts.push(stmt.clone());
+            }
+            _ => {}
+        }
+    }
+
+    seen_functions.clear();
+
+    for stmt in &program.statements {
+        match stmt {
+            Statement::Function {
+                name,
+                params,
+                return_type,
+                body,
+                ..
+            } => {
+                if !seen_functions.insert(name.clone()) {
+                    continue;
+                }
+                let mir_params = params
+                    .iter()
+                    .map(|(pname, ptype)| MirParam {
+                        name: pname.clone(),
+                        data_type: ptype.clone(),
+                    })
+                    .collect();
+
+                let mut lower = MirLower {
+                    func: MirFunction::new(name.clone(), mir_params, return_type.clone()),
+                    next_temp: 0,
+                    vars: HashMap::new(),
+                    var_types: HashMap::new(),
+                    globals: globals.clone(),
+                    struct_types: struct_types.clone(),
+                    enum_types: enum_types.clone(),
+                    bare_to_qualified: bare_to_qualified.clone(),
+                    method_map: method_map.clone(),
+                    current_block: 0,
+                    closure_functions: Vec::new(),
+                    closure_counter: 0,
+                    filename: filename.to_string(),
+                };
+
+                let body_with_top_level = if name == "main" && !top_level_binding_stmts.is_empty() {
+                    let mut combined: Vec<Statement> = top_level_binding_stmts.clone();
+                    combined.extend(body.iter().cloned());
+                    combined
+                } else {
+                    body.clone()
+                };
+                lower.lower_function_body(&body_with_top_level);
+                struct_types.extend(lower.struct_types.clone());
+                functions.extend(lower.closure_functions);
+                if !lower.func.blocks.is_empty() {
+                    lower.func.blocks[0].label = "entry".to_string();
+                }
+                lower.func.body_hash = lower.func.compute_hash();
+                functions.push(lower.func);
+
+                if name == "main" {
+                    entry_point = Some(name.clone());
+                }
+            }
+            Statement::Impl {
+                type_name, methods, ..
+            } => {
+                for method in methods {
+                    if let Statement::Function {
+                        name,
+                        params,
+                        return_type,
+                        body,
+                        ..
+                    } = method
+                    {
+                        let full_name = format!("{}.{}", type_name, name);
+                        if !seen_functions.insert(full_name.clone()) {
+                            continue;
+                        }
+                        let mir_params: Vec<MirParam> = params
+                            .iter()
+                            .map(|(pname, ptype)| {
+                                let dt = if pname == "self" && ptype == &DataType::Unknown {
+                                    DataType::StructNamed(type_name.clone())
+                                } else {
+                                    ptype.clone()
+                                };
+                                MirParam {
+                                    name: pname.clone(),
+                                    data_type: dt,
+                                }
+                            })
+                            .collect();
+
+                        let mut lower = MirLower {
+                            func: MirFunction::new(full_name, mir_params, return_type.clone()),
+                            next_temp: 0,
+                            vars: HashMap::new(),
+                            var_types: HashMap::new(),
+                            globals: globals.clone(),
+                            struct_types: struct_types.clone(),
+                            enum_types: enum_types.clone(),
+                            bare_to_qualified: bare_to_qualified.clone(),
+                            method_map: method_map.clone(),
+                            current_block: 0,
+                            closure_functions: Vec::new(),
+                            closure_counter: 0,
+                            filename: filename.to_string(),
+                        };
+
+                        lower.lower_function_body(body);
+                        struct_types.extend(lower.struct_types.clone());
+                        functions.extend(lower.closure_functions);
+                        if !lower.func.blocks.is_empty() {
+                            lower.func.blocks[0].label = "entry".to_string();
+                        }
+                        lower.func.body_hash = lower.func.compute_hash();
+                        functions.push(lower.func);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut mp = MirProgram::new(functions, entry_point);
+    mp.extern_functions = extern_functions;
+    mp.extern_libs = extern_libs;
+    mp.struct_types = struct_types;
+    mp.globals = globals;
+    mp
+}
+
+impl MirLower {
+    pub(crate) fn new_temp(&mut self) -> usize {
+        let id = self.next_temp;
+        self.next_temp += 1;
+        id
+    }
+
+    pub(crate) fn new_block(&mut self, label: &str) -> usize {
+        let id = self.func.blocks.len();
+        self.func.push_block(format!("{}_{}", label, id));
+        id
+    }
+
+    pub(crate) fn entry_block_id(&mut self) -> usize {
+        if self.func.blocks.is_empty() {
+            self.func.push_block("entry".to_string());
+        }
+        0
+    }
+}
