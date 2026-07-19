@@ -1262,7 +1262,7 @@ fn advanced_literals_compile_and_run() {
         deny_warnings: std::collections::HashSet::new(),
         module_paths: vec![],
         test_mode: false,
-    
+
     ..Default::default()};
 
     let ir_path = root.join("bin").join("debug").join("advanced_literals.ll");
