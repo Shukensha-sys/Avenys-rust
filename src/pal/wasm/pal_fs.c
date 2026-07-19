@@ -196,3 +196,9 @@ char *pal_fs_ext(const char *path) {
     strcpy(out, dot);
     return out;
 }
+
+void *pal_fs_walk(const char *path) {
+    (void)path;
+    // Directory traversal is not supported under WASI.
+    return NULL;
+}

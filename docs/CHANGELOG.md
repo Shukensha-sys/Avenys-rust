@@ -2,6 +2,18 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.15.0] - 2026-07-15
+
+### Removed
+
+- **Legacy Avenys (`LlvmIrGen`) codegen backend has been fully removed**. The
+  `MIRE_LEGACY_CODEGEN` env var, the `--allow-legacy-known-broken` flag, the
+  `BuildOptions::allow_legacy` field, and all `src/avens/llvm_*.rs` modules
+  (binary, builtins, collections, control, dicts, functions, helpers, lists,
+  strings, types) are gone. MIR is now the **only** codegen path; there is no
+  alternative backend and no compile-time branch to select one. Affected
+  commands: `mire build`, `mire run`, `mire debug`, `mire test`.
+
 ## [3.14.1] - 2026-07-15
 
 ### Added
