@@ -1,6 +1,6 @@
 # Mire Language Reference
 
-Version: **3.15.0** · 55 examples
+Version: **3.18.0** · 55 examples
 
 ---
 
@@ -118,7 +118,74 @@ any reassignment to `x`.
 
 **Compound assignment:** `set x += 1`, `set x -= 1`
 
-**Types:** `str`, `i64`, `bool`, `f64`, `vec[str]`, `vec[i64]`
+**Types:** `str`, `bool`, `char`, `i8`, `i16`, `i32`, `i64`, `i128`,
+`u8`, `u16`, `u32`, `u64`, `u128`, `f32`, `f64`, `vec[T]`, `map[K V]`,
+`arr[T N]`, `result[T E]`, `option[T]`.
+
+Mire uses **real, fixed-width scalar types** up to 128 bits. Integer literals
+infer `i64`; floating-point literals infer `f64`. A narrower or differently
+signed type is selected with a type ascription (see §3.1).
+
+### 3.1 Type ascription and real widths
+
+A type ascription `:T` placed after an expression converts its value to the
+named type. Ascriptions are **not silent**: the compiler checks that the
+conversion is valid and rejects lossy casts without an explicit narrowing
+ascription.
+
+```mire
+set a = 200 :u8          // literal 200 fits in u8  → ok
+set b = 100 :u8
+set c = a + b            // u8 + u8 → u8 (wraps mod 256: 300 → 44)
+set x = 120 :i8
+set y = 10  :i8
+set z = x - y            // i8 - i8 → i8 (110)
+
+set f = 1.5 :f32         // 1.5 stored as 32-bit float
+set g = 2.0 :f32
+set h = f * g            // f32 * f32 → f32 (3.0)
+
+set big = 1000 :i64
+set small = big :i8      // ❌ ERROR: i64 → i8 would lose precision
+set pi = 3.14 :f32       // ❌ ERROR if 3.14 does not fit f32 precisely enough
+                         //    (use an explicit narrowing target only when the
+                         //     value actually fits)
+```
+
+**Supported scalar types (real widths):**
+
+| Category | Types |
+|----------|-------|
+| Signed integers | `i8`, `i16`, `i32`, `i64`, `i128` |
+| Unsigned integers | `u8`, `u16`, `u32`, `u64`, `u128` |
+| Floating point | `f32`, `f64` |
+| Boolean | `bool` |
+| Character | `char` (32-bit UTF-32 code point) |
+| String | `str` |
+
+**Conversion rules:**
+
+- Integer → wider integer of the same or larger width: zero-extended
+  (`u*`) or sign-extended (`i*`); never loses information.
+- Integer → narrower integer: only allowed when the **literal value fits**
+  the target range, otherwise a compile error (no silent truncation).
+- Integer → float (`f32`/`f64`): allowed (value preserved exactly for
+  integers up to the float's mantissa precision).
+- Float → integer: **requires an explicit ascription** and discards the
+  fractional part; the compiler rejects implicit float→int coercion.
+- Float → float: `f64 → f32` truncates; `f32 → f64` extends without loss.
+
+**Out-of-range example (compile error, not runtime wrap):**
+
+```mire
+set x = 300 :i8    // ❌ ERROR E0107: 300 does not fit i8 (-128..127)
+set y = 3.99 :f64
+set z = y :i32     // ❌ ERROR: cannot convert f64 → i32 implicitly
+```
+
+Arithmetic operators (`+ - * / %`) compute in a promoted width (`i64` for
+integers, `f32`/`f64` for floats) and narrow the result back to the operands'
+declared type, so `u8 + u8` yields a `u8` and `f32 * f32` yields an `f32`.
 
 ---
 
@@ -572,7 +639,9 @@ set byte = (word >> 16) & 0xFF
 ```
 
 **Caveats:**
-- All operations produce `i64` results; mask with `& 0xFFFFFFFF` for 32-bit wrapping
+- Bitwise operations on operands of a declared integer width compute in a
+  promoted width (`i64`) and narrow the result back to the operands' declared
+  type. Use a narrowing ascription (e.g. `:u32`) when you need a specific width.
 - Right shift (`>>`) is always logical (unsigned), filling with zeros
 - `&` at the start of an expression is parsed as **address-of** (reference), not bitwise AND. Use parentheses: `(0xFF & x)`
 - `^` between bools is logical XOR; between integers is bitwise XOR
@@ -876,6 +945,37 @@ mylib/
 
 Without `core/net/owl.toml`, the path `mylib::net::http` cannot resolve.
 
+### 13.5 Local `load!` — files without owl.toml
+
+`load!` (with a bang) exposes nearly all `pub` content of a **relative
+`.mire` file or directory** as a namespace, without needing an `owl.toml`
+manifest. It is the lightweight counterpart to the package-level `load`.
+
+```mire
+load! math            // loads ./math/main.mire (fallback ./math/mod.mire)
+load! math/main       // loads ./math/main.mire explicitly
+load! /utils/string   // leading '/' → resolved from the project root (owl.toml dir)
+```
+
+The namespace is the **last path segment** — `load! math/main` exposes its
+symbols under `main`, *not* `math`. There is no alias.
+
+**Calls into a `load!` module MUST be wrapped in `use!`:**
+
+```mire
+set r = use! math::suma(2 3)   // ✅ correct
+set r = math::suma(2 3)        // ❌ ERROR: require `use!`
+```
+
+`use!` is **always mandatory** to call any symbol exposed by `load!`. It is
+the simple import form that needs no `owl.toml`, `module` declaration, or
+`exports` table. Package `load` (kioto) uses the separate `load` mechanism
+and is therefore unaffected by this rule — but for `load!` modules, every
+qualified call must go through `use!`.
+
+`load!` only searches up to **2 levels below the project root**; a deeper
+path fails with a note explaining the limit.
+
 ---
 
 ## 14. External libraries (FFI)
@@ -895,9 +995,21 @@ extern fn puts: (msg :*mut i8) :i32 lib "c"
 
 | Mire type | C type | Notes |
 |-----------|--------|-------|
+| `i8` | `int8_t` | 8-bit signed integer |
+| `i16` | `int16_t` | 16-bit signed integer |
+| `i32` | `int32_t` | 32-bit signed integer |
 | `i64` | `int64_t` / `long` | 64-bit signed integer |
-| `str` | `char*` | Null-terminated string |
+| `i128` | `__int128` | 128-bit signed integer |
+| `u8` | `uint8_t` | 8-bit unsigned integer |
+| `u16` | `uint16_t` | 16-bit unsigned integer |
+| `u32` | `uint32_t` | 32-bit unsigned integer |
+| `u64` | `uint64_t` | 64-bit unsigned integer |
+| `u128` | `unsigned __int128` | 128-bit unsigned integer |
+| `f32` | `float` | 32-bit IEEE float |
+| `f64` | `double` | 64-bit IEEE float |
 | `bool` | `int` (0/1) | Boolean |
+| `char` | `uint32_t` | UTF-32 code point |
+| `str` | `char*` | Null-terminated string |
 | `*mut i8` | `void*` / `char*` | Raw mutable pointer |
 | `*const i8` | `const void*` | Raw const pointer |
 

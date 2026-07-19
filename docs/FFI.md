@@ -25,9 +25,21 @@ and `-lname` to the linker.
 
 | Mire type | C type | Notes |
 |-----------|--------|-------|
+| `i8` | `int8_t` | 8-bit signed integer |
+| `i16` | `int16_t` | 16-bit signed integer |
+| `i32` | `int32_t` | 32-bit signed integer |
 | `i64` | `int64_t` / `long` | 64-bit signed integer |
-| `str` | `char*` | Null-terminated string |
+| `i128` | `__int128` | 128-bit signed integer |
+| `u8` | `uint8_t` | 8-bit unsigned integer |
+| `u16` | `uint16_t` | 16-bit unsigned integer |
+| `u32` | `uint32_t` | 32-bit unsigned integer |
+| `u64` | `uint64_t` | 64-bit unsigned integer |
+| `u128` | `unsigned __int128` | 128-bit unsigned integer |
+| `f32` | `float` | 32-bit IEEE float |
+| `f64` | `double` | 64-bit IEEE float |
 | `bool` | `int` (0/1) | Boolean |
+| `char` | `uint32_t` | UTF-32 code point |
+| `str` | `char*` | Null-terminated string |
 | `*mut i8` | `void*` / `char*` | Raw mutable pointer |
 | `*const i8` | `const void*` | Raw const pointer |
 
@@ -80,8 +92,8 @@ pub fn quit: () {
 
 ## Limitations
 
-- No struct passing by value between Mire and C
-- No callback support (C calling Mire functions)
-- No Rust interop (separate effort needed)
-- Type mapping is lossy (i32 → i64)
+ - No struct passing by value between Mire and C
+ - No callback support (C calling Mire functions)
+ - No Rust interop (separate effort needed)
+ - Scalar types map to their exact-width C counterparts (see type table above)
 - `extern lib` names get module-prefixed (stripped at link time)
