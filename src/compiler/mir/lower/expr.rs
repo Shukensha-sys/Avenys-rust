@@ -416,6 +416,7 @@ impl MirLower {
                     MirValue::temp(result)
                 }
             }
+            Expression::UseMacro { inner } => self.lower_expression(inner),
             Expression::Closure {
                 params,
                 body,

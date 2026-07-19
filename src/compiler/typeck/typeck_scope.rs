@@ -467,6 +467,7 @@ impl TypeChecker {
             | Expression::Err { data_type, .. }
             | Expression::EnumVariantPath { data_type, .. }
             | Expression::EnumVariant { data_type, .. } => data_type.clone(),
+            Expression::UseMacro { inner } => self.expression_type_hint(inner),
             Expression::Literal(Literal::Int(_)) => DataType::I64,
             Expression::Literal(Literal::Float(_)) => DataType::F64,
             Expression::Literal(Literal::Char(_)) => DataType::Char,

@@ -216,22 +216,26 @@ static char *ws_read_frame(int fd, int64_t max_bytes, int *out_opcode) {
 // ── Public API ───────────────────────────────────────────────────────
 
 int64_t pal_ws_connect(const char *host, int64_t port, const char *path) {
-    struct hostent *he = gethostbyname(host);
-    if (!he) return -1;
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return -1;
+    char port_str[16];
+    snprintf(port_str, sizeof(port_str), "%lld", (long long)port);
+    if (getaddrinfo(host, port_str, &hints, &res) != 0 || !res) return -1;
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-    memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    int fd = -1;
+    struct addrinfo *rp;
+    for (rp = res; rp; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
         close(fd);
-        return -1;
+        fd = -1;
     }
+    freeaddrinfo(res);
+    if (fd < 0) return -1;
 
     if (!ws_do_handshake(fd, host, path)) {
         close(fd);
@@ -247,11 +251,14 @@ int pal_ws_send_text(int64_t fd, const char *data) {
 }
 
 char *pal_ws_recv(int64_t fd, int64_t max_bytes) {
+    extern char *rt_managed_from_cstr(const char *src);
     int opcode;
     char *payload = ws_read_frame((int)fd, max_bytes, &opcode);
     if (!payload) return NULL;
     if (opcode == 0x8) { free(payload); return NULL; }
-    return payload;
+    char *result = rt_managed_from_cstr(payload);
+    free(payload);
+    return result;
 }
 
 int pal_ws_close(int64_t fd) {
@@ -448,22 +455,26 @@ static char *wss_read_frame(SSL *ssl, int64_t max_bytes, int *out_opcode) {
 int64_t pal_wss_connect(const char *host, int64_t port, const char *path) {
     wss_init_ssl();
 
-    struct hostent *he = gethostbyname(host);
-    if (!he) return -1;
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return -1;
+    char port_str[16];
+    snprintf(port_str, sizeof(port_str), "%lld", (long long)port);
+    if (getaddrinfo(host, port_str, &hints, &res) != 0 || !res) return -1;
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-    memcpy(&addr.sin_addr, he->h_addr_list[0], (size_t)he->h_length);
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    int fd = -1;
+    struct addrinfo *rp;
+    for (rp = res; rp; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
         close(fd);
-        return -1;
+        fd = -1;
     }
+    freeaddrinfo(res);
+    if (fd < 0) return -1;
 
     SSL_CTX *ctx = wss_create_ctx();
     if (!ctx) { close(fd); return -1; }
@@ -472,6 +483,8 @@ int64_t pal_wss_connect(const char *host, int64_t port, const char *path) {
     if (!ssl) { SSL_CTX_free(ctx); close(fd); return -1; }
 
     SSL_set_fd(ssl, fd);
+    SSL_set1_host(ssl, host);
+    SSL_set_tlsext_host_name(ssl, host);
     if (SSL_connect(ssl) != 1) {
         SSL_free(ssl);
         SSL_CTX_free(ctx);
@@ -498,13 +511,16 @@ int pal_wss_send_text(int64_t fd, const char *data) {
 }
 
 char *pal_wss_recv(int64_t fd, int64_t max_bytes) {
+    extern char *rt_managed_from_cstr(const char *src);
     SSL *ssl = (SSL *)(intptr_t)fd;
     if (!ssl) return NULL;
     int opcode;
     char *payload = wss_read_frame(ssl, max_bytes, &opcode);
     if (!payload) return NULL;
     if (opcode == 0x8) { free(payload); return NULL; }
-    return payload;
+    char *result = rt_managed_from_cstr(payload);
+    free(payload);
+    return result;
 }
 
 int pal_wss_close(int64_t fd) {
@@ -647,11 +663,14 @@ int pal_ws_server_send_text(int64_t fd, const char *data) {
 }
 
 char *pal_ws_server_recv(int64_t fd, int64_t max_bytes) {
+    extern char *rt_managed_from_cstr(const char *src);
     int opcode;
     char *payload = ws_server_read_frame((int)fd, max_bytes, &opcode);
     if (!payload) return NULL;
     if (opcode == 0x8) { free(payload); return NULL; }
-    return payload;
+    char *result = rt_managed_from_cstr(payload);
+    free(payload);
+    return result;
 }
 
 int pal_ws_server_close(int64_t fd) {

@@ -154,6 +154,9 @@ impl BorrowChecker<'_> {
                     self.check_expression(payload)?;
                 }
             }
+            Expression::UseMacro { inner } => {
+                self.check_expression(inner)?;
+            }
         }
         Ok(())
     }

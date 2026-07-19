@@ -2,6 +2,23 @@
 
 All notable changes to Mire are documented in this file.
 
+## [3.18.0] - 2026-07-19
+
+### Fixed
+
+- **Private fn visibility for `load!` modules**: `select_imported_statements`
+  in `src/loader/renamer.rs` now runs full dependency resolution when
+  `items=None` (wildcard imports), matching the explicit-items path. Private
+  `fn` declarations are now discoverable as transitive dependencies via the
+  `internal_name` match for `Statement::Function`. Previously, private `fn`
+  in `load!`-imported modules were invisible to the dependency resolver,
+  causing "Unknown function" errors for owl sub-packages using `load!`.
+- **`statement_export_name` visibility consistency**: `Type`, `Skill`, and
+  `Enum` variants in `src/incremental/utils.rs` now only export when
+  `visibility == Public`. Previously these were always exported regardless
+  of visibility, inconsistent with `Function` which already checked
+  `Public`.
+
 ## [3.17.0] - 2026-07-18
 
 ### Added
@@ -32,6 +49,16 @@ All notable changes to Mire are documented in this file.
   report dedicated codes: `E0100` (precision loss), `E0101` (type mismatch),
   `E0102` (implicit float→int), `E0103` (signed/unsigned boundary), `E0107`
   (integer literal out of range). See `docs/ERROR_CODES.md`.
+- **`load!` / `use!` — simple local module import.** `load! <path>` exposes
+  nearly all `pub` content of a relative `.mire` file or directory as a
+  namespace (the **last path segment** is the module name; no alias). A
+  leading `/` resolves from the project root (the `owl.toml` dir); a bare
+  directory defaults to `main.mire` (fallback `mod.mire`). Resolution only
+  searches up to **2 levels below the project root**. Unlike package `load`,
+  `load!` needs no `owl.toml`, `module` declaration, or `exports` table. Every
+  call into a `load!` module **must** be wrapped in `use!`
+  (`set x = use! module::symbol(...)`); a bare `module::symbol(...)` is a type
+  error. Package `load` (kioto) is unaffected.
 
 ### Changed
 

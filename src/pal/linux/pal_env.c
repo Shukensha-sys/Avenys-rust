@@ -4,10 +4,10 @@
 #include <unistd.h>
 
 char *pal_env_get(const char *name) {
+    extern char *rt_managed_from_cstr(const char *src);
     const char *val = getenv(name);
     if (!val) return NULL;
-    extern char *rt_strdup_raw(const char *src);
-    return rt_strdup_raw(val);
+    return rt_managed_from_cstr(val);
 }
 
 int pal_env_set(const char *name, const char *value) {
@@ -28,6 +28,7 @@ void *pal_env_all(void) {
 }
 
 char *pal_env_cwd(void) {
+    extern char *rt_managed_from_cstr(const char *src);
     long size = pathconf(".", _PC_PATH_MAX);
     if (size < 0) size = 4096;
     char *buf = (char *)malloc((size_t)size);
@@ -36,7 +37,9 @@ char *pal_env_cwd(void) {
         free(buf);
         return NULL;
     }
-    return buf;
+    char *result = rt_managed_from_cstr(buf);
+    free(buf);
+    return result;
 }
 
 int pal_env_chdir(const char *path) {

@@ -202,3 +202,15 @@ void *pal_fs_walk(const char *path) {
     // Directory traversal is not supported under WASI.
     return NULL;
 }
+
+int pal_fs_write_secure(const char *path, const char *content, int mode) {
+    (void)mode;
+    // WASI has limited permission support; fall back to regular write.
+    return pal_fs_write(path, content);
+}
+
+int pal_fs_chmod(const char *path, int mode) {
+    (void)path; (void)mode;
+    // WASI has no chmod.
+    return 0;
+}

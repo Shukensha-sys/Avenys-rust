@@ -5,26 +5,49 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <pwd.h>
 
 #define EXPAND_TILDE(var) char *var##_exp = expand_tilde(var); \
     const char *var##_real = var##_exp ? var##_exp : var
 #define EXPAND_TILDE_END(var) free(var##_exp)
 
 static char *expand_tilde(const char *path) {
-    if (path && path[0] == '~' && path[1] == '/') {
+    if (!path || path[0] != '~') return NULL;
+
+    // ~ alone or ~/path
+    if (path[1] == '\0' || path[1] == '/') {
         const char *home = getenv("HOME");
-        if (home) {
-            size_t hlen = strlen(home);
-            size_t plen = strlen(path) - 1;
-            char *out = (char *)malloc(hlen + plen + 1);
-            if (out) {
-                memcpy(out, home, hlen);
-                memcpy(out + hlen, path + 1, plen + 1);
-            }
-            return out;
-        }
+        if (!home) return NULL;
+        size_t hlen = strlen(home);
+        size_t plen = (path[1] == '\0') ? 0 : strlen(path) - 1;
+        char *out = (char *)malloc(hlen + plen + 1);
+        if (!out) return NULL;
+        memcpy(out, home, hlen);
+        if (plen > 0) memcpy(out + hlen, path + 1, plen + 1);
+        else out[hlen] = '\0';
+        return out;
     }
-    return NULL;
+
+    // ~user/path or ~user
+    const char *slash = strchr(path + 1, '/');
+    size_t user_len = slash ? (size_t)(slash - path - 1) : strlen(path + 1);
+    char user[256];
+    if (user_len >= sizeof(user)) return NULL;
+    memcpy(user, path + 1, user_len);
+    user[user_len] = '\0';
+
+    struct passwd *pw = getpwnam(user);
+    if (!pw || !pw->pw_dir) return NULL;
+
+    size_t dlen = strlen(pw->pw_dir);
+    size_t rest_len = slash ? strlen(slash) : 0;
+    char *out = (char *)malloc(dlen + rest_len + 1);
+    if (!out) return NULL;
+    memcpy(out, pw->pw_dir, dlen);
+    if (rest_len > 0) memcpy(out + dlen, slash, rest_len + 1);
+    else out[dlen] = '\0';
+    return out;
 }
 
 int pal_fs_write(const char *path, const char *content) {
@@ -46,6 +69,7 @@ int pal_fs_append(const char *path, const char *content) {
 }
 
 char *pal_fs_read(const char *path) {
+    extern char *rt_managed_from_slice(const char *src, size_t len);
     EXPAND_TILDE(path);
     FILE *fh = fopen(path_real, "rb");
     if (!fh) { EXPAND_TILDE_END(path); return NULL; }
@@ -58,7 +82,9 @@ char *pal_fs_read(const char *path) {
     buf[read] = '\0';
     fclose(fh);
     EXPAND_TILDE_END(path);
-    return buf;
+    char *result = rt_managed_from_slice(buf, read);
+    free(buf);
+    return result;
 }
 
 char *pal_fs_read_bytes(const char *path) {
@@ -203,9 +229,12 @@ void *pal_fs_list(const char *path) {
     return list;
 }
 
-static void walk_recursive(const char *path, void *result_list) {
+#define PAL_FS_WALK_MAX_DEPTH 32
+
+static void walk_recursive(const char *path, void *result_list, int depth) {
     extern void *rt_list_push_ptr(void *list_ptr, void *value);
     extern char *rt_strdup_raw(const char *src);
+    if (depth > PAL_FS_WALK_MAX_DEPTH) return;
     DIR *dir = opendir(path);
     if (!dir) return;
     struct dirent *entry;
@@ -218,8 +247,8 @@ static void walk_recursive(const char *path, void *result_list) {
         void *pushed = rt_list_push_ptr(result_list, copied);
         if (pushed) result_list = pushed;
         struct stat st;
-        if (stat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-            walk_recursive(full_path, result_list);
+        if (lstat(full_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            walk_recursive(full_path, result_list, depth + 1);
         }
         free(full_path);
     }
@@ -230,47 +259,75 @@ void *pal_fs_walk(const char *path) {
     extern void *rt_list_create(int64_t initial_cap, int64_t elem_size);
     void *list = rt_list_create(64, 8);
     EXPAND_TILDE(path);
-    walk_recursive(path_real, list);
+    walk_recursive(path_real, list, 0);
     EXPAND_TILDE_END(path);
     return list;
 }
 
 char *pal_fs_join(const char *a, const char *b) {
+    extern char *rt_managed_from_cstr(const char *src);
     size_t alen = strlen(a);
     size_t blen = strlen(b);
-    char *out = (char *)malloc(alen + blen + 2);
-    if (!out) return NULL;
-    snprintf(out, alen + blen + 2, "%s/%s", a, b);
-    return out;
+    // Skip trailing '/' in a and leading '/' in b to avoid double slashes
+    while (alen > 0 && a[alen - 1] == '/') alen--;
+    while (blen > 0 && b[0] == '/') { b++; blen--; }
+    char *tmp = (char *)malloc(alen + blen + 2);
+    if (!tmp) return NULL;
+    memcpy(tmp, a, alen);
+    tmp[alen] = '/';
+    memcpy(tmp + alen + 1, b, blen);
+    tmp[alen + blen + 1] = '\0';
+    char *result = rt_managed_from_cstr(tmp);
+    free(tmp);
+    return result;
 }
 
 char *pal_fs_dir(const char *path) {
+    extern char *rt_managed_from_slice(const char *src, size_t len);
     EXPAND_TILDE(path);
     const char *slash = strrchr(path_real, '/');
     if (!slash) { EXPAND_TILDE_END(path); return NULL; }
     size_t len = (size_t)(slash - path_real);
-    char *out = (char *)malloc(len + 1);
-    if (!out) { EXPAND_TILDE_END(path); return NULL; }
-    memcpy(out, path_real, len);
-    out[len] = '\0';
+    char *result = rt_managed_from_slice(path_real, len);
     EXPAND_TILDE_END(path);
-    return out;
+    return result;
 }
 
 char *pal_fs_name(const char *path) {
+    extern char *rt_managed_from_cstr(const char *src);
     EXPAND_TILDE(path);
     const char *slash = strrchr(path_real, '/');
     const char *base = slash ? slash + 1 : path_real;
-    char *out = strdup(base);
+    char *result = rt_managed_from_cstr(base);
     EXPAND_TILDE_END(path);
-    return out;
+    return result;
 }
 
 char *pal_fs_ext(const char *path) {
+    extern char *rt_managed_from_cstr(const char *src);
     EXPAND_TILDE(path);
     const char *dot = strrchr(path_real, '.');
     if (!dot || dot == path_real) { EXPAND_TILDE_END(path); return NULL; }
-    char *out = strdup(dot);
+    char *result = rt_managed_from_cstr(dot);
     EXPAND_TILDE_END(path);
-    return out;
+    return result;
+}
+
+int pal_fs_write_secure(const char *path, const char *content, int mode) {
+    EXPAND_TILDE(path);
+    int fd = open(path_real, O_WRONLY | O_CREAT | O_TRUNC, (mode_t)mode);
+    if (fd < 0) { EXPAND_TILDE_END(path); return 0; }
+    FILE *fh = fdopen(fd, "w");
+    if (!fh) { close(fd); EXPAND_TILDE_END(path); return 0; }
+    int ok = (fputs(content, fh) >= 0) ? 1 : 0;
+    fclose(fh);
+    EXPAND_TILDE_END(path);
+    return ok;
+}
+
+int pal_fs_chmod(const char *path, int mode) {
+    EXPAND_TILDE(path);
+    int result = chmod(path_real, (mode_t)mode) == 0 ? 1 : 0;
+    EXPAND_TILDE_END(path);
+    return result;
 }

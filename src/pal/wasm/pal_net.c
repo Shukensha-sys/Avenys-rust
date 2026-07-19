@@ -50,3 +50,13 @@ char *pal_net_resolve(const char *host) {
     (void)host;
     return NULL;
 }
+
+int64_t pal_net_bind(int64_t port) {
+    (void)port;
+    return -1;
+}
+
+int64_t pal_net_accept(int64_t server_fd) {
+    (void)server_fd;
+    return -1;
+}

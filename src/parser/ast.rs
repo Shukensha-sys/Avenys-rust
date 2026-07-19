@@ -346,6 +346,10 @@ pub enum Expression {
         target: DataType,
         data_type: DataType,
     },
+    /// `use!` wrapper required around calls into `load!`-imported modules.
+    UseMacro {
+        inner: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -682,6 +686,10 @@ pub enum Statement {
         ops: Vec<QueryOp>,
         joins: Vec<QueryJoin>,
         group_by: Option<QueryGroup>,
+    },
+    LoadLocal {
+        rel_path: Vec<String>,
+        absolute: bool,
     },
 }
 

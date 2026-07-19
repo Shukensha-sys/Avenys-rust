@@ -1,4 +1,6 @@
-#include "pal.h"
+// Linux PAL — Threads (pthreads)
+
+#include "../pal.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,6 +17,10 @@ int64_t pal_thread_spawn(void *(*fn)(void*), void *arg) {
 int64_t pal_thread_join(int64_t tid, void **result) {
     int ret = pthread_join((pthread_t)tid, result);
     return ret == 0 ? 0 : -1;
+}
+
+void pal_thread_detach(int64_t tid) {
+    pthread_detach((pthread_t)tid);
 }
 
 void pal_thread_exit(void *result) {

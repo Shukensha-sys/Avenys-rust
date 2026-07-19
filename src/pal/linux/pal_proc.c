@@ -1,3 +1,7 @@
+// Linux PAL — Process management
+// Security: pal_proc_spawn_argv uses execvp (no shell). The legacy
+// run/exec/shell functions pass through /bin/sh for backward compat.
+
 #include "../pal.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,8 +10,8 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-// ── Captured stderr from last proc.shell / proc.run ───────────────────
-static char *pal_last_stderr = NULL;
+// ── Captured stderr — thread-safe ───────────────────────────────────
+static _Thread_local char *pal_last_stderr = NULL;
 
 static void pal_free_stderr(void) {
     if (pal_last_stderr) { free(pal_last_stderr); pal_last_stderr = NULL; }
@@ -34,15 +38,23 @@ static char *read_all(FILE *fh) {
     return buf;
 }
 
+// ── Legacy: shell-dependent functions (backward compat) ─────────────
+
 char *pal_proc_run(const char *cmd) {
+    extern char *rt_managed_from_cstr(const char *src);
     FILE *fh = popen(cmd, "r");
     if (!fh) return NULL;
-    return read_all(fh);
+    char *raw = read_all(fh);
+    if (!raw) return NULL;
+    char *result = rt_managed_from_cstr(raw);
+    free(raw);
+    return result;
 }
 
 // Run cmd, capturing both stdout and stderr.
 // Returns stdout; stderr is stored in pal_last_stderr.
 static char *run_captured(const char *cmd) {
+    extern char *rt_managed_from_cstr(const char *src);
     pal_free_stderr();
     char tmpl[] = "/tmp/mire_stderr_XXXXXX";
     int fd = mkstemp(tmpl);
@@ -58,13 +70,16 @@ static char *run_captured(const char *cmd) {
     FILE *fh = popen(full_cmd, "r");
     free(full_cmd);
     if (!fh) { unlink(tmpl); return NULL; }
-    char *out = read_all(fh);
+    char *raw = read_all(fh);
     FILE *efh = fopen(tmpl, "r");
     if (efh) {
         pal_last_stderr = read_all(efh);
     }
     unlink(tmpl);
-    return out;
+    if (!raw) return NULL;
+    char *result = rt_managed_from_cstr(raw);
+    free(raw);
+    return result;
 }
 
 char *pal_proc_exec(const char *cmd) {
@@ -76,9 +91,27 @@ char *pal_proc_shell(const char *cmd) {
 }
 
 char *pal_proc_err(void) {
-    return pal_last_stderr ? strdup(pal_last_stderr) : strdup("");
+    extern char *rt_managed_from_cstr(const char *src);
+    return rt_managed_from_cstr(pal_last_stderr ? pal_last_stderr : "");
 }
 
+// ── Safe: argv-based spawn (no shell) ──────────────────────────────
+
+// Spawn a process using execvp — no shell interpretation.
+// argv must be NULL-terminated: { "cmd", "arg1", "arg2", NULL }.
+int64_t pal_proc_spawn_argv(const char **argv) {
+    if (!argv || !argv[0]) return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+        execvp(argv[0], (char *const *)argv);
+        _exit(127);  // exec failed
+    }
+    return (int64_t)pid;
+}
+
+// Legacy spawn — passes through /bin/sh for backward compat.
 int64_t pal_proc_spawn(const char *cmd) {
     pid_t pid = fork();
     if (pid < 0) return -1;
@@ -89,10 +122,13 @@ int64_t pal_proc_spawn(const char *cmd) {
     return (int64_t)pid;
 }
 
+// ── Wait — distinguishes exit code vs signal death ─────────────────
+
 int64_t pal_proc_wait(int64_t pid) {
     int status;
     if (waitpid((pid_t)pid, &status, 0) < 0) return -1;
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFEXITED(status))   return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return -(128 + WTERMSIG(status));  // POSIX convention
     return -1;
 }
 
@@ -125,4 +161,9 @@ void pal_proc_on(const char *signal_name) {
     else if (strcmp(signal_name, "USR2") == 0 || strcmp(signal_name, "SIGUSR2") == 0) sig = SIGUSR2;
     else if (strcmp(signal_name, "CHLD") == 0 || strcmp(signal_name, "SIGCHLD") == 0) sig = SIGCHLD;
     if (sig) signal(sig, pal_signal_handler);
+}
+
+// Getter for last received signal (exposed to Mire).
+int pal_proc_last_signal(void) {
+    return pal_last_signal;
 }

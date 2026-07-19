@@ -439,6 +439,7 @@ impl SemanticModelBuilder {
             | Statement::ExternLib { .. }
             | Statement::ExternFunction { .. }
             | Statement::Load { .. }
+            | Statement::LoadLocal { .. }
             | Statement::Enum { .. }
             | Statement::Module { .. } => {}
         }
@@ -562,6 +563,9 @@ impl SemanticModelBuilder {
                 self.visit_expression(value);
             }
             Expression::Literal(_) | Expression::Identifier(_) => {}
+            Expression::UseMacro { inner, .. } => {
+                self.visit_expression(inner);
+            }
         }
     }
 

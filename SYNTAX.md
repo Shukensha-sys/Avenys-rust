@@ -945,6 +945,37 @@ mylib/
 
 Without `core/net/owl.toml`, the path `mylib::net::http` cannot resolve.
 
+### 13.5 Local `load!` — files without owl.toml
+
+`load!` (with a bang) exposes nearly all `pub` content of a **relative
+`.mire` file or directory** as a namespace, without needing an `owl.toml`
+manifest. It is the lightweight counterpart to the package-level `load`.
+
+```mire
+load! math            // loads ./math/main.mire (fallback ./math/mod.mire)
+load! math/main       // loads ./math/main.mire explicitly
+load! /utils/string   // leading '/' → resolved from the project root (owl.toml dir)
+```
+
+The namespace is the **last path segment** — `load! math/main` exposes its
+symbols under `main`, *not* `math`. There is no alias.
+
+**Calls into a `load!` module MUST be wrapped in `use!`:**
+
+```mire
+set r = use! math::suma(2 3)   // ✅ correct
+set r = math::suma(2 3)        // ❌ ERROR: require `use!`
+```
+
+`use!` is **always mandatory** to call any symbol exposed by `load!`. It is
+the simple import form that needs no `owl.toml`, `module` declaration, or
+`exports` table. Package `load` (kioto) uses the separate `load` mechanism
+and is therefore unaffected by this rule — but for `load!` modules, every
+qualified call must go through `use!`.
+
+`load!` only searches up to **2 levels below the project root**; a deeper
+path fails with a note explaining the limit.
+
 ---
 
 ## 14. External libraries (FFI)

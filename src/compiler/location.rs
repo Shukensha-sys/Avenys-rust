@@ -79,6 +79,7 @@ pub fn expression_location(expression: &Expression) -> (usize, usize) {
             .map(expression_location)
             .unwrap_or(NO_POSITION),
         Expression::Ascription { expr, .. } => expression_location(expr),
+        Expression::UseMacro { inner } => expression_location(inner),
         Expression::Literal(_) | Expression::EnumVariantPath { .. } => NO_POSITION,
     }
 }

@@ -20,3 +20,12 @@ void pal_proc_on(const char *signal_name) {
     (void)signal_name;
     // Signal handlers are not supported under WASI.
 }
+
+int64_t pal_proc_spawn_argv(const char **argv) {
+    (void)argv;
+    return -1;
+}
+
+int pal_proc_last_signal(void) {
+    return 0;
+}

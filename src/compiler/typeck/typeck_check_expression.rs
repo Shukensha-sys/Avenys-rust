@@ -143,6 +143,12 @@ impl TypeChecker {
                 *data_type = resolved.clone();
                 Ok(resolved)
             }
+            Expression::UseMacro { inner } => {
+                self.in_use_macro = true;
+                let result = self.check_expression(inner);
+                self.in_use_macro = false;
+                result
+            }
             Expression::Call {
                 name,
                 args,
@@ -151,6 +157,27 @@ impl TypeChecker {
                 name_column: _,
                 data_type,
             } => {
+                // A qualified call into a `load!`-imported module is only
+                // allowed when wrapped in `use!`. The qualifier may appear
+                // with `::` (source) or `.` (after renaming).
+                if !self.in_use_macro {
+                    let qualifier = name
+                        .split_once("::")
+                        .or_else(|| name.split_once('.'))
+                        .map(|(q, _)| q.to_string());
+                    if let Some(qualifier) = qualifier {
+                        if self.load_local_modules.contains(&qualifier) {
+                            return Err(type_error(
+                                self.current_line,
+                                self.current_column,
+                                format!(
+                                    "calls into module '{qualifier}' require `use!` \
+                                     (e.g. `set x = use! {qualifier}::symbol(...)`)"
+                                ),
+                            ));
+                        }
+                    }
+                }
                 if name == "ireru" && *data_type != DataType::Unknown {
                     *data_type = data_type.clone();
                     return Ok(data_type.clone());
