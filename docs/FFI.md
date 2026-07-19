@@ -83,13 +83,5 @@ pub fn quit: () {
 - No struct passing by value between Mire and C
 - No callback support (C calling Mire functions)
 - No Rust interop (separate effort needed)
-- Type mapping is lossy (i32 → i64 in legacy codegen)
+- Type mapping is lossy (i32 → i64)
 - `extern lib` names get module-prefixed (stripped at link time)
-
-> **Note**: A successful FFI call under `MIRE_LEGACY_CODEGEN=1` (with
-> `--allow-legacy-known-broken`) validates only that *linkage and the C ABI
-> boundary* work. It does **not** validate legacy codegen correctness: the
-> legacy backend is known to emit wrong numeric/string output for ordinary
-> arithmetic. The legacy backend is known-broken and is rejected unless
-> `--allow-legacy-known-broken` is passed; do not rely on its numeric/string
-> output.
